@@ -1,0 +1,3 @@
+[submodule "contracts/enterprise"]
+	path = contracts/enterprise
+	url = git@github.com:OffshoreSync/enterprise-contracts.git

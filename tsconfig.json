@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": [],
+    "resolveJsonModule": true,
+    "outDir": "./dist"
+  },
+  "include": ["scripts/**/*.ts", "test/**/*.ts", "cli/**/*.ts", "hardhat.config.ts"],
+  "files": ["hardhat.config.ts"]
+}

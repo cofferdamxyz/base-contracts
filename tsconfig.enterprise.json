@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": [],
+    "resolveJsonModule": true,
+    "outDir": "./dist"
+  },
+  "include": ["contracts/enterprise/enterprise-cli/**/*.ts"]
+}
