@@ -72,7 +72,7 @@ export interface CofferdamPaymasterInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "postOp",
-    values: [BigNumberish, BytesLike, BigNumberish]
+    values: [BigNumberish, BytesLike, BigNumberish, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "validatePaymasterUserOp",
@@ -141,9 +141,14 @@ export interface CofferdamPaymaster extends BaseContract {
   ENTRY_POINT: TypedContractMethod<[], [string], "view">;
 
   postOp: TypedContractMethod<
-    [mode: BigNumberish, context: BytesLike, actualGasCost: BigNumberish],
+    [
+      mode: BigNumberish,
+      context: BytesLike,
+      actualGasCost: BigNumberish,
+      actualUserOpFeePerGas: BigNumberish
+    ],
     [void],
-    "nonpayable"
+    "view"
   >;
 
   validatePaymasterUserOp: TypedContractMethod<
@@ -172,9 +177,14 @@ export interface CofferdamPaymaster extends BaseContract {
   getFunction(
     nameOrSignature: "postOp"
   ): TypedContractMethod<
-    [mode: BigNumberish, context: BytesLike, actualGasCost: BigNumberish],
+    [
+      mode: BigNumberish,
+      context: BytesLike,
+      actualGasCost: BigNumberish,
+      actualUserOpFeePerGas: BigNumberish
+    ],
     [void],
-    "nonpayable"
+    "view"
   >;
   getFunction(
     nameOrSignature: "validatePaymasterUserOp"

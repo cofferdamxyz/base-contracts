@@ -40,10 +40,15 @@ interface IPaymaster {
         uint256 maxCost
     ) external view returns (bytes memory context, uint256 validationData);
 
+    // ERC-4337 v0.7 postOp: the canonical EntryPoint
+    // (0x0000000071727De22E5E9d8BAf0edAc6f37da032) calls FOUR args. The v0.6
+    // 3-arg shape has a different selector, so the EntryPoint's call would not
+    // match it and reverts (PostOpReverted), rolling back the whole userOp.
     function postOp(
         uint8 mode,
         bytes calldata context,
-        uint256 actualGasCost
+        uint256 actualGasCost,
+        uint256 actualUserOpFeePerGas
     ) external;
 }
 
@@ -79,8 +84,9 @@ contract CofferdamPaymaster is IPaymaster {
     function postOp(
         uint8 mode,
         bytes calldata context,
-        uint256 actualGasCost
-    ) external {
+        uint256 actualGasCost,
+        uint256 actualUserOpFeePerGas
+    ) external view {
         require(msg.sender == address(ENTRY_POINT), "CofferdamPaymaster: not from EntryPoint");
         // No-op: the stub sponsors gas with no post-op reconciliation.
     }

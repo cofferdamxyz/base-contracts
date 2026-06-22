@@ -1,4 +1,5 @@
-import { ethers } from 'hardhat';
+import { ethers, network } from 'hardhat';
+import { writeDeployments } from './lib/deployments';
 
 // ERC-4337 EntryPoint v0.7 — preinstalled on Base
 const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
@@ -40,9 +41,20 @@ async function main() {
   await paymaster.waitForDeployment();
   console.log('CofferdamPaymaster (stub):', await paymaster.getAddress());
 
+  // Persist to deployments/<network>.json (merge with existing entries).
+  const registryPath = writeDeployments(network.name, {
+    EntryPoint: ENTRYPOINT_V07,
+    PasskeyAuthority: await passkeyAuthority.getAddress(),
+    WebAuthnPasskeyAuthority: await webAuthnPasskeyAuthority.getAddress(),
+    SessionKeyAuthorityLowUntrusted: await sessionUntrusted.getAddress(),
+    SessionKeyAuthorityLowManaged: await sessionManaged.getAddress(),
+    CofferdamAccountFactory4337: await factory.getAddress(),
+    CofferdamPaymaster: await paymaster.getAddress(),
+  });
+
   console.log('\n--- Deployment complete ---');
   console.log('EntryPoint:', ENTRYPOINT_V07);
-  console.log('Save these addresses for the SDK + cofferdam-api deployments.');
+  console.log('Wrote', registryPath);
 }
 
 main().catch((error) => {

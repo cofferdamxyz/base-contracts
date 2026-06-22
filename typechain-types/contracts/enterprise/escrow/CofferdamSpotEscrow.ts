@@ -26,27 +26,45 @@ import type {
 export declare namespace CofferdamSpotEscrow {
   export type SpotEscrowPolicyStruct = {
     funder: AddressLike;
+    recruiter: AddressLike;
     workerNullifier: BytesLike;
     checkInTimeout: BigNumberish;
     checkOutTimeout: BigNumberish;
-    disputeWindow: BigNumberish;
     witness: AddressLike;
+    arbiter: AddressLike;
+    killFeeBps: BigNumberish;
+    amount: BigNumberish;
+    termsHash: BytesLike;
+    jobStartTime: BigNumberish;
+    disputeWindow: BigNumberish;
   };
 
   export type SpotEscrowPolicyStructOutput = [
     funder: string,
+    recruiter: string,
     workerNullifier: string,
     checkInTimeout: bigint,
     checkOutTimeout: bigint,
-    disputeWindow: bigint,
-    witness: string
+    witness: string,
+    arbiter: string,
+    killFeeBps: bigint,
+    amount: bigint,
+    termsHash: string,
+    jobStartTime: bigint,
+    disputeWindow: bigint
   ] & {
     funder: string;
+    recruiter: string;
     workerNullifier: string;
     checkInTimeout: bigint;
     checkOutTimeout: bigint;
-    disputeWindow: bigint;
     witness: string;
+    arbiter: string;
+    killFeeBps: bigint;
+    amount: bigint;
+    termsHash: string;
+    jobStartTime: bigint;
+    disputeWindow: bigint;
   };
 }
 
@@ -54,31 +72,55 @@ export interface CofferdamSpotEscrowInterface extends Interface {
   getFunction(
     nameOrSignature:
       | "USDC"
+      | "awardWorker"
+      | "awardedWorker"
       | "cancel"
       | "checkIn"
       | "checkOut"
       | "checkedInAt"
       | "checkedOutAt"
+      | "claimAfterCheckoutTimeout"
+      | "claimAfterDisputeTimeout"
       | "createdAt"
+      | "disputeReason"
+      | "disputedAt"
       | "fund"
       | "fundedAmount"
       | "policy"
+      | "raiseDispute"
+      | "reclaimNoShow"
       | "refund"
-      | "release"
+      | "resolveDispute"
+      | "setWitness"
       | "state"
+      | "witnessHistory"
+      | "witnessHistoryCount"
       | "worker"
   ): FunctionFragment;
 
   getEvent(
     nameOrSignatureOrTopic:
+      | "DisputeResolved"
       | "EscrowDisputed"
       | "EscrowFunded"
       | "EscrowRefunded"
       | "EscrowReleased"
       | "EscrowStateChanged"
+      | "KillFeePaid"
+      | "WitnessAssigned"
+      | "WitnessReplaced"
+      | "WorkerAwarded"
   ): EventFragment;
 
   encodeFunctionData(functionFragment: "USDC", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "awardWorker",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "awardedWorker",
+    values?: undefined
+  ): string;
   encodeFunctionData(functionFragment: "cancel", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "checkIn",
@@ -93,19 +135,66 @@ export interface CofferdamSpotEscrowInterface extends Interface {
     functionFragment: "checkedOutAt",
     values?: undefined
   ): string;
+  encodeFunctionData(
+    functionFragment: "claimAfterCheckoutTimeout",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "claimAfterDisputeTimeout",
+    values?: undefined
+  ): string;
   encodeFunctionData(functionFragment: "createdAt", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "disputeReason",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "disputedAt",
+    values?: undefined
+  ): string;
   encodeFunctionData(functionFragment: "fund", values: [BigNumberish]): string;
   encodeFunctionData(
     functionFragment: "fundedAmount",
     values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "policy", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "raiseDispute",
+    values: [BytesLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "reclaimNoShow",
+    values?: undefined
+  ): string;
   encodeFunctionData(functionFragment: "refund", values?: undefined): string;
-  encodeFunctionData(functionFragment: "release", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "resolveDispute",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setWitness",
+    values: [AddressLike]
+  ): string;
   encodeFunctionData(functionFragment: "state", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "witnessHistory",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "witnessHistoryCount",
+    values?: undefined
+  ): string;
   encodeFunctionData(functionFragment: "worker", values?: undefined): string;
 
   decodeFunctionResult(functionFragment: "USDC", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "awardWorker",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "awardedWorker",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "cancel", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "checkIn", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "checkOut", data: BytesLike): Result;
@@ -117,17 +206,78 @@ export interface CofferdamSpotEscrowInterface extends Interface {
     functionFragment: "checkedOutAt",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "claimAfterCheckoutTimeout",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "claimAfterDisputeTimeout",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "createdAt", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "disputeReason",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "disputedAt", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "fund", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "fundedAmount",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "policy", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "raiseDispute",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "reclaimNoShow",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "refund", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "release", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "resolveDispute",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "setWitness", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "state", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "witnessHistory",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "witnessHistoryCount",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "worker", data: BytesLike): Result;
+}
+
+export namespace DisputeResolvedEvent {
+  export type InputTuple = [
+    worker: AddressLike,
+    workerAmount: BigNumberish,
+    funder: AddressLike,
+    funderAmount: BigNumberish,
+    arbiter: AddressLike
+  ];
+  export type OutputTuple = [
+    worker: string,
+    workerAmount: bigint,
+    funder: string,
+    funderAmount: bigint,
+    arbiter: string
+  ];
+  export interface OutputObject {
+    worker: string;
+    workerAmount: bigint;
+    funder: string;
+    funderAmount: bigint;
+    arbiter: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export namespace EscrowDisputedEvent {
@@ -237,6 +387,72 @@ export namespace EscrowStateChangedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace KillFeePaidEvent {
+  export type InputTuple = [
+    worker: AddressLike,
+    amount: BigNumberish,
+    funder: AddressLike
+  ];
+  export type OutputTuple = [worker: string, amount: bigint, funder: string];
+  export interface OutputObject {
+    worker: string;
+    amount: bigint;
+    funder: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace WitnessAssignedEvent {
+  export type InputTuple = [witness: AddressLike, assignedBy: AddressLike];
+  export type OutputTuple = [witness: string, assignedBy: string];
+  export interface OutputObject {
+    witness: string;
+    assignedBy: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace WitnessReplacedEvent {
+  export type InputTuple = [
+    oldWitness: AddressLike,
+    newWitness: AddressLike,
+    replacedBy: AddressLike
+  ];
+  export type OutputTuple = [
+    oldWitness: string,
+    newWitness: string,
+    replacedBy: string
+  ];
+  export interface OutputObject {
+    oldWitness: string;
+    newWitness: string;
+    replacedBy: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace WorkerAwardedEvent {
+  export type InputTuple = [worker: AddressLike, awardedBy: AddressLike];
+  export type OutputTuple = [worker: string, awardedBy: string];
+  export interface OutputObject {
+    worker: string;
+    awardedBy: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export interface CofferdamSpotEscrow extends BaseContract {
   connect(runner?: ContractRunner | null): CofferdamSpotEscrow;
   waitForDeployment(): Promise<this>;
@@ -282,6 +498,14 @@ export interface CofferdamSpotEscrow extends BaseContract {
 
   USDC: TypedContractMethod<[], [string], "view">;
 
+  awardWorker: TypedContractMethod<
+    [_worker: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  awardedWorker: TypedContractMethod<[], [string], "view">;
+
   cancel: TypedContractMethod<[], [void], "nonpayable">;
 
   checkIn: TypedContractMethod<[_worker: AddressLike], [void], "nonpayable">;
@@ -292,7 +516,15 @@ export interface CofferdamSpotEscrow extends BaseContract {
 
   checkedOutAt: TypedContractMethod<[], [bigint], "view">;
 
+  claimAfterCheckoutTimeout: TypedContractMethod<[], [void], "nonpayable">;
+
+  claimAfterDisputeTimeout: TypedContractMethod<[], [void], "nonpayable">;
+
   createdAt: TypedContractMethod<[], [bigint], "view">;
+
+  disputeReason: TypedContractMethod<[], [string], "view">;
+
+  disputedAt: TypedContractMethod<[], [bigint], "view">;
 
   fund: TypedContractMethod<[_amount: BigNumberish], [void], "nonpayable">;
 
@@ -301,23 +533,70 @@ export interface CofferdamSpotEscrow extends BaseContract {
   policy: TypedContractMethod<
     [],
     [
-      [string, string, bigint, bigint, bigint, string] & {
+      [
+        string,
+        string,
+        string,
+        bigint,
+        bigint,
+        string,
+        string,
+        bigint,
+        bigint,
+        string,
+        bigint,
+        bigint
+      ] & {
         funder: string;
+        recruiter: string;
         workerNullifier: string;
         checkInTimeout: bigint;
         checkOutTimeout: bigint;
-        disputeWindow: bigint;
         witness: string;
+        arbiter: string;
+        killFeeBps: bigint;
+        amount: bigint;
+        termsHash: string;
+        jobStartTime: bigint;
+        disputeWindow: bigint;
       }
     ],
     "view"
   >;
 
+  raiseDispute: TypedContractMethod<[_reason: BytesLike], [void], "nonpayable">;
+
+  reclaimNoShow: TypedContractMethod<[], [void], "nonpayable">;
+
   refund: TypedContractMethod<[], [void], "nonpayable">;
 
-  release: TypedContractMethod<[], [void], "nonpayable">;
+  resolveDispute: TypedContractMethod<
+    [_workerAmount: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  setWitness: TypedContractMethod<
+    [_newWitness: AddressLike],
+    [void],
+    "nonpayable"
+  >;
 
   state: TypedContractMethod<[], [bigint], "view">;
+
+  witnessHistory: TypedContractMethod<
+    [arg0: BigNumberish],
+    [
+      [string, string, bigint] & {
+        witness: string;
+        assignedBy: string;
+        timestamp: bigint;
+      }
+    ],
+    "view"
+  >;
+
+  witnessHistoryCount: TypedContractMethod<[], [bigint], "view">;
 
   worker: TypedContractMethod<[], [string], "view">;
 
@@ -327,6 +606,12 @@ export interface CofferdamSpotEscrow extends BaseContract {
 
   getFunction(
     nameOrSignature: "USDC"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "awardWorker"
+  ): TypedContractMethod<[_worker: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "awardedWorker"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "cancel"
@@ -344,7 +629,19 @@ export interface CofferdamSpotEscrow extends BaseContract {
     nameOrSignature: "checkedOutAt"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "claimAfterCheckoutTimeout"
+  ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "claimAfterDisputeTimeout"
+  ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "createdAt"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "disputeReason"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "disputedAt"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "fund"
@@ -357,30 +654,81 @@ export interface CofferdamSpotEscrow extends BaseContract {
   ): TypedContractMethod<
     [],
     [
-      [string, string, bigint, bigint, bigint, string] & {
+      [
+        string,
+        string,
+        string,
+        bigint,
+        bigint,
+        string,
+        string,
+        bigint,
+        bigint,
+        string,
+        bigint,
+        bigint
+      ] & {
         funder: string;
+        recruiter: string;
         workerNullifier: string;
         checkInTimeout: bigint;
         checkOutTimeout: bigint;
-        disputeWindow: bigint;
         witness: string;
+        arbiter: string;
+        killFeeBps: bigint;
+        amount: bigint;
+        termsHash: string;
+        jobStartTime: bigint;
+        disputeWindow: bigint;
       }
     ],
     "view"
   >;
   getFunction(
+    nameOrSignature: "raiseDispute"
+  ): TypedContractMethod<[_reason: BytesLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "reclaimNoShow"
+  ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "refund"
   ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "release"
-  ): TypedContractMethod<[], [void], "nonpayable">;
+    nameOrSignature: "resolveDispute"
+  ): TypedContractMethod<[_workerAmount: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "setWitness"
+  ): TypedContractMethod<[_newWitness: AddressLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "state"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "witnessHistory"
+  ): TypedContractMethod<
+    [arg0: BigNumberish],
+    [
+      [string, string, bigint] & {
+        witness: string;
+        assignedBy: string;
+        timestamp: bigint;
+      }
+    ],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "witnessHistoryCount"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "worker"
   ): TypedContractMethod<[], [string], "view">;
 
+  getEvent(
+    key: "DisputeResolved"
+  ): TypedContractEvent<
+    DisputeResolvedEvent.InputTuple,
+    DisputeResolvedEvent.OutputTuple,
+    DisputeResolvedEvent.OutputObject
+  >;
   getEvent(
     key: "EscrowDisputed"
   ): TypedContractEvent<
@@ -416,8 +764,47 @@ export interface CofferdamSpotEscrow extends BaseContract {
     EscrowStateChangedEvent.OutputTuple,
     EscrowStateChangedEvent.OutputObject
   >;
+  getEvent(
+    key: "KillFeePaid"
+  ): TypedContractEvent<
+    KillFeePaidEvent.InputTuple,
+    KillFeePaidEvent.OutputTuple,
+    KillFeePaidEvent.OutputObject
+  >;
+  getEvent(
+    key: "WitnessAssigned"
+  ): TypedContractEvent<
+    WitnessAssignedEvent.InputTuple,
+    WitnessAssignedEvent.OutputTuple,
+    WitnessAssignedEvent.OutputObject
+  >;
+  getEvent(
+    key: "WitnessReplaced"
+  ): TypedContractEvent<
+    WitnessReplacedEvent.InputTuple,
+    WitnessReplacedEvent.OutputTuple,
+    WitnessReplacedEvent.OutputObject
+  >;
+  getEvent(
+    key: "WorkerAwarded"
+  ): TypedContractEvent<
+    WorkerAwardedEvent.InputTuple,
+    WorkerAwardedEvent.OutputTuple,
+    WorkerAwardedEvent.OutputObject
+  >;
 
   filters: {
+    "DisputeResolved(address,uint256,address,uint256,address)": TypedContractEvent<
+      DisputeResolvedEvent.InputTuple,
+      DisputeResolvedEvent.OutputTuple,
+      DisputeResolvedEvent.OutputObject
+    >;
+    DisputeResolved: TypedContractEvent<
+      DisputeResolvedEvent.InputTuple,
+      DisputeResolvedEvent.OutputTuple,
+      DisputeResolvedEvent.OutputObject
+    >;
+
     "EscrowDisputed(uint256,address,bytes32)": TypedContractEvent<
       EscrowDisputedEvent.InputTuple,
       EscrowDisputedEvent.OutputTuple,
@@ -471,6 +858,50 @@ export interface CofferdamSpotEscrow extends BaseContract {
       EscrowStateChangedEvent.InputTuple,
       EscrowStateChangedEvent.OutputTuple,
       EscrowStateChangedEvent.OutputObject
+    >;
+
+    "KillFeePaid(address,uint256,address)": TypedContractEvent<
+      KillFeePaidEvent.InputTuple,
+      KillFeePaidEvent.OutputTuple,
+      KillFeePaidEvent.OutputObject
+    >;
+    KillFeePaid: TypedContractEvent<
+      KillFeePaidEvent.InputTuple,
+      KillFeePaidEvent.OutputTuple,
+      KillFeePaidEvent.OutputObject
+    >;
+
+    "WitnessAssigned(address,address)": TypedContractEvent<
+      WitnessAssignedEvent.InputTuple,
+      WitnessAssignedEvent.OutputTuple,
+      WitnessAssignedEvent.OutputObject
+    >;
+    WitnessAssigned: TypedContractEvent<
+      WitnessAssignedEvent.InputTuple,
+      WitnessAssignedEvent.OutputTuple,
+      WitnessAssignedEvent.OutputObject
+    >;
+
+    "WitnessReplaced(address,address,address)": TypedContractEvent<
+      WitnessReplacedEvent.InputTuple,
+      WitnessReplacedEvent.OutputTuple,
+      WitnessReplacedEvent.OutputObject
+    >;
+    WitnessReplaced: TypedContractEvent<
+      WitnessReplacedEvent.InputTuple,
+      WitnessReplacedEvent.OutputTuple,
+      WitnessReplacedEvent.OutputObject
+    >;
+
+    "WorkerAwarded(address,address)": TypedContractEvent<
+      WorkerAwardedEvent.InputTuple,
+      WorkerAwardedEvent.OutputTuple,
+      WorkerAwardedEvent.OutputObject
+    >;
+    WorkerAwarded: TypedContractEvent<
+      WorkerAwardedEvent.InputTuple,
+      WorkerAwardedEvent.OutputTuple,
+      WorkerAwardedEvent.OutputObject
     >;
   };
 }

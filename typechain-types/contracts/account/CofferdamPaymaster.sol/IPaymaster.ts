@@ -64,7 +64,7 @@ export interface IPaymasterInterface extends Interface {
 
   encodeFunctionData(
     functionFragment: "postOp",
-    values: [BigNumberish, BytesLike, BigNumberish]
+    values: [BigNumberish, BytesLike, BigNumberish, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "validatePaymasterUserOp",
@@ -122,7 +122,12 @@ export interface IPaymaster extends BaseContract {
   ): Promise<this>;
 
   postOp: TypedContractMethod<
-    [mode: BigNumberish, context: BytesLike, actualGasCost: BigNumberish],
+    [
+      mode: BigNumberish,
+      context: BytesLike,
+      actualGasCost: BigNumberish,
+      actualUserOpFeePerGas: BigNumberish
+    ],
     [void],
     "nonpayable"
   >;
@@ -144,7 +149,12 @@ export interface IPaymaster extends BaseContract {
   getFunction(
     nameOrSignature: "postOp"
   ): TypedContractMethod<
-    [mode: BigNumberish, context: BytesLike, actualGasCost: BigNumberish],
+    [
+      mode: BigNumberish,
+      context: BytesLike,
+      actualGasCost: BigNumberish,
+      actualUserOpFeePerGas: BigNumberish
+    ],
     [void],
     "nonpayable"
   >;

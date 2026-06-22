@@ -53,54 +53,109 @@ export declare namespace CofferdamPayrollEscrow {
 export declare namespace CofferdamSpotEscrow {
   export type SpotEscrowPolicyStruct = {
     funder: AddressLike;
+    recruiter: AddressLike;
     workerNullifier: BytesLike;
     checkInTimeout: BigNumberish;
     checkOutTimeout: BigNumberish;
-    disputeWindow: BigNumberish;
     witness: AddressLike;
+    arbiter: AddressLike;
+    killFeeBps: BigNumberish;
+    amount: BigNumberish;
+    termsHash: BytesLike;
+    jobStartTime: BigNumberish;
+    disputeWindow: BigNumberish;
   };
 
   export type SpotEscrowPolicyStructOutput = [
     funder: string,
+    recruiter: string,
     workerNullifier: string,
     checkInTimeout: bigint,
     checkOutTimeout: bigint,
-    disputeWindow: bigint,
-    witness: string
+    witness: string,
+    arbiter: string,
+    killFeeBps: bigint,
+    amount: bigint,
+    termsHash: string,
+    jobStartTime: bigint,
+    disputeWindow: bigint
   ] & {
     funder: string;
+    recruiter: string;
     workerNullifier: string;
     checkInTimeout: bigint;
     checkOutTimeout: bigint;
-    disputeWindow: bigint;
     witness: string;
+    arbiter: string;
+    killFeeBps: bigint;
+    amount: bigint;
+    termsHash: string;
+    jobStartTime: bigint;
+    disputeWindow: bigint;
   };
 }
 
 export interface EscrowFactoryInterface extends Interface {
   getFunction(
-    nameOrSignature: "USDC" | "createPayrollEscrow" | "createSpotEscrow"
+    nameOrSignature:
+      | "USDC"
+      | "authorize"
+      | "authorizedCallers"
+      | "createPayrollEscrow"
+      | "createSpotEscrow"
+      | "owner"
+      | "predictSpotEscrowAddress"
+      | "revoke"
+      | "transferOwnership"
   ): FunctionFragment;
 
   getEvent(
-    nameOrSignatureOrTopic: "PayrollEscrowCreated" | "SpotEscrowCreated"
+    nameOrSignatureOrTopic:
+      | "CallerAuthorized"
+      | "CallerRevoked"
+      | "PayrollEscrowCreated"
+      | "SpotEscrowCreated"
   ): EventFragment;
 
   encodeFunctionData(functionFragment: "USDC", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "authorize",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "authorizedCallers",
+    values: [AddressLike]
+  ): string;
   encodeFunctionData(
     functionFragment: "createPayrollEscrow",
     values: [
       AddressLike,
       BytesLike,
-      CofferdamPayrollEscrow.PayrollEscrowPolicyStruct
+      CofferdamPayrollEscrow.PayrollEscrowPolicyStruct,
+      BytesLike
     ]
   ): string;
   encodeFunctionData(
     functionFragment: "createSpotEscrow",
-    values: [CofferdamSpotEscrow.SpotEscrowPolicyStruct]
+    values: [CofferdamSpotEscrow.SpotEscrowPolicyStruct, BytesLike]
+  ): string;
+  encodeFunctionData(functionFragment: "owner", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "predictSpotEscrowAddress",
+    values: [CofferdamSpotEscrow.SpotEscrowPolicyStruct, BytesLike]
+  ): string;
+  encodeFunctionData(functionFragment: "revoke", values: [AddressLike]): string;
+  encodeFunctionData(
+    functionFragment: "transferOwnership",
+    values: [AddressLike]
   ): string;
 
   decodeFunctionResult(functionFragment: "USDC", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "authorize", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "authorizedCallers",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "createPayrollEscrow",
     data: BytesLike
@@ -109,6 +164,42 @@ export interface EscrowFactoryInterface extends Interface {
     functionFragment: "createSpotEscrow",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "predictSpotEscrowAddress",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "revoke", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "transferOwnership",
+    data: BytesLike
+  ): Result;
+}
+
+export namespace CallerAuthorizedEvent {
+  export type InputTuple = [caller: AddressLike, authorizedBy: AddressLike];
+  export type OutputTuple = [caller: string, authorizedBy: string];
+  export interface OutputObject {
+    caller: string;
+    authorizedBy: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace CallerRevokedEvent {
+  export type InputTuple = [caller: AddressLike, revokedBy: AddressLike];
+  export type OutputTuple = [caller: string, revokedBy: string];
+  export interface OutputObject {
+    caller: string;
+    revokedBy: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export namespace PayrollEscrowCreatedEvent {
@@ -140,17 +231,23 @@ export namespace SpotEscrowCreatedEvent {
   export type InputTuple = [
     escrow: AddressLike,
     funder: AddressLike,
-    workerNullifier: BytesLike
+    recruiter: AddressLike,
+    workerNullifier: BytesLike,
+    witness: AddressLike
   ];
   export type OutputTuple = [
     escrow: string,
     funder: string,
-    workerNullifier: string
+    recruiter: string,
+    workerNullifier: string,
+    witness: string
   ];
   export interface OutputObject {
     escrow: string;
     funder: string;
+    recruiter: string;
     workerNullifier: string;
+    witness: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -203,19 +300,44 @@ export interface EscrowFactory extends BaseContract {
 
   USDC: TypedContractMethod<[], [string], "view">;
 
+  authorize: TypedContractMethod<[_caller: AddressLike], [void], "nonpayable">;
+
+  authorizedCallers: TypedContractMethod<
+    [arg0: AddressLike],
+    [boolean],
+    "view"
+  >;
+
   createPayrollEscrow: TypedContractMethod<
     [
       _funder: AddressLike,
       _companyOrgRoot: BytesLike,
-      _policy: CofferdamPayrollEscrow.PayrollEscrowPolicyStruct
+      _policy: CofferdamPayrollEscrow.PayrollEscrowPolicyStruct,
+      _salt: BytesLike
     ],
     [string],
     "nonpayable"
   >;
 
   createSpotEscrow: TypedContractMethod<
-    [_policy: CofferdamSpotEscrow.SpotEscrowPolicyStruct],
+    [_policy: CofferdamSpotEscrow.SpotEscrowPolicyStruct, _salt: BytesLike],
     [string],
+    "nonpayable"
+  >;
+
+  owner: TypedContractMethod<[], [string], "view">;
+
+  predictSpotEscrowAddress: TypedContractMethod<
+    [_policy: CofferdamSpotEscrow.SpotEscrowPolicyStruct, _salt: BytesLike],
+    [string],
+    "view"
+  >;
+
+  revoke: TypedContractMethod<[_caller: AddressLike], [void], "nonpayable">;
+
+  transferOwnership: TypedContractMethod<
+    [_newOwner: AddressLike],
+    [void],
     "nonpayable"
   >;
 
@@ -227,12 +349,19 @@ export interface EscrowFactory extends BaseContract {
     nameOrSignature: "USDC"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "authorize"
+  ): TypedContractMethod<[_caller: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "authorizedCallers"
+  ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+  getFunction(
     nameOrSignature: "createPayrollEscrow"
   ): TypedContractMethod<
     [
       _funder: AddressLike,
       _companyOrgRoot: BytesLike,
-      _policy: CofferdamPayrollEscrow.PayrollEscrowPolicyStruct
+      _policy: CofferdamPayrollEscrow.PayrollEscrowPolicyStruct,
+      _salt: BytesLike
     ],
     [string],
     "nonpayable"
@@ -240,11 +369,41 @@ export interface EscrowFactory extends BaseContract {
   getFunction(
     nameOrSignature: "createSpotEscrow"
   ): TypedContractMethod<
-    [_policy: CofferdamSpotEscrow.SpotEscrowPolicyStruct],
+    [_policy: CofferdamSpotEscrow.SpotEscrowPolicyStruct, _salt: BytesLike],
     [string],
     "nonpayable"
   >;
+  getFunction(
+    nameOrSignature: "owner"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "predictSpotEscrowAddress"
+  ): TypedContractMethod<
+    [_policy: CofferdamSpotEscrow.SpotEscrowPolicyStruct, _salt: BytesLike],
+    [string],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "revoke"
+  ): TypedContractMethod<[_caller: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "transferOwnership"
+  ): TypedContractMethod<[_newOwner: AddressLike], [void], "nonpayable">;
 
+  getEvent(
+    key: "CallerAuthorized"
+  ): TypedContractEvent<
+    CallerAuthorizedEvent.InputTuple,
+    CallerAuthorizedEvent.OutputTuple,
+    CallerAuthorizedEvent.OutputObject
+  >;
+  getEvent(
+    key: "CallerRevoked"
+  ): TypedContractEvent<
+    CallerRevokedEvent.InputTuple,
+    CallerRevokedEvent.OutputTuple,
+    CallerRevokedEvent.OutputObject
+  >;
   getEvent(
     key: "PayrollEscrowCreated"
   ): TypedContractEvent<
@@ -261,6 +420,28 @@ export interface EscrowFactory extends BaseContract {
   >;
 
   filters: {
+    "CallerAuthorized(address,address)": TypedContractEvent<
+      CallerAuthorizedEvent.InputTuple,
+      CallerAuthorizedEvent.OutputTuple,
+      CallerAuthorizedEvent.OutputObject
+    >;
+    CallerAuthorized: TypedContractEvent<
+      CallerAuthorizedEvent.InputTuple,
+      CallerAuthorizedEvent.OutputTuple,
+      CallerAuthorizedEvent.OutputObject
+    >;
+
+    "CallerRevoked(address,address)": TypedContractEvent<
+      CallerRevokedEvent.InputTuple,
+      CallerRevokedEvent.OutputTuple,
+      CallerRevokedEvent.OutputObject
+    >;
+    CallerRevoked: TypedContractEvent<
+      CallerRevokedEvent.InputTuple,
+      CallerRevokedEvent.OutputTuple,
+      CallerRevokedEvent.OutputObject
+    >;
+
     "PayrollEscrowCreated(address,address,bytes32,uint48)": TypedContractEvent<
       PayrollEscrowCreatedEvent.InputTuple,
       PayrollEscrowCreatedEvent.OutputTuple,
@@ -272,7 +453,7 @@ export interface EscrowFactory extends BaseContract {
       PayrollEscrowCreatedEvent.OutputObject
     >;
 
-    "SpotEscrowCreated(address,address,bytes32)": TypedContractEvent<
+    "SpotEscrowCreated(address,address,address,bytes32,address)": TypedContractEvent<
       SpotEscrowCreatedEvent.InputTuple,
       SpotEscrowCreatedEvent.OutputTuple,
       SpotEscrowCreatedEvent.OutputObject

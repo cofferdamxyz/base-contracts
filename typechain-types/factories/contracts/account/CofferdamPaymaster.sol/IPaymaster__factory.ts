@@ -26,6 +26,11 @@ const _abi = [
         name: "actualGasCost",
         type: "uint256",
       },
+      {
+        internalType: "uint256",
+        name: "actualUserOpFeePerGas",
+        type: "uint256",
+      },
     ],
     name: "postOp",
     outputs: [],

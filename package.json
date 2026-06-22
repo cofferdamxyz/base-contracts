@@ -14,6 +14,8 @@
     "deploy:self:sepolia": "hardhat run scripts/deploy-self.ts --network baseSepolia",
     "deploy:all:local": "hardhat run scripts/deploy-all.ts --network localhost",
     "deploy:all:sepolia": "hardhat run scripts/deploy-all.ts --network baseSepolia",
+    "deploy:escrow:local": "hardhat run scripts/deploy-escrow.ts --network localhost",
+    "deploy:escrow:sepolia": "hardhat run scripts/deploy-escrow.ts --network baseSepolia",
     "node:start": "base-anvil --fork-url ${BASE_SEPOLIA_RPC_URL:-https://sepolia.base.org} --port 8545",
     "cli": "ts-node cli/index.ts",
     "enterprise:cli": "ts-node contracts/enterprise/enterprise-cli/index.ts",

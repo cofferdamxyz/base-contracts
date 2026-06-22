@@ -52,7 +52,7 @@ contracts/
 │   ├── AuthorityManagerBase.sol         # Authority registry + one-way ratchet
 │   ├── CofferdamAccount4337.sol         # ERC-4337 account (validateUserOp + execute)
 │   ├── CofferdamAccountFactory4337.sol  # CREATE2 counterfactual factory
-│   └── CofferdamPaymaster.sol           # Stub verifying paymaster (→ CDP in production)
+│   └── CofferdamPaymaster.sol           # Stub verifying paymaster, EntryPoint v0.7 4-arg postOp (→ CDP in production)
 ├── auth/                                # MIT — authority modules
 │   ├── PasskeyAuthority.sol             # P-256 raw signature (RIP-7212 precompile)
 │   ├── WebAuthnPasskeyAuthority.sol     # Full WebAuthn assertion verification
@@ -65,8 +65,9 @@ contracts/
 ├── test/                                # MIT — test mocks
 │   ├── MockCounter.sol
 │   └── MockGroth16Verifier.sol
-└── enterprise/                          # PROPRIETARY — enterprise payroll escrow
+└── enterprise/  ← GIT SUBMODULE (proprietary, github.com/OffshoreSync/enterprise-contracts)
     ├── LICENSE                          # Proprietary license terms
+    ├── README.md                        # Full enterprise module documentation
     ├── company/                         # Company registration + org tree
     │   ├── CofferdamCompanyRegistry.sol     # Domain-proof company wallet deployment
     │   └── CofferdamCorporateRegistry.sol   # Merkle OrgRoot + pauseCompany + witnesses
@@ -77,8 +78,11 @@ contracts/
     │   └── EscrowFactory.sol                # Deploys Spot or Payroll escrows
     ├── treasury/                        # P2 — role-bound sub-treasuries
     │   └── CofferdamSubTreasuryFactory.sol  # Spending caps per role
-    └── wallet/                          # P2 — wallet binding
-        └── CofferdamWalletBind.sol          # SSO-proof linking of existing accounts
+    ├── wallet/                          # P2 — wallet binding
+    │   └── CofferdamWalletBind.sol          # SSO-proof linking of existing accounts
+    └── enterprise-cli/                  # Interactive CLI for testing on Anvil
+        ├── lib/                             # CSV import, provisioning, Merkle, wallets
+        └── menus/                           # Deploy, company, orgtree, spot, payroll, state
 ```
 
 ## Key Addresses
@@ -89,6 +93,12 @@ contracts/
 | RIP-7212 P-256 precompile | `0x0000000000000000000000000000000000000100` |
 | USDC (Base Sepolia) | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
 | USDC (Base mainnet) | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
+
+Deployed Cofferdam contract addresses are written per-network by the deploy
+scripts to `deployments/<network>.json` (e.g. `deployments/baseSepolia.json`).
+The account/factory/paymaster/authority stack used by the
+`cofferdam-sdk` example demos lives in
+`examples/capacitor-minimal/.env.local` (`VITE_NATIVE_TESTNET_*`).
 
 ## Quickstart
 
@@ -114,6 +124,9 @@ yarn test
 
 # Deploy to Base Sepolia
 yarn deploy:all:sepolia
+
+# Launch enterprise CLI (requires submodule — see License Split below)
+yarn enterprise:cli
 ```
 
 ### Local Node — base-anvil
@@ -208,7 +221,7 @@ model supports phased migration — see `BASE_CONVERSION.md` §12.
 |---|---|---|
 | Compiler | `zksolc` (EraVM) | Standard `solc` (EVM) |
 | Hardhat plugin | `@matterlabs/hardhat-zksync` | `@nomicfoundation/hardhat-toolbox` |
-| Account abstraction | ZKSync native AA (`validateTransaction`) | ERC-4337 (`validateUserOp`, EntryPoint v0.6) |
+| Account abstraction | ZKSync native AA (`validateTransaction`) | ERC-4337 (`validateUserOp`, EntryPoint v0.7) |
 | Account factory | `ContractDeployer` system contract | Standard EVM `CREATE2` |
 | P-256 library | `@openzeppelin/contracts-hardhat-zksync-upgradable` | `@openzeppelin/contracts` (standard) |
 | Paymaster | ZKSync `paymasterAndData` | ERC-4337 `IPaymaster` → CDP Paymaster |
@@ -270,6 +283,15 @@ B20 ships with a built-in compliance toolkit directly relevant to Cofferdam payr
 > Analysis". The architecture below is the canonical design for the Cofferdam
 > Enterprise Module on Base. Implementation is phased (§Phasing below) but the
 > contract interfaces and provisioning flow are frozen.
+>
+> **Implementation:** P1 contracts are built and functional in the
+> [`contracts/enterprise/`](https://github.com/OffshoreSync/enterprise-contracts)
+> submodule (private). The enterprise CLI provides a full simulation on Anvil:
+> Workday CSV batch import, brick-by-brick manual org tree building, deterministic
+> wallet provisioning, Merkle tree construction, on-chain root publishing, and
+> complete spot/payroll escrow lifecycles. See
+> [`contracts/enterprise/README.md`](contracts/enterprise/README.md) for full
+> documentation with concrete examples.
 
 ### Design Principles (locked)
 
@@ -573,7 +595,7 @@ removes their Merkle leaf but doesn't pause the company.
 |---|---|---|
 | `CofferdamAccount4337` | ✅ Built | ERC-4337 account with tiered authority |
 | `CofferdamAccountFactory4337` | ✅ Built | CREATE2 deterministic deployment |
-| `CofferdamPaymaster` | ✅ Stub | Dev/test only — production uses CDP |
+| `CofferdamPaymaster` | ✅ Stub | Dev/test only — production uses CDP. `postOp` uses the EntryPoint **v0.7** 4-arg signature (`mode, context, actualGasCost, actualUserOpFeePerGas`); the v0.6 3-arg shape reverts (`PostOpReverted`) under v0.7 |
 | `PasskeyAuthority` | ✅ Built | P-256 via RIP-7212 precompile |
 | `WebAuthnPasskeyAuthority` | ✅ Built | Full WebAuthn assertion verification |
 | `SessionKeyAuthority` | ✅ Built | ECDSA session-signer bridge (legacy auth) |
@@ -581,13 +603,14 @@ removes their Merkle leaf but doesn't pause the company.
 | `SelfAttesterRegistry` | ✅ Built | TEE attester allowlist |
 | `MockGroth16Verifier` | ✅ Built | Always-true verifier for mock testing |
 | `IB20Factory` | ✅ Interface | B20 + PolicyRegistry interfaces |
-| `CofferdamCompanyRegistry` | ⚠️ Skeleton | `contracts/enterprise/company/` — proprietary. Domain-proof company wallet deployment + pause |
-| `CofferdamCorporateRegistry` | ⚠️ Skeleton | `contracts/enterprise/company/` — proprietary. Merkle OrgRoot + witness delegation + `pauseCompany` |
-| `CofferdamSpotEscrow` | ⚠️ Skeleton | `contracts/enterprise/escrow/` — proprietary. Gig/temporary escrow, check-in/out, Self.xyz identity |
-| `CofferdamPayrollEscrow` | ⚠️ Skeleton | `contracts/enterprise/escrow/` — proprietary. Calendar-based payroll, Merkle-gated, no check-in/out |
-| `EscrowFactory` | ⚠️ Skeleton | `contracts/enterprise/escrow/` — proprietary. Deploys Spot or Payroll escrows per use case |
-| `CofferdamSubTreasuryFactory` | ⚠️ P2 Skeleton | `contracts/enterprise/treasury/` — proprietary. Role-bound sub-treasuries (Spend Permissions first) |
-| `CofferdamWalletBind` | ⚠️ P2 Skeleton | `contracts/enterprise/wallet/` — proprietary. SSO-proof linking of existing Cofferdam accounts |
+| `CofferdamCompanyRegistry` | ✅ Built | `contracts/enterprise/company/` — proprietary submodule. Domain-proof company registration + pause |
+| `CofferdamCorporateRegistry` | ✅ Built | `contracts/enterprise/company/` — proprietary submodule. Merkle OrgRoot + witness delegation + `pauseCompany` |
+| `CofferdamSpotEscrow` | ✅ Built | `contracts/enterprise/escrow/` — proprietary submodule. Gig/temporary escrow, check-in/out, Self.xyz identity |
+| `CofferdamPayrollEscrow` | ✅ Built | `contracts/enterprise/escrow/` — proprietary submodule. Calendar-based payroll, Merkle-gated, no check-in/out |
+| `EscrowFactory` | ✅ Built | `contracts/enterprise/escrow/` — proprietary submodule. Deploys Spot or Payroll escrows per use case |
+| `CofferdamSubTreasuryFactory` | ⚠️ P2 Skeleton | `contracts/enterprise/treasury/` — proprietary submodule. Role-bound sub-treasuries (Spend Permissions first) |
+| `CofferdamWalletBind` | ⚠️ P2 Skeleton | `contracts/enterprise/wallet/` — proprietary submodule. SSO-proof linking of existing Cofferdam accounts |
+| Enterprise CLI | ✅ Built | `contracts/enterprise/enterprise-cli/` — Workday CSV import, manual org tree builder, wallet provisioning, escrow lifecycle |
 
 ### Architecture Diagram
 
@@ -708,7 +731,8 @@ CDP Paymaster allowlist is configured to sponsor:
 
 **ERC-20 Paymaster (USDC for gas):** Base supports paying gas in USDC via
 ERC-7677. The company can pay gas in USDC instead of ETH — no ETH treasury
-needed. Workers never see gas.
+needed. Workers never see gas. See [ERC-20 Paymasters](https://docs.base.org/base-account/improve-ux/sponsor-gas/erc20-paymasters)
+and [Paymaster Implementation Guide](https://docs.base.org/base-account/improve-ux/sponsor-gas/paymasters).
 
 #### Treasury Top-Up (Circle DAA → Base)
 
@@ -734,16 +758,17 @@ const permission = await requestSpendPermission({
   spender: financeOfficerAddress,
   token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC on Base
   chainId: 8453,
-  allowance: 100_000n,  // $100k per period
-  periodInDays: 30,
+  allowance: 100_000n,  // $100k per period (in token units)
+  period: 2592000,       // 30 days in seconds
   provider: sdk.getProvider(),
 });
 ```
 
-The `SpendPermission` struct (`allowance`, `period`, `start`, `end`, `salt`,
-`extraData`) maps directly to our role-bound sub-treasury concept. A finance
-officer gets a monthly cap. An AI agent gets a smaller cap. No sub-Safe
-deployment needed.
+The `SpendPermission` struct (`account`, `spender`, `token`, `allowance`,
+`period`, `start`, `end`, `salt`, `extraData`) maps directly to our role-bound
+sub-treasury concept. A finance officer gets a monthly cap. An AI agent gets a
+smaller cap. No sub-Safe deployment needed. See [Spend Permissions](https://docs.base.org/base-account/improve-ux/spend-permissions)
+and the [contract reference](https://docs.base.org/base-account/reference/onchain-contracts/spend-permissions).
 
 **P1:** Keep `SessionKeyAuthority` (already built). **P2:** Migrate to Spend
 Permissions for companies using Base Account SDK.
@@ -805,6 +830,8 @@ ledger operator (Cofferdam) can see the mapping.
 
 Base docs explicitly list "Payroll & Payouts: Run onchain payroll without
 publishing what every employee or contractor earns" as a supported use case.
+See [Base Ledgers — Use cases](https://docs.base.org/ledgers/overview#use-cases)
+and [How it works](https://docs.base.org/ledgers/how-it-works).
 
 #### x402 for AI Agent Payments (P4)
 
@@ -850,7 +877,10 @@ credential validation) using company USDC, without human approval per tx.
 
 ## Base Account Integration
 
-Cofferdam accounts are designed to be compatible with the [Base Account](https://docs.base.org/base-account/overview/what-is-base-account) ecosystem:
+Cofferdam accounts are designed to be compatible with the [Base Account](https://docs.base.org/base-account/overview/what-is-base-account)
+ecosystem. Base Account is an ERC-4337 Smart Wallet that gives every user
+universal passkey sign-on, one-tap USDC payments, and multi-chain support.
+See [What is a Base Account?](https://docs.base.org/base-account/overview/what-is-base-account).
 
 - **ERC-6492 counterfactual signatures**: `isValidSignature` supports ERC-6492 wrapped signatures for undeployed accounts. Viem's `verifyMessage` / `verifyTypedData` handle the wrapper automatically.
 - **Sub Account import**: `addOwnerAddress` / `addOwnerPublicKey` mirror the Coinbase Smart Wallet pattern, allowing Cofferdam accounts to be imported as Sub Accounts via `wallet_addSubAccount`.

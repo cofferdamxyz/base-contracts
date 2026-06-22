@@ -1,4 +1,5 @@
-import { ethers } from 'hardhat';
+import { ethers, network } from 'hardhat';
+import { writeDeployments } from './lib/deployments';
 
 async function main() {
   const [deployer] = await ethers.getSigners();
@@ -31,6 +32,13 @@ async function main() {
   );
   await nullifierRegistry.waitForDeployment();
   console.log('NullifierRegistry:', await nullifierRegistry.getAddress());
+
+  // Merge into deployments/<network>.json (preserve auth + escrow entries).
+  const registryPath = writeDeployments(network.name, {
+    SelfAttesterRegistry: await attesterRegistry.getAddress(),
+    NullifierRegistry: await nullifierRegistry.getAddress(),
+  });
+  console.log('Wrote', registryPath);
 
   console.log('\n--- Self contracts deployed ---');
   console.log('Next: add trusted attester addresses via SelfAttesterRegistry.addAttester()');

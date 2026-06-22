@@ -1,0 +1,32 @@
+{
+  "PasskeyAuthority": {
+    "address": "0xE3781F531A00EBBCD68bb251ae4BDa4B6c59e83a"
+  },
+  "WebAuthnPasskeyAuthority": {
+    "address": "0x55F5aE990d1Cd1d1e6907e919F844F074Df0338b"
+  },
+  "SessionKeyAuthorityLowUntrusted": {
+    "address": "0xC812dcB94AE3EDb331FD209e9dC53CA46a33b41B"
+  },
+  "SessionKeyAuthorityLowManaged": {
+    "address": "0xaD29E46FbBed7A2d6815E0677D4136A2F7BA25eF"
+  },
+  "CofferdamAccountFactory4337": {
+    "address": "0xc129f9C1bfAC4325a7c82Cb92C3b82579D2c660B"
+  },
+  "CofferdamPaymaster": {
+    "address": "0xA2fA191a85Af57EB1109d72dbbe5873b99c2e59c"
+  },
+  "SelfAttesterRegistry": {
+    "address": "0xaEaA9bbeA3A0A642fddD636Fb1FCbE614E8a61aA"
+  },
+  "MockGroth16Verifier": {
+    "address": "0x88F67563EBe77BF6fD0D980a1eB313C473Fb3e8b"
+  },
+  "NullifierRegistry": {
+    "address": "0xdcc21a7d2B8A581466f5Ea1B73F3bd5e616c721f"
+  },
+  "EntryPoint": {
+    "address": "0x0000000071727De22E5E9d8BAf0edAc6f37da032"
+  }
+}

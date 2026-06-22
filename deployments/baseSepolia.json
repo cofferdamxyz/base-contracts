@@ -1,0 +1,41 @@
+{
+  "EntryPoint": {
+    "address": "0x0000000071727De22E5E9d8BAf0edAc6f37da032"
+  },
+  "PasskeyAuthority": {
+    "address": "0x25338619e03e92511feB63cc66Dfd9CAFB5654E6"
+  },
+  "WebAuthnPasskeyAuthority": {
+    "address": "0x279Cf7DF840a76EE9EcC1C177698E6EaB490Eea8"
+  },
+  "SessionKeyAuthorityLowUntrusted": {
+    "address": "0xc76337F62D298831deEeE8f4063567884680A14b"
+  },
+  "SessionKeyAuthorityLowManaged": {
+    "address": "0x4780DEc3E132E835C36895BFBbb71Bb63C638e54"
+  },
+  "CofferdamAccountFactory4337": {
+    "address": "0x35CeBf87f5DAE7be7cf755067d30fC65Fa541F3D"
+  },
+  "CofferdamPaymaster": {
+    "address": "0x5ffb8bA851DCf7A592B85fc2567e72449214204e"
+  },
+  "SelfAttesterRegistry": {
+    "address": "0x782ea54C148AdDe5679E464E16b370297039267E"
+  },
+  "MockGroth16Verifier": {
+    "address": "0x442f9584BBBFC9987d7220659bA84B20Fab24136"
+  },
+  "NullifierRegistry": {
+    "address": "0x8C05411C6ED0d113a200382a590CcFeC546A5cAe"
+  },
+  "MockUSDC": {
+    "address": "0x8c05Df95F91De2D70e0436B774fc9D1f86FF1f51"
+  },
+  "EscrowFactory": {
+    "address": "0x6a1C08bf3c17DDbd021C2e4131c9dA85d976A737"
+  },
+  "CofferdamSpotEscrow": {
+    "address": "0xc46241fa872EFD91884E29244901cF3B266bE262"
+  }
+}

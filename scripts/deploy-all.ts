@@ -1,4 +1,5 @@
-import { ethers } from 'hardhat';
+import { ethers, network } from 'hardhat';
+import { writeDeployments } from './lib/deployments';
 
 const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
 
@@ -78,7 +79,23 @@ async function main() {
     console.log('MockGroth16Verifier (dev):', verifierAddress);
   }
   console.log('NullifierRegistry:', await nullifierReg.getAddress());
-  console.log('\nUpdate cofferdam-api/src/chain/deployments.ts with these addresses.');
+
+  // 4. Persist addresses to deployments/<network>.json so the SDK + demo can
+  //    read them (deploy-escrow.ts merges into the same file).
+  const registryPath = writeDeployments(network.name, {
+    EntryPoint: ENTRYPOINT_V07,
+    PasskeyAuthority: await passkeyAuth.getAddress(),
+    WebAuthnPasskeyAuthority: await webAuthnAuth.getAddress(),
+    SessionKeyAuthorityLowUntrusted: await sessionUntrusted.getAddress(),
+    SessionKeyAuthorityLowManaged: await sessionManaged.getAddress(),
+    CofferdamAccountFactory4337: await factory.getAddress(),
+    CofferdamPaymaster: await paymaster.getAddress(),
+    SelfAttesterRegistry: await attesterReg.getAddress(),
+    ...(process.env.SELF_VERIFIER_ADDRESS ? {} : { MockGroth16Verifier: verifierAddress }),
+    NullifierRegistry: await nullifierReg.getAddress(),
+  });
+  console.log('\nWrote', registryPath);
+  console.log('VITE_TESTNET_RECEIVER_ADDRESS =', await nullifierReg.getAddress());
 }
 
 main().catch((error) => {

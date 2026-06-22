@@ -160,9 +160,12 @@ contract CofferdamAccount4337 is AuthorityManagerBase {
         IAuthorityModule newModule,
         bytes calldata newConfig
     ) external {
-        // When called via EntryPoint, the signature was already validated.
-        // For direct calls (not via EntryPoint), revert — use a UserOp.
-        require(msg.sender == address(ENTRY_POINT), "CofferdamAccount4337: use EntryPoint");
+        // Called via EntryPoint → execute → self-call. The outer execute is
+        // EntryPoint-gated, so a self-call from execute is authorised.
+        require(
+            msg.sender == address(ENTRY_POINT) || msg.sender == address(this),
+            "CofferdamAccount4337: use EntryPoint"
+        );
         _addAuthority(newModule, newConfig);
     }
 
@@ -171,7 +174,10 @@ contract CofferdamAccount4337 is AuthorityManagerBase {
         uint256 authorityId,
         uint256 targetId
     ) external {
-        require(msg.sender == address(ENTRY_POINT), "CofferdamAccount4337: use EntryPoint");
+        require(
+            msg.sender == address(ENTRY_POINT) || msg.sender == address(this),
+            "CofferdamAccount4337: use EntryPoint"
+        );
         _revokeAuthorityRecord(targetId);
     }
 
@@ -185,7 +191,10 @@ contract CofferdamAccount4337 is AuthorityManagerBase {
         IAuthorityModule passkeyModule,
         bytes calldata passkeyConfig
     ) external {
-        require(msg.sender == address(ENTRY_POINT), "CofferdamAccount4337: use EntryPoint");
+        require(
+            msg.sender == address(ENTRY_POINT) || msg.sender == address(this),
+            "CofferdamAccount4337: use EntryPoint"
+        );
         _preEnrollChecks(passkeyModule);
         _enrollFirstPasskey(lowAuthorityId, passkeyModule, passkeyConfig);
     }
@@ -240,7 +249,10 @@ contract CofferdamAccount4337 is AuthorityManagerBase {
     ///         See: https://docs.base.org/base-account/improve-ux/sub-accounts
     ///         Called via the EntryPoint (as execute calldata).
     function addOwnerAddress(address owner) external {
-        require(msg.sender == address(ENTRY_POINT), "CofferdamAccount4337: use EntryPoint");
+        require(
+            msg.sender == address(ENTRY_POINT) || msg.sender == address(this),
+            "CofferdamAccount4337: use EntryPoint"
+        );
         // Delegate to the authority system — add the owner as a LowManaged
         // session-signer authority. The caller (a High authority via UserOp
         // signature) authorises this.
@@ -253,7 +265,10 @@ contract CofferdamAccount4337 is AuthorityManagerBase {
     /// @dev    Mirrors the Coinbase Smart Wallet's `addOwnerPublicKey` for P-256
     ///         passkey owners. See `addOwnerAddress` above.
     function addOwnerPublicKey(bytes32 qx, bytes32 qy) external {
-        require(msg.sender == address(ENTRY_POINT), "CofferdamAccount4337: use EntryPoint");
+        require(
+            msg.sender == address(ENTRY_POINT) || msg.sender == address(this),
+            "CofferdamAccount4337: use EntryPoint"
+        );
         // Delegate to the authority system — add the passkey as a High-tier
         // authority via PasskeyAuthority or WebAuthnPasskeyAuthority.
         // NOTE: requires the passkey module to be deployed and passed. This
