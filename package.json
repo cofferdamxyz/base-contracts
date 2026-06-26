@@ -19,6 +19,7 @@
     "node:start": "base-anvil --fork-url ${BASE_SEPOLIA_RPC_URL:-https://sepolia.base.org} --port 8545",
     "cli": "ts-node cli/index.ts",
     "enterprise:cli": "ts-node contracts/enterprise/enterprise-cli/index.ts",
+    "inspect:account": "hardhat run scripts/inspect-account.ts",
     "clean": "hardhat clean",
     "typecheck": "tsc --noEmit",
     "typecheck:enterprise": "tsc --noEmit --project tsconfig.enterprise.json"

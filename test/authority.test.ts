@@ -60,8 +60,9 @@ describe('CofferdamAccountFactory4337', () => {
     const config = ethers.AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32'], [qx, qy]);
     const salt = ethers.id('test-salt');
 
-    const addr1 = await factory.getAddress(passkeyAuth.getAddress(), config, salt);
-    const addr2 = await factory.getAddress(passkeyAuth.getAddress(), config, salt);
+    const authorityAddress = await passkeyAuth.getAddress();
+    const addr1 = await factory.getFunction('getAddress')(authorityAddress, config, salt);
+    const addr2 = await factory.getFunction('getAddress')(authorityAddress, config, salt);
     expect(addr1).to.equal(addr2);
     expect(addr1).to.not.equal(ethers.ZeroAddress);
   });

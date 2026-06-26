@@ -12,7 +12,12 @@ export interface DeploymentConfig {
   selfAttesterRegistry?: string;
   mockGroth16Verifier?: string;
   nullifierRegistry?: string;
+  companyRegistry?: string;
+  corporateRegistry?: string;
+  escrowFactory?: string;
+  usdcAddress?: string;
   accounts: Record<string, string>;
+  companies?: Record<string, string>;
 }
 
 const CONFIG_PATH = path.join(__dirname, '..', '..', '.cofferdam-cli.json');

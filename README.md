@@ -539,7 +539,7 @@ Key properties:
   (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`), not a bridged wrapper.
   Settlement is final on Base L2, no L1 wait.
 - **CCTP for cross-chain**: If an enterprise needs USDC on another chain
-  (e.g. for a worker who prefers Celo), Circle's burn-and-mint CCTP handles
+  (e.g. for a worker on a different L2/L1), Circle's burn-and-mint CCTP handles
   it — no third-party bridge.
 
 ### Dispute Resolution
