@@ -37,8 +37,7 @@ import {IAuthorityModule, Tier} from "../interfaces/IAuthorityModule.sol";
 ///         can distinguish the consumer-session bridge from the managed Polis
 ///         bridge even though they share this implementation.
 ///
-///         This contract is pure Solidity (no imports beyond the interface) —
-///         identical on ZKSync Era and Base.
+///         This contract is pure Solidity (no imports beyond the interface).
 contract SessionKeyAuthority is IAuthorityModule {
     /// @dev secp256k1 group order / 2; signatures with s above this are rejected
     ///      to prevent signature malleability (EIP-2).

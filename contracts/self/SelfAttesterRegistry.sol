@@ -6,7 +6,7 @@ pragma solidity 0.8.28;
 ///         attester keys. Bridges Self's TEE trust model with onchain enforcement.
 /// @dev    Signature scheme: EIP-191 personal_sign over a 32-byte message hash.
 ///         Layout of the message is decided by the caller (e.g. NullifierRegistry).
-///         This contract is pure Solidity — identical on ZKSync Era and Base.
+///         This contract is pure Solidity.
 contract SelfAttesterRegistry {
     address public owner;
     address public pendingOwner;

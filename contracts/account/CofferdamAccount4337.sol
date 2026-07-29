@@ -10,11 +10,6 @@ import {IEntryPoint} from "../interfaces/IEntryPoint.sol";
 ///         of the tiered-authority model + one-way upgrade ratchet specified in
 ///         `cofferdam-sdk/IDENTITY_LAYER_DESIGN.md` §2.5.
 ///
-///         This is the Base successor to the ZKSync-era `CofferdamAccount` /
-///         `CofferdamSmartAccount`. The authority abstraction
-///         (`IAuthorityModule`) is identical — only the execution/replay layer
-///         changes from ZKSync native AA to ERC-4337 EntryPoint v0.7.
-///
 /// @dev    Auth-mode abstraction: every authentication method — a hardware
 ///         passkey, a consumer's legacy password / Google-Apple OAuth session,
 ///         or an enterprise Polis SSO JWT — plugs in behind one

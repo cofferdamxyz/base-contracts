@@ -13,9 +13,6 @@ import {IAuthorityModule, Tier} from "../interfaces/IAuthorityModule.sol";
 ///           - `CofferdamAccount4337` — an ERC-4337 account whose replay
 ///                                       protection is the EntryPoint nonce and
 ///                                       whose signed digest is the userOpHash.
-///           - (legacy) `CofferdamAccount` — a custom-`execute` harness whose
-///                                       replay protection is an internal nonce
-///                                       counter, used on ZKSync Era.
 ///
 /// @dev    Modules are stateless singletons (see `IAuthorityModule`); all
 ///         per-account key material lives here in each `Authority.config` blob.

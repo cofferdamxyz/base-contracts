@@ -9,7 +9,7 @@ import {SelfPublicSignals} from "./SelfPublicSignals.sol";
 /// @notice One-shot binding from a Self.xyz passport-derived nullifier to a
 ///         Cofferdam account address. Enforces the "one passport = one account"
 ///         rule that powers Cofferdam's sybil resistance.
-/// @dev    This contract is pure Solidity — identical on ZKSync Era and Base.
+/// @dev    This contract is pure Solidity.
 ///         The `verifyAndBind` entrypoint composes three independent security
 ///         checks:
 ///           1. Public-signal sanity: attestation ID matches E_PASSPORT, and the

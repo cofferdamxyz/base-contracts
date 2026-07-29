@@ -43,8 +43,7 @@ enum Tier {
 ///         signature standing in for a verified JWT, or a future post-quantum
 ///         Dilithium signature. The account never learns how; it only sees a bool.
 ///
-///         This interface is chain-agnostic: identical on ZKSync Era (native AA)
-///         and Base (ERC-4337). See BASE_CONVERSION.md §12 (post-quantum migration).
+///         This interface is chain-agnostic by design.
 interface IAuthorityModule {
     /// @notice The trust tier this module's authorities carry on an account.
     /// @dev    `pure` because a module's tier is fixed at deploy time. A single

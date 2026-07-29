@@ -3,10 +3,6 @@
 Cofferdam onchain contracts for Base. ERC-4337 account abstraction with tiered
 passkey authority, session-key legacy bridge, and Self.xyz sybil resistance.
 
-This repo is the Base successor to the ZKSync-era `contracts/` repo. The
-authority abstraction (`IAuthorityModule`) is identical — only the execution
-layer changes from ZKSync native AA to ERC-4337 EntryPoint v0.7.
-
 ## License Split
 
 This repository contains two licensing tiers:
@@ -18,7 +14,7 @@ This repository contains two licensing tiers:
 
 - **Proprietary enterprise contracts** (`contracts/enterprise/`) —
   PROPRIETARY. This is a **Git submodule** pointing to
-  [`OffshoreSync/enterprise-contracts`](https://github.com/OffshoreSync/enterprise-contracts)
+  [`cofferdamxyz/enterprise-contracts`](https://github.com/cofferdamxyz/enterprise-contracts)
   (private repo). It contains the enterprise payroll escrow contracts: company
   registries, spot/payroll escrows, sub-treasury factory, wallet bind, and the
   enterprise CLI for Workday CSV import, org tree building, wallet provisioning,
@@ -28,7 +24,7 @@ This repository contains two licensing tiers:
 
 ```bash
 # Clone with submodule included (requires SSH key access to the private repo)
-git clone --recursive git@github.com:OffshoreSync/base-contracts.git
+git clone --recursive git@github.com:cofferdamxyz/base-contracts.git
 
 # If already cloned, initialize the submodule
 git submodule update --init --recursive
@@ -36,7 +32,7 @@ git submodule update --init --recursive
 
 > **Contributors:** The `contracts/enterprise/` submodule is private. If you get
 > a permission denied error, ensure your SSH key is linked to a GitHub account
-> with access to the `OffshoreSync/enterprise-contracts` repository. The
+> with access to the `cofferdamxyz/enterprise-contracts` repository. The
 > open-source base contracts work fully without the submodule — it's only needed
 > for enterprise payroll and escrow development.
 
@@ -65,7 +61,7 @@ contracts/
 ├── test/                                # MIT — test mocks
 │   ├── MockCounter.sol
 │   └── MockGroth16Verifier.sol
-└── enterprise/  ← GIT SUBMODULE (proprietary, github.com/OffshoreSync/enterprise-contracts)
+└── enterprise/  ← GIT SUBMODULE (proprietary, github.com/cofferdamxyz/enterprise-contracts)
     ├── LICENSE                          # Proprietary license terms
     ├── README.md                        # Full enterprise module documentation
     ├── company/                         # Company registration + org tree
@@ -215,19 +211,6 @@ model supports phased migration — see `BASE_CONVERSION.md` §12.
 | SPHINCS+ (SLH-DSA-128s) | ~8 KB | ~150k+ calldata |
 | Hybrid (P-256 + Dilithium) | ~2.8 KB | ~57k+ (verify both) |
 
-## Differences from ZKSync `contracts/` repo
-
-| Layer | ZKSync (`contracts/`) | Base (`base-contracts/`) |
-|---|---|---|
-| Compiler | `zksolc` (EraVM) | Standard `solc` (EVM) |
-| Hardhat plugin | `@matterlabs/hardhat-zksync` | `@nomicfoundation/hardhat-toolbox` |
-| Account abstraction | ZKSync native AA (`validateTransaction`) | ERC-4337 (`validateUserOp`, EntryPoint v0.7) |
-| Account factory | `ContractDeployer` system contract | Standard EVM `CREATE2` |
-| P-256 library | `@openzeppelin/contracts-hardhat-zksync-upgradable` | `@openzeppelin/contracts` (standard) |
-| Paymaster | ZKSync `paymasterAndData` | ERC-4337 `IPaymaster` → CDP Paymaster |
-| Local node | `anvil-zksync` (port 8011, chainId 260) | `base-anvil` (port 8545, fork Base Sepolia) |
-| Networks | `zkSyncSepolia` (300), `zkSyncMainnet` (324) | `baseSepolia` (84532), `base` (8453) |
-
 ## Base Preinstalled Contracts
 
 Base has several contracts preinstalled at genesis — no deployment needed:
@@ -278,14 +261,14 @@ B20 ships with a built-in compliance toolkit directly relevant to Cofferdam payr
 
 ## Enterprise Module — Locked Design (rev-8)
 
-> **Status:** LOCKED. This section supersedes the ZKSync-era analysis in
-> `ENTERPRISE_MODULE_PLAN.md` (rev-7.4) and the earlier "Base Simplification
+> **Status:** LOCKED. This section supersedes the earlier analysis in
+> `ENTERPRISE_MODULE_PLAN.md` (rev-7.4) and the "Base Simplification
 > Analysis". The architecture below is the canonical design for the Cofferdam
 > Enterprise Module on Base. Implementation is phased (§Phasing below) but the
 > contract interfaces and provisioning flow are frozen.
 >
 > **Implementation:** P1 contracts are built and functional in the
-> [`contracts/enterprise/`](https://github.com/OffshoreSync/enterprise-contracts)
+> [`contracts/enterprise/`](https://github.com/cofferdamxyz/enterprise-contracts)
 > submodule (private). The enterprise CLI provides a full simulation on Anvil:
 > Workday CSV batch import, brick-by-brick manual org tree building, deterministic
 > wallet provisioning, Merkle tree construction, on-chain root publishing, and
@@ -426,7 +409,7 @@ don't exist in the company's Merkle org tree.
 - **Funding**: one-time per assignment
 - **Witness**: optional third-party verification (e.g. Captain for maritime)
 - **Who can be the worker**: anyone with a Cofferdam account + Self.xyz binding
-- **Marketplace integration**: OffshoreSync vacancies create Spot escrows on hire
+- **Marketplace integration**: Cofferdam marketplace vacancies create Spot escrows on hire
 
 ```solidity
 struct SpotEscrowPolicy {
@@ -898,4 +881,4 @@ See [What is a Base Account?](https://docs.base.org/base-account/overview/what-i
 
 ## License
 
-MIT
+MIT. Copyright 2026 Cofferdam Inc.

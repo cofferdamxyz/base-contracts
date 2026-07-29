@@ -25,8 +25,6 @@ import {CofferdamAccount4337} from "./CofferdamAccount4337.sol";
 ///           abi.encode(entryPoint, initialModule, initialConfig)
 ///         )
 ///
-///         This mirrors the ZKSync `CofferdamAccountFactory` but uses standard
-///         EVM CREATE2 instead of ZKSync's `ContractDeployer` system contract.
 contract CofferdamAccountFactory4337 {
     /// @notice The canonical ERC-4337 EntryPoint v0.7.
     IEntryPoint public immutable ENTRY_POINT;

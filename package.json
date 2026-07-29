@@ -3,6 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "license": "(MIT OR PROPRIETARY)",
+  "author": "Cofferdam Inc.",
+  "homepage": "https://github.com/cofferdamxyz/base-contracts#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cofferdamxyz/base-contracts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cofferdamxyz/base-contracts/issues"
+  },
   "description": "Cofferdam onchain contracts for Base. Open-source (MIT): ERC-4337 account abstraction, passkey authority, Self.xyz. Proprietary: enterprise payroll escrow (contracts/enterprise/).",
   "scripts": {
     "compile": "hardhat compile",
