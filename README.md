@@ -405,24 +405,44 @@ an employee** — they don't have a company email, they're not in Polis, and the
 don't exist in the company's Merkle org tree.
 
 - **Identity**: Self.xyz nullifier binding (sovereign, not company-provisioned)
-- **Check-in / check-out**: yes — worker explicitly starts and ends the assignment
-- **Funding**: one-time per assignment
-- **Witness**: optional third-party verification (e.g. Captain for maritime)
+- **Check-in / check-out**: yes — but **called by the witness, never the worker**.
+  Both are `onlyWitness`. The worker does not self-attest; that is the whole
+  point of the trust model (see `escrow/SPOT_ESCROW_RULES.md` §1).
+- **Funding**: one-time per assignment, **funder-only**
+- **Witness**: **required** (non-zero), company-appointed, replaceable by the
+  recruiter via `setWitness`, and **may not be the funder** — enforced on-chain.
+  Whoever was physically present: a site supervisor, a shift lead, a ship's
+  captain, a clinic manager.
 - **Who can be the worker**: anyone with a Cofferdam account + Self.xyz binding
 - **Marketplace integration**: Cofferdam marketplace vacancies create Spot escrows on hire
 
 ```solidity
 struct SpotEscrowPolicy {
-    address funder;        // company wallet (anyone can fund in open marketplace)
-    bytes32 workerNullifier; // Self.xyz nullifier (not Merkle leaf)
-    uint32  checkInTimeout;  // worker must check in within N seconds or escrow voids
-    uint32  checkOutTimeout; // auto-release if worker doesn't check out (abandonment)
-    uint32  disputeWindow;   // dispute window after check-out before release
-    address witness;         // optional witness address (0 = no witness required)
+    address funder;          // company finance wallet; only it may fund/refund
+    address recruiter;       // company HR; awards the worker, sets the witness
+    bytes32 workerNullifier; // Self.xyz nullifier (not a Merkle leaf)
+    uint32  checkInTimeout;  // after this, the FUNDER may reclaimNoShow() in full
+    uint32  checkOutTimeout; // after this, the WORKER may self-claim when the
+                             // witness never checks them out (anti-wage-theft)
+    address witness;         // required, non-zero; must not equal `funder`
+    address arbiter;         // required, non-zero; neutral dispute resolver
+    uint16  killFeeBps;      // funder-cancellation fee to the worker, 500–2500
+    uint256 amount;          // agreed pay; if non-zero, fund() must match exactly
+    bytes32 termsHash;       // pointer to the off-chain terms the worker accepted
+    uint64  jobStartTime;    // 0 = check-in window runs from creation
+    uint32  disputeWindow;   // 0 = no deadline; else worker may claim a stuck dispute
 }
 ```
 
-Flow: `funder.CREATE → worker.CHECK_IN → worker.CHECK_OUT → [witness.APPROVE] → RELEASE`
+Flow: `funder.FUND → recruiter.AWARD_WORKER → witness.CHECK_IN → witness.CHECK_OUT → RELEASE`
+
+`checkOut()` transfers the full funded amount to the worker **in the same
+transaction** — there is no separate approve or settle step.
+
+> **Note on `checkOutTimeout`.** It protects the *worker*, not the company. The
+> witness is company-appointed, so the risk of witness inaction has to sit with
+> the company: once the timeout passes, `claimAfterCheckoutTimeout()` is
+> permissionless and pays the worker. It is not an abandonment penalty.
 
 #### `CofferdamPayrollEscrow` — recurring calendar-based payroll
 
