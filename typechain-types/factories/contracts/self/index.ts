@@ -4,3 +4,4 @@
 export { ISelfGroth16Verifier__factory } from "./ISelfGroth16Verifier__factory";
 export { NullifierRegistry__factory } from "./NullifierRegistry__factory";
 export { SelfAttesterRegistry__factory } from "./SelfAttesterRegistry__factory";
+export { Verifier_vc_and_disclose__factory } from "./Verifier_vc_and_disclose__factory";

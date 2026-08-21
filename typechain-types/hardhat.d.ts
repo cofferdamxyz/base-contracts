@@ -158,6 +158,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.SelfAttesterRegistry__factory>;
     getContractFactory(
+      name: "Verifier_vc_and_disclose",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.Verifier_vc_and_disclose__factory>;
+    getContractFactory(
       name: "MockCounter",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockCounter__factory>;
@@ -165,6 +169,10 @@ declare module "hardhat/types/runtime" {
       name: "MockGroth16Verifier",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockGroth16Verifier__factory>;
+    getContractFactory(
+      name: "RejectingGroth16Verifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.RejectingGroth16Verifier__factory>;
     getContractFactory(
       name: "USDC",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -351,6 +359,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.SelfAttesterRegistry>;
     getContractAt(
+      name: "Verifier_vc_and_disclose",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.Verifier_vc_and_disclose>;
+    getContractAt(
       name: "MockCounter",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -360,6 +373,11 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.MockGroth16Verifier>;
+    getContractAt(
+      name: "RejectingGroth16Verifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.RejectingGroth16Verifier>;
     getContractAt(
       name: "USDC",
       address: string | ethers.Addressable,
@@ -511,6 +529,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SelfAttesterRegistry>;
     deployContract(
+      name: "Verifier_vc_and_disclose",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Verifier_vc_and_disclose>;
+    deployContract(
       name: "MockCounter",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockCounter>;
@@ -518,6 +540,10 @@ declare module "hardhat/types/runtime" {
       name: "MockGroth16Verifier",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockGroth16Verifier>;
+    deployContract(
+      name: "RejectingGroth16Verifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.RejectingGroth16Verifier>;
     deployContract(
       name: "USDC",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -704,6 +730,11 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SelfAttesterRegistry>;
     deployContract(
+      name: "Verifier_vc_and_disclose",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Verifier_vc_and_disclose>;
+    deployContract(
       name: "MockCounter",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -713,6 +744,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockGroth16Verifier>;
+    deployContract(
+      name: "RejectingGroth16Verifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.RejectingGroth16Verifier>;
     deployContract(
       name: "USDC",
       args: any[],

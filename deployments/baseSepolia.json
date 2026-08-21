@@ -21,13 +21,13 @@
     "address": "0x5ffb8bA851DCf7A592B85fc2567e72449214204e"
   },
   "SelfAttesterRegistry": {
-    "address": "0x782ea54C148AdDe5679E464E16b370297039267E"
+    "address": "0x8F3fF40Aa7Eb46b9AB214229D8f7833bbC47ae08"
   },
   "MockGroth16Verifier": {
     "address": "0x442f9584BBBFC9987d7220659bA84B20Fab24136"
   },
   "NullifierRegistry": {
-    "address": "0x8C05411C6ED0d113a200382a590CcFeC546A5cAe"
+    "address": "0x2843F55C9E1491a6d47F65f041E68F96E3aeB3d4"
   },
   "MockUSDC": {
     "address": "0x8c05Df95F91De2D70e0436B774fc9D1f86FF1f51"
@@ -37,5 +37,8 @@
   },
   "CofferdamSpotEscrow": {
     "address": "0xc46241fa872EFD91884E29244901cF3B266bE262"
+  },
+  "Verifier_vc_and_disclose": {
+    "address": "0x26fBC868344AF4E99874edFd0E3756EcC2359bEb"
   }
 }

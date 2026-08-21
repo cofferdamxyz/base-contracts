@@ -409,10 +409,18 @@ don't exist in the company's Merkle org tree.
   Both are `onlyWitness`. The worker does not self-attest; that is the whole
   point of the trust model (see `escrow/SPOT_ESCROW_RULES.md` §1).
 - **Funding**: one-time per assignment, **funder-only**
-- **Witness**: **required** (non-zero), company-appointed, replaceable by the
-  recruiter via `setWitness`, and **may not be the funder** — enforced on-chain.
-  Whoever was physically present: a site supervisor, a shift lead, a ship's
-  captain, a clinic manager.
+- **Witness**: **required** (non-zero), company-appointed, and replaceable by
+  the recruiter via `setWitness` — including **mid-job**, while the worker is
+  already checked in, so a supervisor rotating off shift can hand over without
+  affecting the worker or any deadline. Whoever was physically present: a site
+  supervisor, a shift lead, a ship's captain, a clinic manager. **May not be the
+  funder** in a B2B escrow — enforced on-chain — so the party holding the money
+  never certifies the work. The exception is the consumer shape, where one hirer
+  is funder, recruiter and witness at once; that sets the immutable
+  `selfWitnessed` flag and is the only case where the funder may retake the
+  witness seat (otherwise a hirer who delegated while away could never resume).
+  A witness can never redirect funds: `checkOut()` always pays the awarded
+  worker, so the role carries timing authority only.
 - **Who can be the worker**: anyone with a Cofferdam account + Self.xyz binding
 - **Marketplace integration**: Cofferdam marketplace vacancies create Spot escrows on hire
 
@@ -424,8 +432,11 @@ struct SpotEscrowPolicy {
     uint32  checkInTimeout;  // after this, the FUNDER may reclaimNoShow() in full
     uint32  checkOutTimeout; // after this, the WORKER may self-claim when the
                              // witness never checks them out (anti-wage-theft)
-    address witness;         // required, non-zero; must not equal `funder`
-    address arbiter;         // required, non-zero; neutral dispute resolver
+    address witness;         // required, non-zero; != `funder` unless selfWitnessed
+    address arbiter;         // required, non-zero; neutral dispute resolver.
+                             // Must differ from funder, recruiter AND witness —
+                             // resolveDispute is unilateral 0-100% over the funds.
+                             // May be a contract (future arbitration pool).
     uint16  killFeeBps;      // funder-cancellation fee to the worker, 500–2500
     uint256 amount;          // agreed pay; if non-zero, fund() must match exactly
     bytes32 termsHash;       // pointer to the off-chain terms the worker accepted

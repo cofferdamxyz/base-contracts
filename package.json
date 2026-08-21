@@ -53,6 +53,7 @@
     "ethers": "^6.17.0",
     "hardhat": "^2.22.0",
     "hardhat-gas-reporter": "^1.0.8",
+    "poseidon-lite": "^0.3.0",
     "solidity-coverage": "^0.8.1",
     "ts-node": "^10.9.2",
     "typechain": "^8.3.0",

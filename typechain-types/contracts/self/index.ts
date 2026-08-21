@@ -4,3 +4,4 @@
 export type { ISelfGroth16Verifier } from "./ISelfGroth16Verifier";
 export type { NullifierRegistry } from "./NullifierRegistry";
 export type { SelfAttesterRegistry } from "./SelfAttesterRegistry";
+export type { Verifier_vc_and_disclose } from "./Verifier_vc_and_disclose";

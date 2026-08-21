@@ -16,3 +16,18 @@ contract MockGroth16Verifier is ISelfGroth16Verifier {
         return true;
     }
 }
+
+/// @title RejectingGroth16Verifier
+/// @notice Always-returns-false verifier, so tests can exercise the
+///         `NullifierRegistry.InvalidProof` branch without constructing a
+///         genuinely invalid Groth16 proof.
+contract RejectingGroth16Verifier is ISelfGroth16Verifier {
+    function verifyProof(
+        uint256[2] calldata,
+        uint256[2][2] calldata,
+        uint256[2] calldata,
+        uint256[21] calldata
+    ) external pure override returns (bool) {
+        return false;
+    }
+}

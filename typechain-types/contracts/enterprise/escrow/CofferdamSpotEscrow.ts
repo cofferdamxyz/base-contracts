@@ -91,6 +91,7 @@ export interface CofferdamSpotEscrowInterface extends Interface {
       | "reclaimNoShow"
       | "refund"
       | "resolveDispute"
+      | "selfWitnessed"
       | "setWitness"
       | "state"
       | "witnessHistory"
@@ -172,6 +173,10 @@ export interface CofferdamSpotEscrowInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
+    functionFragment: "selfWitnessed",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "setWitness",
     values: [AddressLike]
   ): string;
@@ -237,6 +242,10 @@ export interface CofferdamSpotEscrowInterface extends Interface {
   decodeFunctionResult(functionFragment: "refund", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "resolveDispute",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "selfWitnessed",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "setWitness", data: BytesLike): Result;
@@ -576,6 +585,8 @@ export interface CofferdamSpotEscrow extends BaseContract {
     "nonpayable"
   >;
 
+  selfWitnessed: TypedContractMethod<[], [boolean], "view">;
+
   setWitness: TypedContractMethod<
     [_newWitness: AddressLike],
     [void],
@@ -696,6 +707,9 @@ export interface CofferdamSpotEscrow extends BaseContract {
   getFunction(
     nameOrSignature: "resolveDispute"
   ): TypedContractMethod<[_workerAmount: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "selfWitnessed"
+  ): TypedContractMethod<[], [boolean], "view">;
   getFunction(
     nameOrSignature: "setWitness"
   ): TypedContractMethod<[_newWitness: AddressLike], [void], "nonpayable">;

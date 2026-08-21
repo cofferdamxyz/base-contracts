@@ -33,6 +33,7 @@ export interface NullifierRegistryInterface extends Interface {
       | "isAccountBound"
       | "isNullifierBound"
       | "nullifierToAccount"
+      | "selfDestChainId"
       | "verifier"
       | "verifyAndBind"
   ): FunctionFragment;
@@ -67,6 +68,10 @@ export interface NullifierRegistryInterface extends Interface {
     functionFragment: "nullifierToAccount",
     values: [BigNumberish]
   ): string;
+  encodeFunctionData(
+    functionFragment: "selfDestChainId",
+    values?: undefined
+  ): string;
   encodeFunctionData(functionFragment: "verifier", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "verifyAndBind",
@@ -76,6 +81,7 @@ export interface NullifierRegistryInterface extends Interface {
       [[BigNumberish, BigNumberish], [BigNumberish, BigNumberish]],
       [BigNumberish, BigNumberish],
       BigNumberish[],
+      BytesLike,
       BytesLike
     ]
   ): string;
@@ -106,6 +112,10 @@ export interface NullifierRegistryInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "nullifierToAccount",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "selfDestChainId",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "verifier", data: BytesLike): Result;
@@ -217,6 +227,8 @@ export interface NullifierRegistry extends BaseContract {
     "view"
   >;
 
+  selfDestChainId: TypedContractMethod<[], [bigint], "view">;
+
   verifier: TypedContractMethod<[], [string], "view">;
 
   verifyAndBind: TypedContractMethod<
@@ -226,6 +238,7 @@ export interface NullifierRegistry extends BaseContract {
       b: [[BigNumberish, BigNumberish], [BigNumberish, BigNumberish]],
       c: [BigNumberish, BigNumberish],
       pubSignals: BigNumberish[],
+      userContextData: BytesLike,
       attesterSig: BytesLike
     ],
     [void],
@@ -262,6 +275,9 @@ export interface NullifierRegistry extends BaseContract {
     nameOrSignature: "nullifierToAccount"
   ): TypedContractMethod<[arg0: BigNumberish], [string], "view">;
   getFunction(
+    nameOrSignature: "selfDestChainId"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "verifier"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
@@ -273,6 +289,7 @@ export interface NullifierRegistry extends BaseContract {
       b: [[BigNumberish, BigNumberish], [BigNumberish, BigNumberish]],
       c: [BigNumberish, BigNumberish],
       pubSignals: BigNumberish[],
+      userContextData: BytesLike,
       attesterSig: BytesLike
     ],
     [void],
