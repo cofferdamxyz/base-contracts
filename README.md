@@ -631,7 +631,7 @@ removes their Merkle leaf but doesn't pause the company.
 ```
 ┌──────────────── Cofferdam app (RN) + cofferdam-pages (web) ─────────────────┐
 │  Passkey (Secure Enclave / StrongBox, P-256)  ──►  Base Account SDK          │
-│  Self.xyz NFC passport  ──►  TEE prover (cofferdam-prover)                   │
+│  Self.xyz NFC passport  ──►  Self.xyz GCP Confidential Space enclave     │
 │  cofferdam-attester (Worker)  ──►  session attestation + nullifier bind sig │
 └───────────────┬──────────────────────────────────────────────┬─────────────┘
                 │                                                │

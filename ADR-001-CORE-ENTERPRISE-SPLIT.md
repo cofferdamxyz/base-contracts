@@ -131,19 +131,17 @@ worker from starting.**
 Safe because the witness cannot redirect funds: a stale-but-once-valid witness releasing to the
 correct worker is not a loss, so there is nothing to protect by re-checking at use time.
 
-### D6 — Fee model (source: `financial/COFFERDAM_REVENUE.md` §1, §3)
+### D6 — Fee model (source: `../COFFERDAM_REVENUE.md` §1, §3)
 
-- **2% of notional unlocked, 1% veCOFF-locked floor, no cap.** Spot carries a **$1 minimum** binding
-  at its **$50 contract floor**.
-- **The rate is a parameter, never a constant.** The veCOFF discount ladder lands later; hardcoding
-  2% forces a redeploy.
+- **Working card: 2% of eligible GPV pre-TGE; 1% only if the parked veCOFF program later activates.** Spot carries a **$1 minimum** at its **$50 contract floor**.
+- **The rate is a parameter, never a constant.** The 1% path is not live; hardcoding 2% would force a redeploy if an approved reduction later ships.
 - **Rate and originator are snapshotted immutably at construction.** An escrow funded under one rate
   must never settle under another.
 - **The down-only doctrine becomes a contract invariant.** The rate setter may only ever *decrease*.
   This turns a documented promise into something verifiable on-chain.
-- **The originator must be recorded.** The ¼ partner rev-share (OffshoreSync first) is routed by
-  which app originated the volume, so the escrow has to know. This is an independent argument for
-  the consumer factory being gated: the gate is what identifies the originator.
+- **The originator must be recorded.** A proposed partner allocation depends on eligible origin,
+  but no 25% split activates without an executed partner agreement and Cofferdam-side configuration.
+  This independently argues for a gated consumer factory: the gate authenticates the originator.
 
 > Note: with the $50 floor enforced at creation, 2% of $50 is exactly $1, so the $1 minimum never
 > binds independently. One floor check plus the 2% formula covers the published card. **Confirm this
@@ -188,8 +186,7 @@ correct worker is not a loss, so there is nothing to protect by re-checking at u
 
 - [ ] Confirm the $1-minimum reading in D6 — is it redundant given the $50 floor, or is the floor
       expected to move independently?
-- [ ] `ENTERPRISE_MODULE_PLAN.md` (~line 4013) still cites **"flat 0.5%, no cap (rev-7)"**, retired
-      by `COFFERDAM_REVENUE.md` rev-8.1 (2% / 1%). Stale rate in a planning doc.
+- [x] `ENTERPRISE_MODULE_PLAN.md` fee/entity references corrected in the 2026-08-24 rev-9 audit.
 - [ ] Decide git-history handling for the primitive's move out of the submodule.
 - [ ] Rate-limit window and threshold per nullifier.
 - [ ] Whether enterprise escrow creation stays a platform allowlist or moves to `companyAdmin`
