@@ -200,7 +200,14 @@ See:
 The `IAuthorityModule` ABI is crypto-agile: a future `DilithiumAuthorityModule`
 (ML-DSA-65) or `SPHINCSPlusAuthorityModule` (SLH-DSA-128s) plugs in behind the
 same interface with no changes to `CofferdamAccount4337`. The tiered-authority
-model supports phased migration — see `BASE_CONVERSION.md` §12.
+model supports phased migration:
+
+1. Deploy the post-quantum authority modules (ML-DSA-65 "Dilithium", ~2.7 KB signatures; SLH-DSA-128s "SPHINCS+", ~8 KB; a hybrid module requiring both P-256 and Dilithium during transition).
+2. `addAuthority()` the new module on each account — the multi-authority model already supports concurrent signers with tier gating.
+3. Run hybrid mode for high-value operations, then `revokeAuthority()` the P-256 authority once the threat materialises.
+4. Upgrade `SelfAttesterRegistry` from `ecrecover` to a post-quantum verifier (contract upgrade, no L1 fork). Self.xyz's Groth16 proofs are a third-party dependency to track, not a blocker.
+
+Already hash-based and unaffected: `companyAnchor` (keccak256), the Merkle `OrgRoot`, HMAC-SHA256 pseudonyms. Keep every signature path (SDK `NativeTxRequest`, bundler userOp `signature`, attester message) able to carry ~2.7 KB signatures.
 
 ### Gas considerations
 
@@ -257,7 +264,7 @@ B20 ships with a built-in compliance toolkit directly relevant to Cofferdam payr
 | Approvals | Separate Permit2 or custom | Built-in ERC-2612 |
 | Circle integration | Native USDC (Fiat→USDC) | Would need B20 bridge or native issuance |
 
-**Decision pending**: Whether to use existing ERC-20 USDC (Circle-issued, battle-tested) or deploy a B20 Stablecoin for Cofferdam payroll. B20's compliance features are compelling but Circle's USDC has liquidity and fiat on/off-ramp. A hybrid approach (USDC for settlement, B20 for compliance-gated payroll tokens) is also possible.
+**Decided (2026-06-17, re-affirmed 2026-10-10): payroll stays on Circle-issued native USDC; Cofferdam does not mint a B20 stablecoin.** Minting our own stablecoin would make us the issuer and break the non-custodial, non-money-transmitter posture the per-enterprise Circle DAA model exists to preserve (`ENTERPRISE_MODULE_PLAN.md` §6.E). B20 is ERC-20-compatible, so the USDC paymaster and escrow `approve` flow are unaffected either way; B20 remains a possible issuer-vertical feature for an enterprise that is itself a stablecoin/RWA issuer, never core payroll. Original comparison: B20's compliance features are compelling but Circle's USDC has liquidity and fiat on/off-ramp. A hybrid approach (USDC for settlement, B20 for compliance-gated payroll tokens) is also possible.
 
 ## Enterprise Module — Locked Design (rev-8)
 

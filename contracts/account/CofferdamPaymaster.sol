@@ -13,7 +13,7 @@ import {IEntryPoint} from "../interfaces/IEntryPoint.sol";
 ///         sponsors all userOps unconditionally (no signature verification) —
 ///         DO NOT use on mainnet.
 ///
-///         Production paths (see BASE_CONVERSION.md §5.5):
+///         Production paths (see README.md → Base Account Integration):
 ///
 ///           1. CDP PAYMASTER (recommended, ERC-7677-compliant):
 ///              Coinbase-hosted, no onchain contract needed. Configure via the
