@@ -9,9 +9,18 @@ import 'dotenv/config';
 // AA: ERC-4337 EntryPoint v0.7 (0x0000000071727De22E5E9d8BAf0edAc6f37da032)
 // ──────────────────────────────────────────────────────────────────────────────
 
-const PRIVATE_KEY =
-  process.env.DEPLOYER_PRIVATE_KEY ||
+// Hardhat/Anvil account #0: a publicly known key, fine for local and testnet
+// use only. Mainnet never signs with it: without a DEPLOYER_PRIVATE_KEY (or
+// with this key, as in .env.example) the base network has no signer, so a
+// deploy fails instead of using a key anyone can drain.
+const PUBLIC_DEV_KEY =
   '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY;
+const PRIVATE_KEY = DEPLOYER_PRIVATE_KEY || PUBLIC_DEV_KEY;
+const MAINNET_ACCOUNTS =
+  DEPLOYER_PRIVATE_KEY && DEPLOYER_PRIVATE_KEY.toLowerCase() !== PUBLIC_DEV_KEY
+    ? [DEPLOYER_PRIVATE_KEY]
+    : [];
 
 const config: HardhatUserConfig = {
   defaultNetwork: 'hardhat',
@@ -51,7 +60,7 @@ const config: HardhatUserConfig = {
     base: {
       url: process.env.BASE_RPC_URL || 'https://mainnet.base.org',
       chainId: 8453,
-      accounts: [PRIVATE_KEY],
+      accounts: MAINNET_ACCOUNTS,
     },
   },
 

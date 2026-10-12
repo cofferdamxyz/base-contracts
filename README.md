@@ -616,7 +616,7 @@ removes their Merkle leaf but doesn't pause the company.
 |---|---|---|
 | `CofferdamAccount4337` | ✅ Built | ERC-4337 account with tiered authority |
 | `CofferdamAccountFactory4337` | ✅ Built | CREATE2 deterministic deployment |
-| `CofferdamPaymaster` | ✅ Stub | Dev/test only — production uses CDP. `postOp` uses the EntryPoint **v0.7** 4-arg signature (`mode, context, actualGasCost, actualUserOpFeePerGas`); the v0.6 3-arg shape reverts (`PostOpReverted`) under v0.7 |
+| `CofferdamPaymaster` | ✅ Stub | Dev/test only — production uses CDP. `postOp` uses the EntryPoint **v0.7** 4-arg signature (`mode, context, actualGasCost, actualUserOpFeePerGas`); the v0.6 3-arg shape reverts (`PostOpReverted`) under v0.7. `Ownable` (owner = deployer); `withdrawTo` is `onlyOwner` |
 | `PasskeyAuthority` | ✅ Built | P-256 via RIP-7212 precompile |
 | `WebAuthnPasskeyAuthority` | ✅ Built | Full WebAuthn assertion verification |
 | `SessionKeyAuthority` | ✅ Built | ECDSA session-signer bridge (legacy auth) |
