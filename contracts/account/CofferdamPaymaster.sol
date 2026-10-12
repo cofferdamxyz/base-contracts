@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IEntryPoint} from "../interfaces/IEntryPoint.sol";
 
 /// @title CofferdamPaymaster
@@ -31,8 +32,9 @@ import {IEntryPoint} from "../interfaces/IEntryPoint.sol";
 ///              gas via CDP; workers never see gas costs.
 ///
 ///           3. THIS STUB (dev/test only):
-///              Unconditional sponsorship for local anvil testing. No access
-///              control, no signature verification. Never deploy to mainnet.
+///              Unconditional sponsorship for local anvil testing. No
+///              signature verification; only the owner (the deployer) can
+///              withdraw the EntryPoint deposit. Never deploy to mainnet.
 interface IPaymaster {
     function validatePaymasterUserOp(
         IEntryPoint.PackedUserOperation calldata userOp,
@@ -52,7 +54,7 @@ interface IPaymaster {
     ) external;
 }
 
-contract CofferdamPaymaster is IPaymaster {
+contract CofferdamPaymaster is IPaymaster, Ownable {
     IEntryPoint public immutable ENTRY_POINT;
 
     /// @notice Deposit ETH to the EntryPoint for this paymaster's balance.
@@ -60,12 +62,12 @@ contract CofferdamPaymaster is IPaymaster {
         ENTRY_POINT.depositTo{value: msg.value}(address(this));
     }
 
-    /// @notice Withdraw the paymaster's EntryPoint balance.
-    function withdrawTo(address payable withdrawAddress, uint256 amount) external {
+    /// @notice Withdraw the paymaster's EntryPoint balance. Owner only.
+    function withdrawTo(address payable withdrawAddress, uint256 amount) external onlyOwner {
         ENTRY_POINT.withdrawTo(withdrawAddress, amount);
     }
 
-    constructor(IEntryPoint entryPoint) {
+    constructor(IEntryPoint entryPoint) Ownable(msg.sender) {
         ENTRY_POINT = entryPoint;
     }
 
