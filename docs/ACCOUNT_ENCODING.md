@@ -352,6 +352,7 @@ Bundler → EntryPoint.handleOps([userOp], beneficiary)
     → Account decodes authorityId from signature[0:32]
     → Account calls _authenticate(authorityId, userOpHash, signature[32:])
       → Module.isValidSignature(account, userOpHash, config, userSig)
+    → Account checks userOp.callData against the authority's tier (§10.4)
     → Account returns validationData (0 = success)
   → EntryPoint calls account.execute(target, value, data) [if validation passed]
 ```
@@ -384,7 +385,9 @@ These invariants are enforced on-chain and should be verified during audits:
 4. **Tier gating** (checked in `validateUserOp` against `userOp.callData`):
    - `High` may make any call.
    - `LowManaged` may `execute` / `executeBatch` to any target other than the
-     account itself, and may `addAuthority` a High-tier module.
+     account itself, and may `addAuthority` a High-tier module only while
+     `upgradeLocked == false`. Once a passkey exists, only `High` may add or
+     revoke authorities.
    - `LowUntrusted` may ONLY call `enrollFirstPasskey` (zero value) with its
      own id as `lowAuthorityId`, before the ratchet fires.
    Anything else reverts with `TierNotPermitted(tier)`.

@@ -210,6 +210,18 @@ describe('CofferdamAccount4337 tier gating', () => {
       expect((await account.getAuthority(0)).active).to.be.true; // LowManaged survives (OR semantics)
     });
 
+    it('may not add any authority once a passkey exists', async () => {
+      await account.connect(entryPoint).addAuthority(0, await passkeyModule.getAddress(), passkey().config);
+      expect(await account.upgradeLocked()).to.be.true;
+      const callData = enc(account, 'addAuthority', [0, await passkeyModule.getAddress(), passkey().config]);
+      await expect(validate(account, addr, 0, callData, signAs))
+        .to.be.revertedWithCustomError(account, 'TierNotPermitted').withArgs(LOW_MANAGED);
+      // It can still execute company-bound ops (OR semantics).
+      const inc = counter.interface.encodeFunctionData('increment');
+      expect(await validate(account, addr, 0, enc(account, 'execute', [await counter.getAddress(), 0, inc]), signAs))
+        .to.equal(0n);
+    });
+
     it('may not add a low-tier authority or revoke one', async () => {
       const other = sessionKey();
       for (const mod of [untrustedModule, managedModule]) {

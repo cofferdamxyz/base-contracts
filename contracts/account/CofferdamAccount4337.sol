@@ -30,7 +30,8 @@ import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 ///         Tier gating (enforced here, mirrored client-side in the SDK):
 ///           - High         → may `execute` / `addAuthority` / `revokeAuthority`.
 ///           - LowManaged   → may `execute` (company-bound ops) + `addAuthority`
-///                            of a High passkey via the OR-semantics path.
+///                            of a High passkey via the OR-semantics path,
+///                            only until the first passkey exists (ratchet).
 ///           - LowUntrusted → may ONLY call `enrollFirstPasskey` (zero value);
 ///                            everything else reverts. After the first passkey
 ///                            registers, the one-way ratchet permanently
@@ -126,7 +127,9 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
 
     /// @dev Tier gate on the userOp's top-level call. High may do anything.
     ///      LowManaged may `execute` / `executeBatch` to any target except this
-    ///      account, and may `addAuthority` a High module. LowUntrusted may only
+    ///      account, and may `addAuthority` a High module until the ratchet
+    ///      fires; after that only High may manage authorities
+    ///      (`rules/cofferdam-identity.md`, IDENTITY_LAYER_DESIGN §2.5.2). LowUntrusted may only
     ///      `enrollFirstPasskey` naming itself, before the ratchet fires.
     function _checkCallPolicy(Tier t, uint256 authorityId, bytes calldata callData) internal view {
         if (t == Tier.LowUntrusted) {
@@ -151,7 +154,7 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
                 if (targets[i] == address(this)) revert TierNotPermitted(t);
             }
             return;
-        } else if (selector == this.addAuthority.selector) {
+        } else if (selector == this.addAuthority.selector && !upgradeLocked) {
             (, IAuthorityModule newModule) = abi.decode(callData[4:], (uint256, IAuthorityModule));
             if (newModule.tier() == Tier.High) return;
         }

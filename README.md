@@ -595,7 +595,7 @@ removes their Merkle leaf but doesn't pause the company.
 |---|---|
 | Company wallet | `CofferdamCompanyRegistry` (domain-proof gated, institutional) |
 | Treasury top-up | Circle DAA → native USDC on Base (non-custodial, at par) |
-| Recruiter / automated actions | Session key (LowUntrusted tier) or Spend Permissions |
+| Recruiter / automated actions | Session key (LowManaged tier) or Spend Permissions |
 | Finance officer | Passkey authority (High tier) — signs UserOp to fund escrow |
 | Manager approval | Optional `EscrowStep` — disabled if not needed |
 | Worker identity | `NullifierRegistry` binding (Self.xyz, opt-in) |
@@ -654,7 +654,7 @@ removes their Merkle leaf but doesn't pause the company.
 │       └─ Emergency: pauseCompany(domain) circuit breaker                    │
 │                                                                              │
 │  WORKER      = CofferdamAccount4337 (ERC-4337) — AuthorityManagerBase       │
-│       └─ owners: P-256 passkeys (RIP-7212) + Session keys (LowUntrusted)   │
+│       └─ owners: P-256 passkeys (RIP-7212) + Session keys (LowManaged)     │
 │       └─ Provisioned via SCIM → Merkle leaf → SSO invite → auto-deploy      │
 │       └─ Gas sponsored by CDP Paymaster (worker never needs ETH)            │
 │                                                                              │
@@ -904,6 +904,7 @@ universal passkey sign-on, one-tap USDC payments, and multi-chain support.
 See [What is a Base Account?](https://docs.base.org/base-account/overview/what-is-base-account).
 
 - **ERC-6492 counterfactual signatures**: `isValidSignature` supports ERC-6492 wrapped signatures for undeployed accounts. Viem's `verifyMessage` / `verifyTypedData` handle the wrapper automatically.
+- **ERC-1271 replay safety**: the authority signs `replaySafeHash(hash)` (EIP-712 `CofferdamAccountMessage(bytes32 hash)` under the account's own domain), not the verifier's hash, so a signature is valid on one account and chain only. Only High and LowManaged authorities can sign; see `docs/ACCOUNT_ENCODING.md` §5.5.
 - **Sub Account import**: `addOwnerAddress` / `addOwnerPublicKey` mirror the Coinbase Smart Wallet pattern, allowing Cofferdam accounts to be imported as Sub Accounts via `wallet_addSubAccount`.
 - **CDP Paymaster**: Production gas sponsorship uses the Coinbase-hosted ERC-7677 paymaster via `paymasterService` capability in `wallet_sendCalls` — no onchain paymaster contract needed.
 - **Spend Permissions**: Base's native `SpendPermissionManager` supports recurring period-based token allowances (EIP-712 structured, ERC-6492 compatible). Relevant for future payroll escrow replacement. See [Spend Permissions](https://docs.base.org/base-account/reference/onchain-contracts/spend-permissions).
