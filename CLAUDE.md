@@ -1,0 +1,26 @@
+@AGENTS.md
+
+## Workspace
+
+This is a Cofferdam product repository. On the Mac it is checked out inside the
+`cofferdam` workspace repository (`cofferdamxyz/cofferdam`), whose `AGENTS.md`,
+`rules/` and `.claude/skills/` are at `../`. In a cloud session (claude.ai/code,
+the Claude mobile app, Projects) the clones sit side by side, so the same files
+are at `../cofferdam/`. Read the workspace `AGENTS.md` first whenever it is
+present, and the `rules/<area>.md` for the area you touch.
+
+## Validate here
+
+`yarn compile`, `yarn test`, `yarn typecheck`; commit the regenerated
+`typechain-types/`. The private `contracts/enterprise/` submodule is absent in
+cloud clones and must not be fetched there; the public core builds and tests
+without it.
+
+## Delegated git (cloud session, Projects thread, Lockkeeper)
+
+Never commit on `main`. Commit on the session branch with `git commit -s` and
+a `Co-Authored-By: Claude <model> <noreply@anthropic.com>` trailer naming the
+model that wrote the change, push that branch at every stopping point, and do
+not merge or open a pull request unless the task says so. The founder lands
+branches locally (workspace decision 0013). Interactive sessions on the Mac
+commit on `main` and never push unless asked.
