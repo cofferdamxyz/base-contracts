@@ -83,6 +83,7 @@ abstract contract AuthorityManagerBase {
     function _initFirstAuthority(IAuthorityModule initialModule, bytes memory initialConfig) internal {
         if (address(initialModule) == address(0)) revert ZeroModule();
         Tier t = initialModule.tier();
+        if (t == Tier.None) revert TierNotPermitted(t);
 
         _authorities[0] = Authority({module: initialModule, tier: t, active: true, config: initialConfig});
         authorityCount = 1;
@@ -115,9 +116,15 @@ abstract contract AuthorityManagerBase {
         return a.tier;
     }
 
-    /// @dev Append an authority record; enforces the passkey cap for High tiers.
+    /// @dev Append an authority record; enforces the passkey cap for High tiers
+    ///      and the ratchet invariant: once `upgradeLocked` is set, no
+    ///      LowUntrusted authority may ever be added, and adding any passkey
+    ///      fires the ratchet if it has not fired yet (whatever the entrypoint).
     function _addAuthority(IAuthorityModule module, bytes memory config) internal returns (uint256 id) {
+        if (address(module) == address(0)) revert ZeroModule();
         Tier t = module.tier();
+        if (t == Tier.None) revert TierNotPermitted(t);
+        if (t == Tier.LowUntrusted && upgradeLocked) revert UpgradeLocked();
         if (t == Tier.High) {
             if (passkeyCount >= MAX_PASSKEYS) revert PasskeyCapReached();
             passkeyCount++;
@@ -126,6 +133,8 @@ abstract contract AuthorityManagerBase {
         _authorities[id] = Authority({module: module, tier: t, active: true, config: config});
         authorityCount = id + 1;
         emit AuthorityAdded(id, address(module), t, module.kind());
+
+        if (t == Tier.High && !upgradeLocked) _fireRatchet();
     }
 
     /// @dev Deactivate an authority record; decrements the passkey count if the
@@ -159,8 +168,14 @@ abstract contract AuthorityManagerBase {
         IAuthorityModule passkeyModule,
         bytes memory passkeyConfig
     ) internal returns (uint256 passkeyAuthorityId) {
+        // `_addAuthority` fires the ratchet because the module is High.
         passkeyAuthorityId = _addAuthority(passkeyModule, passkeyConfig);
+        emit FirstPasskeyEnrolled(lowAuthorityId, passkeyAuthorityId);
+    }
 
+    /// @dev The one-way ratchet: lock the account and permanently deactivate
+    ///      every LowUntrusted authority.
+    function _fireRatchet() private {
         upgradeLocked = true;
         for (uint256 i = 0; i < authorityCount; i++) {
             Authority storage a = _authorities[i];
@@ -169,8 +184,6 @@ abstract contract AuthorityManagerBase {
                 emit AuthorityRevoked(i);
             }
         }
-
-        emit FirstPasskeyEnrolled(lowAuthorityId, passkeyAuthorityId);
         emit RatchetFired();
     }
 

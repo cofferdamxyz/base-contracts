@@ -57,9 +57,10 @@ describe('EntryPoint v0.7 Integration', function () {
   it('should deploy a CofferdamAccount, send a PackedUserOp through EntryPoint v0.7, and execute a call', async function () {
     if (!isFork) this.skip();
 
-    // 1. Deploy authority module (SessionKeyAuthority — LowUntrusted for testing)
+    // 1. Deploy authority module (SessionKeyAuthority — LowManaged, since a
+    //    LowUntrusted key may only enrol the first passkey, not execute)
     const SessionKeyAuthority = await ethers.getContractFactory('SessionKeyAuthority');
-    const sessionAuth = await SessionKeyAuthority.deploy(1);
+    const sessionAuth = await SessionKeyAuthority.deploy(2);
     await sessionAuth.waitForDeployment();
     const sessionAuthAddr = await sessionAuth.getAddress();
 
