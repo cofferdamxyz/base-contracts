@@ -10,4 +10,7 @@ contract MockCounter {
     function increment() external {
         value += 1;
     }
+
+    /// @notice Accepts ETH, for tests of a permission's value cap.
+    function deposit() external payable {}
 }

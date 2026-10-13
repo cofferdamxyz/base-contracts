@@ -23,8 +23,10 @@ export async function infoMenu(rpcUrl: string, wallet: PrefundedWallet): Promise
   printKV('EntryPoint v0.7', config.entryPoint);
   if (config.passkeyAuthority) printKV('PasskeyAuthority', config.passkeyAuthority);
   if (config.webAuthnPasskeyAuthority) printKV('WebAuthnPasskeyAuthority', config.webAuthnPasskeyAuthority);
-  if (config.sessionKeyAuthorityUntrusted) printKV('SessionKeyAuth (untrusted)', config.sessionKeyAuthorityUntrusted);
+  if (config.partnerPasskeyAuthority) printKV('PartnerPasskeyAuthority', config.partnerPasskeyAuthority);
   if (config.sessionKeyAuthorityManaged) printKV('SessionKeyAuth (managed)', config.sessionKeyAuthorityManaged);
+  if (config.moduleRegistry) printKV('ModuleRegistry', config.moduleRegistry);
+  if (config.ceremonyAttesterRegistry) printKV('CeremonyAttesterRegistry', config.ceremonyAttesterRegistry);
   if (config.accountFactory) printKV('AccountFactory', config.accountFactory);
   if (config.paymaster) printKV('Paymaster', config.paymaster);
   if (config.selfAttesterRegistry) printKV('SelfAttesterRegistry', config.selfAttesterRegistry);

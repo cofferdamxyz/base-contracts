@@ -7,23 +7,46 @@ pragma solidity 0.8.28;
 ///         spec in `cofferdam-sdk/IDENTITY_LAYER_DESIGN.md` §2.5.
 ///
 ///         The tier of the authority that signs a transaction decides what that
-///         transaction may do (enforced by `CofferdamAccount4337`):
+///         transaction may do (enforced by `CofferdamAccount4337`, decisions
+///         0015 and 0016 in the `cofferdam` repository):
 ///
-///           High          — a device passkey (P-256, Secure Enclave/StrongBox).
-///                           May sign anything.
-///           LowUntrusted  — a leakable credential (password / social OAuth,
-///                           bridged on-chain via a server session signer). May
-///                           ONLY authorise the first-passkey enrolment with zero
-///                           value, then is permanently locked out by the one-way
-///                           ratchet (§2.5.2).
-///           LowManaged    — an IdP-brokered, centrally SCIM-revocable authority
-///                           (e.g. Polis SSO). NOT ratchet-locked; coexists with a
-///                           later passkey with OR semantics (§3.10).
+///           LowUntrusted  — RETIRED (decision 0016). A consumer-server key is
+///                           never an account authority; the account rejects
+///                           any module that reports this tier. The value is
+///                           kept so the enum numbering does not move.
+///           LowManaged    — the employer IdP bridge (e.g. Polis SSO), a
+///                           server-held key. Scoped by a `Permission` like
+///                           Partner; coexists with High (OR semantics).
+///           High          — a `cofferdam.xyz` passkey (P-256, Secure Enclave /
+///                           StrongBox, UV), created and used only on Cofferdam
+///                           surfaces. May sign anything.
+///           Partner       — the user's own passkey on a partner app's RP.
+///                           Scoped by a `Permission`: allowlisted job calls,
+///                           zero value, no authority changes, no ERC-1271.
 enum Tier {
     None,
     LowUntrusted,
     LowManaged,
-    High
+    High,
+    Partner
+}
+
+/// @notice What a Partner or Managed authority may call, fixed when the
+///         authority is granted and stored on the account (decision 0016:
+///         the grant the user approved is what the chain enforces; no
+///         Cofferdam key can widen it).
+/// @param targets   `targets[i]` may be called with selector `selectors[i]`.
+/// @param selectors Parallel to `targets`.
+/// @param valueCap  Maximum ETH value per call. Always 0 for Partner and for
+///                  any grant made without a High signer.
+/// @param expiry    Unix time after which the authority's userOps are invalid
+///                  (returned as `validUntil`). 0 = no expiry, allowed for
+///                  Managed only.
+struct Permission {
+    address[] targets;
+    bytes4[] selectors;
+    uint256 valueCap;
+    uint48 expiry;
 }
 
 /// @title IAuthorityModule
@@ -46,16 +69,11 @@ enum Tier {
 ///         This interface is chain-agnostic by design.
 interface IAuthorityModule {
     /// @notice The trust tier this module's authorities carry on an account.
-    /// @dev    `pure` because a module's tier is fixed at deploy time. A single
-    ///         module implementation MAY be deployed twice at different tiers
-    ///         (e.g. `SessionKeyAuthority` as LowUntrusted vs LowManaged) — each
-    ///         deployment returns its own immutable tier.
-    ///         MUST NOT read storage: `CofferdamAccount4337.validateUserOp` calls
-    ///         `tier()` on a module being added during validation, where
-    ///         ERC-7562 forbids reading another contract's storage, and a tier
-    ///         that could change between validation and execution would let a
-    ///         module pass the tier gate and then act as a different tier.
-    ///         Return a constant or an immutable.
+    /// @dev    A module's tier is fixed at deploy time. MUST NOT read storage:
+    ///         the account records the tier when an authority is added and
+    ///         enforces it on every userOp, so a tier that could change later
+    ///         would let a module be granted as one tier and behave as
+    ///         another. Return a constant or an immutable.
     function tier() external view returns (Tier);
 
     /// @notice Stable identifier of the authority kind, e.g.

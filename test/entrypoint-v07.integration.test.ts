@@ -57,17 +57,29 @@ describe('EntryPoint v0.7 Integration', function () {
   it('should deploy a CofferdamAccount, send a PackedUserOp through EntryPoint v0.7, and execute a call', async function () {
     if (!isFork) this.skip();
 
-    // 1. Deploy authority module (SessionKeyAuthority — LowManaged, since a
-    //    LowUntrusted key may only enrol the first passkey, not execute)
+    // 1. Deploy authority module (SessionKeyAuthority — Managed) and the
+    //    registries the account pins.
     const SessionKeyAuthority = await ethers.getContractFactory('SessionKeyAuthority');
-    const sessionAuth = await SessionKeyAuthority.deploy(2);
+    const sessionAuth = await SessionKeyAuthority.deploy();
     await sessionAuth.waitForDeployment();
     const sessionAuthAddr = await sessionAuth.getAddress();
+    const moduleRegistry = await (await ethers.getContractFactory('CofferdamModuleRegistry')).deploy(deployerAddr, [sessionAuthAddr]);
+    await moduleRegistry.waitForDeployment();
+    const ceremonyRegistry = await (await ethers.getContractFactory('CofferdamCeremonyAttesterRegistry')).deploy(deployerAddr, []);
+    await ceremonyRegistry.waitForDeployment();
 
-    // 2. Deploy account factory (for address computation reference)
-    const Factory = await ethers.getContractFactory('CofferdamAccountFactory4337');
-    const factory = await Factory.deploy(ENTRYPOINT_V07);
-    await factory.waitForDeployment();
+    // 2. Deploy a simple target contract (a counter) to call via UserOp; the
+    //    Managed grant lists exactly `increment` on it.
+    const Counter = await ethers.getContractFactory('MockCounter');
+    const counter = await Counter.deploy();
+    await counter.waitForDeployment();
+    const counterAddr = await counter.getAddress();
+    const grant = {
+      targets: [counterAddr],
+      selectors: [counter.interface.getFunction('increment')!.selector],
+      valueCap: 0n,
+      expiry: 0n,
+    };
 
     // 3. Deploy account directly (bypassing factory CREATE2 to avoid
     //    collisions with EIP-7702 delegated EOAs on the Base Sepolia fork)
@@ -75,7 +87,7 @@ describe('EntryPoint v0.7 Integration', function () {
     const signerAddr = await signer.getAddress();
     const config = ethers.AbiCoder.defaultAbiCoder().encode(['address'], [signerAddr]);
     const Account = await ethers.getContractFactory('CofferdamAccount4337');
-    const account = await Account.deploy(ENTRYPOINT_V07, sessionAuthAddr, config);
+    const account = await Account.deploy(ENTRYPOINT_V07, moduleRegistry, ceremonyRegistry, sessionAuthAddr, config, grant);
     await account.waitForDeployment();
     const accountAddr = await account.getAddress();
 
@@ -85,12 +97,6 @@ describe('EntryPoint v0.7 Integration', function () {
       value: ethers.parseEther('1.0'),
     });
     await fundTx.wait();
-
-    // 5. Deploy a simple target contract (a counter) to call via UserOp
-    const Counter = await ethers.getContractFactory('MockCounter');
-    const counter = await Counter.deploy();
-    await counter.waitForDeployment();
-    const counterAddr = await counter.getAddress();
 
     // 6. Account is already deployed — use empty initCode
     const initCode = '0x';

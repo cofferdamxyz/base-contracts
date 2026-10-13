@@ -31,6 +31,14 @@ import {IAuthorityModule, Tier} from "../interfaces/IAuthorityModule.sol";
 ///         it to appear at `challengeIndex` in `clientDataJSON` (handled inside
 ///         `WebAuthn.verify`).
 ///
+///         RP PINNING (decision 0016). High means a `cofferdam.xyz` passkey,
+///         created and used only on Cofferdam surfaces (the Cofferdam app and
+///         `id.cofferdam.xyz`). The assertion's `authenticatorData` must start
+///         with `rpIdHash == sha256("cofferdam.xyz")`; a passkey on any other
+///         RP (a partner app's own domain) is never High. The OS binds a
+///         passkey's RP to the origins and binaries associated with it, so this
+///         check is the on-chain domain lock.
+///
 ///         USER VERIFICATION. `requireUserVerification` is a compile-time
 ///         `constant true`: a High-tier financial authority is always
 ///         biometric-gated, so every assertion MUST carry the UV bit (the device
@@ -45,6 +53,10 @@ contract WebAuthnPasskeyAuthority is IAuthorityModule {
     /// @notice Whether assertions must carry the User-Verified (UV) flag. Always
     ///         `true` for this High-tier module.
     bool public constant requireUserVerification = true;
+
+    /// @notice `sha256("cofferdam.xyz")`, the only RP a High passkey may have.
+    bytes32 public constant COFFERDAM_RP_ID_HASH =
+        0x93c1df9b80c22525d5c6a23dd4ee07f3d0accfbc2634c4d97c9c7587653764e2;
 
     /// @inheritdoc IAuthorityModule
     function tier() external pure returns (Tier) {
@@ -70,6 +82,8 @@ contract WebAuthnPasskeyAuthority is IAuthorityModule {
 
         (bool ok, WebAuthn.WebAuthnAuth calldata auth) = WebAuthn.tryDecodeAuth(signature);
         if (!ok) return false;
+        if (auth.authenticatorData.length < 37) return false;
+        if (bytes32(auth.authenticatorData[0:32]) != COFFERDAM_RP_ID_HASH) return false;
 
         (bytes32 qx, bytes32 qy) = abi.decode(config, (bytes32, bytes32));
 

@@ -9,6 +9,12 @@ import {IAuthorityModule, Tier} from "../interfaces/IAuthorityModule.sol";
 ///         WebAuthn ES256). Backed by hardware (iOS Secure Enclave / Android
 ///         StrongBox) on the user's device; non-exportable, biometric-gated.
 ///
+///         NOT FOR MAINNET (decision 0016). A raw P-256 signature carries no
+///         RP, so this module cannot tell a `cofferdam.xyz` passkey from any
+///         other P-256 key. High on mainnet is `WebAuthnPasskeyAuthority`,
+///         which pins the RP; this module is listed in the module registry
+///         on local and test networks only.
+///
 /// @dev    Stateless singleton. The account stores the public key as
 ///         `config = abi.encode(qx, qy)` and the signature is the raw 64-byte
 ///         `r || s`. Validation goes through OpenZeppelin's `P256.verify`, which

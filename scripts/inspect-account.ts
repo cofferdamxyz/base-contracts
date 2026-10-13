@@ -5,7 +5,7 @@ import * as path from 'path';
 // ─────────────────────────────────────────────────────────────────────────────
 // Account Inspector — reads on-chain state of a deployed CofferdamAccount4337
 // and prints a human-readable summary: authorities, tiers, kinds, config blobs,
-// ratchet status, EntryPoint binding, balance, nonce, and code presence.
+// High status and permissions, EntryPoint binding, balance, nonce, and code presence.
 //
 // Usage:
 //   hardhat run scripts/inspect-account.ts --network baseSepolia -- <address>
@@ -14,13 +14,14 @@ import * as path from 'path';
 
 const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
 
-const TIER_NAMES = ['None', 'LowUntrusted', 'LowManaged', 'High'] as const;
+const TIER_NAMES = ['None', 'LowUntrusted (retired)', 'LowManaged', 'High', 'Partner'] as const;
 
 // Known kind hashes (keccak256 of the kind string)
 const KIND_HASHES: Record<string, string> = {
   [ethers.id('passkey')]: 'passkey',
   [ethers.id('session')]: 'session',
   [ethers.id('polis_sso')]: 'polis_sso',
+  [ethers.id('partner_passkey')]: 'partner_passkey',
 };
 
 // Minimal ABIs (no Typechain needed — raw ethers.Interface)
@@ -29,6 +30,10 @@ const ACCOUNT_ABI = [
   'function authorityCount() view returns (uint256)',
   'function passkeyCount() view returns (uint8)',
   'function upgradeLocked() view returns (bool)',
+  'function ceremonyNonce() view returns (uint256)',
+  'function MODULE_REGISTRY() view returns (address)',
+  'function CEREMONY_ATTESTERS() view returns (address)',
+  'function getPermission(uint256 authorityId) view returns (tuple(address[] targets, bytes4[] selectors, uint256 valueCap, uint48 expiry))',
   'function getAuthority(uint256 authorityId) view returns (address module, uint8 tier, bool active, bytes config)',
   'function isValidSignature(bytes32 digest, bytes sig) view returns (bytes4)',
 ] as const;
@@ -40,7 +45,7 @@ const MODULE_ABI = [
 
 const FACTORY_ABI = [
   'function ENTRY_POINT() view returns (address)',
-  'function getAddress(address initialModule, bytes initialConfig, bytes32 salt) view returns (address)',
+  'function getAddress(address initialModule, bytes initialConfig, tuple(address[] targets, bytes4[] selectors, uint256 valueCap, uint48 expiry) initialPermission, bytes32 salt) view returns (address)',
   'event AccountDeployed(address indexed account, address indexed initialModule, bytes32 salt)',
 ] as const;
 
@@ -58,6 +63,14 @@ interface AuthorityInfo {
 
 function decodeConfig(module: string, config: string): string | null {
   const configBytes = ethers.getBytes(config);
+  if (configBytes.length === 160) {
+    // PartnerPasskeyAuthority: abi.encode(qx, qy, rpIdHash, partnerId, partnerSigner)
+    const [qx, qy, rpIdHash, partnerId, partnerSigner] = ethers.AbiCoder.defaultAbiCoder().decode(
+      ['bytes32', 'bytes32', 'bytes32', 'bytes32', 'address'],
+      config,
+    );
+    return `Partner passkey:\n    qx: ${qx}\n    qy: ${qy}\n    rpIdHash: ${rpIdHash}\n    partnerId: ${partnerId}\n    partnerSigner: ${partnerSigner}`;
+  }
   if (configBytes.length === 64) {
     // PasskeyAuthority / WebAuthnPasskeyAuthority: abi.encode(bytes32 qx, bytes32 qy)
     const qx = ethers.hexlify(configBytes.slice(0, 32));
@@ -65,9 +78,9 @@ function decodeConfig(module: string, config: string): string | null {
     return `P-256 public key:\n    qx: ${qx}\n    qy: ${qy}`;
   }
   if (configBytes.length === 32) {
-    // SessionKeyAuthority: abi.encode(address sessionSigner)
-    const signer = ethers.getAddress(ethers.hexlify(configBytes));
-    return `Session signer: ${signer}`;
+    // SessionKeyAuthority (Managed): abi.encode(address sessionSigner)
+    const [signer] = ethers.AbiCoder.defaultAbiCoder().decode(['address'], config);
+    return `Bridge signer: ${signer}`;
   }
   return null;
 }
@@ -131,13 +144,17 @@ async function inspectAccount(accountAddress: string, txHash?: string) {
   const authorityCount = await account.authorityCount();
   const passkeyCount = await account.passkeyCount();
   const upgradeLocked = await account.upgradeLocked();
+  const ceremonyNonce = await account.ceremonyNonce();
 
   console.log('\n── Account Config ──────────────────────────────────────────────────');
   console.log(`  EntryPoint:   ${entryPointAddr}`);
   console.log(`  EP correct:   ${entryPointAddr.toLowerCase() === ENTRYPOINT_V07.toLowerCase() ? 'YES ✓' : 'NO ✗ (expected ' + ENTRYPOINT_V07 + ')'}`);
   console.log(`  Auth count:   ${authorityCount}`);
   console.log(`  Passkey count:${passkeyCount}`);
-  console.log(`  Upgrade locked (ratchet fired): ${upgradeLocked ? 'YES ✓' : 'NO'}`);
+  console.log(`  High established: ${upgradeLocked ? 'YES ✓ (only High manages authorities)' : 'NO (first-High and Partner recovery open)'}`);
+  console.log(`  Ceremony nonce: ${ceremonyNonce}`);
+  console.log(`  Module registry:   ${await account.MODULE_REGISTRY()}`);
+  console.log(`  Ceremony attesters: ${await account.CEREMONY_ATTESTERS()}`);
   console.log(`  Max passkeys: 3`);
 
   // ── Authority inspection ──────────────────────────────────────────────────
@@ -186,33 +203,29 @@ async function inspectAccount(accountAddress: string, txHash?: string) {
     } else {
       console.log(`      Config:    ${config} (raw, ${ethers.getBytes(config).length} bytes)`);
     }
+    if (Number(tierNum) === 2 || Number(tierNum) === 4) {
+      const p = await account.getPermission(i);
+      const expiry = Number(p.expiry);
+      console.log(`      Permission: value cap ${p.valueCap} wei, ${expiry === 0 ? 'no expiry' : 'expires ' + new Date(expiry * 1000).toISOString()}`);
+      p.targets.forEach((t: string, j: number) => console.log(`        ${t} ${p.selectors[j]}`));
+    }
   }
 
-  // ── Ratchet / security summary ────────────────────────────────────────────
+  // ── Security summary ──────────────────────────────────────────────────
   console.log('\n── Security Summary ────────────────────────────────────────────────');
 
-  const activePasskeys = authorities.filter((a) => a.active && a.tierName === 'High');
-  const activeLowUntrusted = authorities.filter((a) => a.active && a.tierName === 'LowUntrusted');
-  const activeLowManaged = authorities.filter((a) => a.active && a.tierName === 'LowManaged');
+  const activePasskeys = authorities.filter((a) => a.active && a.tierNum === 3);
+  const activePartner = authorities.filter((a) => a.active && a.tierNum === 4);
+  const activeManaged = authorities.filter((a) => a.active && a.tierNum === 2);
+  const activeRetired = authorities.filter((a) => a.active && a.tierNum === 1);
   const revoked = authorities.filter((a) => !a.active);
 
-  console.log(`  Active passkeys:     ${activePasskeys.length} / 3 max`);
-  console.log(`  Active LowUntrusted: ${activeLowUntrusted.length}`);
-  console.log(`  Active LowManaged:   ${activeLowManaged.length}`);
-  console.log(`  Revoked authorities: ${revoked.length}`);
-
-  if (upgradeLocked && activePasskeys.length > 0) {
-    console.log('  Ratchet:             FIRED ✓ (passkey-first, untrusted locked out)');
-  } else if (!upgradeLocked && activeLowUntrusted.length > 0 && activePasskeys.length === 0) {
-    console.log('  Ratchet:             NOT FIRED (legacy-first, awaiting passkey enrolment)');
-  } else if (!upgradeLocked && activePasskeys.length === 0 && activeLowUntrusted.length === 0) {
-    console.log('  Ratchet:             NOT FIRED (no passkey, no untrusted — unusual state)');
-  } else {
-    console.log('  Ratchet:             UNKNOWN STATE — review manually');
-  }
-
-  if (activeLowUntrusted.length > 0 && upgradeLocked) {
-    console.log('  ⚠ WARNING: Active LowUntrusted authority with ratchet fired — unexpected!');
+  console.log(`  Active High passkeys: ${activePasskeys.length} / 3 max`);
+  console.log(`  Active Partner:       ${activePartner.length}`);
+  console.log(`  Active Managed:       ${activeManaged.length}`);
+  console.log(`  Revoked authorities:  ${revoked.length}`);
+  if (activeRetired.length > 0) {
+    console.log('  ⚠ WARNING: active LowUntrusted authority — a pre-0016 account; migrate it.');
   }
 
   // ── Transaction analysis (if tx hash provided) ────────────────────────────
@@ -289,22 +302,13 @@ async function inspectAccount(accountAddress: string, txHash?: string) {
   // ── Interpretation ────────────────────────────────────────────────────────
   console.log('\n── Interpretation ──────────────────────────────────────────────────');
 
-  if (activePasskeys.length > 0 && upgradeLocked && activeLowUntrusted.length === 0) {
-    console.log('  ✓ Healthy passkey-first account.');
-    console.log('    The account was bootstrapped with a hardware passkey (High tier).');
-    console.log('    The one-way ratchet has fired — no untrusted authority can ever');
-    console.log('    be added. This is the sovereign-first onboarding path.');
-  } else if (activeLowUntrusted.length > 0 && !upgradeLocked && activePasskeys.length === 0) {
-    console.log('  ⚠ Legacy-first account (pre-passkey).');
-    console.log('    Bootstrapped with a LowUntrusted session key. The ratchet has NOT');
-    console.log('    fired — a passkey can still be enrolled via enrollFirstPasskey.');
-    console.log('    Once enrolled, the LowUntrusted authority will be permanently');
-    console.log('    deactivated.');
-  } else if (activeLowManaged.length > 0 && activePasskeys.length > 0) {
-    console.log('  ✓ Enterprise account (OR semantics).');
-    console.log('    Has both a managed (Polis SSO) authority and a passkey.');
-    console.log('    The managed authority is NOT ratchet-locked and coexists with');
-    console.log('    the passkey for enterprise-managed access.');
+  if (activePasskeys.length > 0) {
+    console.log('  ✓ High account. Only the cofferdam.xyz passkey(s) move funds and');
+    console.log('    manage authorities; Partner / Managed keep their scoped calls.');
+  } else if (activePartner.length > 0 || activeManaged.length > 0) {
+    console.log('  ℹ Partner / Managed account, no High yet. It can make its listed');
+    console.log('    job calls only; funds stay put until the co-signed enrollFirstHigh');
+    console.log('    on a Cofferdam surface.');
   } else {
     console.log('  ⚠ Unusual state — review authority configuration manually.');
   }
