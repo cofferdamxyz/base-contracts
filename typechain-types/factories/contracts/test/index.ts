@@ -4,3 +4,4 @@
 export * as mockGroth16VerifierSol from "./MockGroth16Verifier.sol";
 export * as mockUsdcSol from "./MockUSDC.sol";
 export { MockCounter__factory } from "./MockCounter__factory";
+export { MockEntryPoint__factory } from "./MockEntryPoint__factory";

@@ -6,6 +6,8 @@ export type { openzeppelin };
 import type * as contracts from "./contracts";
 export type { contracts };
 export * as factories from "./factories";
+export type { Ownable } from "./@openzeppelin/contracts/access/Ownable";
+export { Ownable__factory } from "./factories/@openzeppelin/contracts/access/Ownable__factory";
 export type { IERC1155Errors } from "./@openzeppelin/contracts/interfaces/draft-IERC6093.sol/IERC1155Errors";
 export { IERC1155Errors__factory } from "./factories/@openzeppelin/contracts/interfaces/draft-IERC6093.sol/IERC1155Errors__factory";
 export type { IERC20Errors } from "./@openzeppelin/contracts/interfaces/draft-IERC6093.sol/IERC20Errors";
@@ -82,6 +84,8 @@ export type { Verifier_vc_and_disclose } from "./contracts/self/Verifier_vc_and_
 export { Verifier_vc_and_disclose__factory } from "./factories/contracts/self/Verifier_vc_and_disclose__factory";
 export type { MockCounter } from "./contracts/test/MockCounter";
 export { MockCounter__factory } from "./factories/contracts/test/MockCounter__factory";
+export type { MockEntryPoint } from "./contracts/test/MockEntryPoint";
+export { MockEntryPoint__factory } from "./factories/contracts/test/MockEntryPoint__factory";
 export type { MockGroth16Verifier } from "./contracts/test/MockGroth16Verifier.sol/MockGroth16Verifier";
 export { MockGroth16Verifier__factory } from "./factories/contracts/test/MockGroth16Verifier.sol/MockGroth16Verifier__factory";
 export type { RejectingGroth16Verifier } from "./contracts/test/MockGroth16Verifier.sol/RejectingGroth16Verifier";

@@ -14,6 +14,10 @@ import * as Contracts from ".";
 declare module "hardhat/types/runtime" {
   interface HardhatEthersHelpers extends HardhatEthersHelpersBase {
     getContractFactory(
+      name: "Ownable",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.Ownable__factory>;
+    getContractFactory(
       name: "IERC1155Errors",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC1155Errors__factory>;
@@ -166,6 +170,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockCounter__factory>;
     getContractFactory(
+      name: "MockEntryPoint",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockEntryPoint__factory>;
+    getContractFactory(
       name: "MockGroth16Verifier",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockGroth16Verifier__factory>;
@@ -179,6 +187,11 @@ declare module "hardhat/types/runtime" {
     ): Promise<Contracts.USDC__factory>;
 
     getContractAt(
+      name: "Ownable",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.Ownable>;
+    getContractAt(
       name: "IERC1155Errors",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -368,6 +381,11 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.MockCounter>;
+    getContractAt(
+      name: "MockEntryPoint",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockEntryPoint>;
     getContractAt(
       name: "MockGroth16Verifier",
       address: string | ethers.Addressable,
@@ -385,6 +403,10 @@ declare module "hardhat/types/runtime" {
     ): Promise<Contracts.USDC>;
 
     deployContract(
+      name: "Ownable",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Ownable>;
+    deployContract(
       name: "IERC1155Errors",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC1155Errors>;
@@ -536,6 +558,10 @@ declare module "hardhat/types/runtime" {
       name: "MockCounter",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockCounter>;
+    deployContract(
+      name: "MockEntryPoint",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockEntryPoint>;
     deployContract(
       name: "MockGroth16Verifier",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -550,6 +576,11 @@ declare module "hardhat/types/runtime" {
     ): Promise<Contracts.USDC>;
 
     deployContract(
+      name: "Ownable",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Ownable>;
+    deployContract(
       name: "IERC1155Errors",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -739,6 +770,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockCounter>;
+    deployContract(
+      name: "MockEntryPoint",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockEntryPoint>;
     deployContract(
       name: "MockGroth16Verifier",
       args: any[],

@@ -8,6 +8,7 @@ import type {
   FunctionFragment,
   Result,
   Interface,
+  EventFragment,
   AddressLike,
   ContractRunner,
   ContractMethod,
@@ -17,6 +18,7 @@ import type {
   TypedContractEvent,
   TypedDeferredTopicFilter,
   TypedEventLog,
+  TypedLogDescription,
   TypedListener,
   TypedContractMethod,
 } from "../../../common";
@@ -61,18 +63,32 @@ export interface CofferdamPaymasterInterface extends Interface {
   getFunction(
     nameOrSignature:
       | "ENTRY_POINT"
+      | "owner"
       | "postOp"
+      | "renounceOwnership"
+      | "transferOwnership"
       | "validatePaymasterUserOp"
       | "withdrawTo"
   ): FunctionFragment;
+
+  getEvent(nameOrSignatureOrTopic: "OwnershipTransferred"): EventFragment;
 
   encodeFunctionData(
     functionFragment: "ENTRY_POINT",
     values?: undefined
   ): string;
+  encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "postOp",
     values: [BigNumberish, BytesLike, BigNumberish, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "renounceOwnership",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "transferOwnership",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "validatePaymasterUserOp",
@@ -87,12 +103,34 @@ export interface CofferdamPaymasterInterface extends Interface {
     functionFragment: "ENTRY_POINT",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "postOp", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "renounceOwnership",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "transferOwnership",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "validatePaymasterUserOp",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "withdrawTo", data: BytesLike): Result;
+}
+
+export namespace OwnershipTransferredEvent {
+  export type InputTuple = [previousOwner: AddressLike, newOwner: AddressLike];
+  export type OutputTuple = [previousOwner: string, newOwner: string];
+  export interface OutputObject {
+    previousOwner: string;
+    newOwner: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export interface CofferdamPaymaster extends BaseContract {
@@ -140,6 +178,8 @@ export interface CofferdamPaymaster extends BaseContract {
 
   ENTRY_POINT: TypedContractMethod<[], [string], "view">;
 
+  owner: TypedContractMethod<[], [string], "view">;
+
   postOp: TypedContractMethod<
     [
       mode: BigNumberish,
@@ -149,6 +189,14 @@ export interface CofferdamPaymaster extends BaseContract {
     ],
     [void],
     "view"
+  >;
+
+  renounceOwnership: TypedContractMethod<[], [void], "nonpayable">;
+
+  transferOwnership: TypedContractMethod<
+    [newOwner: AddressLike],
+    [void],
+    "nonpayable"
   >;
 
   validatePaymasterUserOp: TypedContractMethod<
@@ -175,6 +223,9 @@ export interface CofferdamPaymaster extends BaseContract {
     nameOrSignature: "ENTRY_POINT"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "owner"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "postOp"
   ): TypedContractMethod<
     [
@@ -186,6 +237,12 @@ export interface CofferdamPaymaster extends BaseContract {
     [void],
     "view"
   >;
+  getFunction(
+    nameOrSignature: "renounceOwnership"
+  ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "transferOwnership"
+  ): TypedContractMethod<[newOwner: AddressLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "validatePaymasterUserOp"
   ): TypedContractMethod<
@@ -205,5 +262,24 @@ export interface CofferdamPaymaster extends BaseContract {
     "nonpayable"
   >;
 
-  filters: {};
+  getEvent(
+    key: "OwnershipTransferred"
+  ): TypedContractEvent<
+    OwnershipTransferredEvent.InputTuple,
+    OwnershipTransferredEvent.OutputTuple,
+    OwnershipTransferredEvent.OutputObject
+  >;
+
+  filters: {
+    "OwnershipTransferred(address,address)": TypedContractEvent<
+      OwnershipTransferredEvent.InputTuple,
+      OwnershipTransferredEvent.OutputTuple,
+      OwnershipTransferredEvent.OutputObject
+    >;
+    OwnershipTransferred: TypedContractEvent<
+      OwnershipTransferredEvent.InputTuple,
+      OwnershipTransferredEvent.OutputTuple,
+      OwnershipTransferredEvent.OutputObject
+    >;
+  };
 }
