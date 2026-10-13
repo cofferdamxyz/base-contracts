@@ -77,6 +77,8 @@ describe('EntryPoint v0.7 Integration', function () {
     const grant = {
       targets: [counterAddr],
       selectors: [counter.interface.getFunction('increment')!.selector],
+      codeHashes: [],
+      codeSelectors: [],
       valueCap: 0n,
       expiry: 0n,
     };

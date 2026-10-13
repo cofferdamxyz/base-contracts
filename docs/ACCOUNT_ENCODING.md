@@ -44,8 +44,10 @@ then these addresses run the previous account code.
 
 ```solidity
 struct Permission {
-    address[] targets;   // targets[i] may be called with selectors[i]
+    address[] targets;       // targets[i] may be called with selectors[i]
     bytes4[]  selectors;
+    bytes32[] codeHashes;    // any contract whose code hash is codeHashes[i] may be called with codeSelectors[i]
+    bytes4[]  codeSelectors;
     uint256   valueCap;  // max ETH per call; 0 for Partner and for any grant made without High
     uint48    expiry;    // returned as validUntil; 0 = none (Managed only)
 }
@@ -58,9 +60,9 @@ function deployAccount(
 ) public returns (CofferdamAccount4337)
 ```
 
-**Selector**: `0xa826bfe6` (`deployAccount(address,bytes,(address[],bytes4[],uint256,uint48),bytes32)`)
+**Selector**: `0xbcb51ab1` (`deployAccount(address,bytes,(address[],bytes4[],bytes32[],bytes4[],uint256,uint48),bytes32)`)
 
-`initialPermission` must be empty (`targets = selectors = []`, `valueCap = 0`,
+`initialPermission` must be empty (all four arrays `[]`, `valueCap = 0`,
 `expiry = 0`) for a High genesis and non-empty for a Partner or Managed
 genesis (§10.5).
 
@@ -91,8 +93,8 @@ into a counterfactual address the user has already seen.
 
 ### 2.4 `getAddress` (view-only counterfactual check)
 
-`getAddress(address,bytes,(address[],bytes4[],uint256,uint48),bytes32)` →
-selector `0xac6e539b`. Returns the computed address without deploying.
+`getAddress(address,bytes,(address[],bytes4[],bytes32[],bytes4[],uint256,uint48),bytes32)` →
+selector `0xa8ace465`. Returns the computed address without deploying.
 
 ## 3. Account Storage Layout
 
@@ -136,9 +138,21 @@ permissionSlot = keccak256(abi.encode(authorityId, 3))
 
 permissionSlot + 0: targets.length   (elements at keccak256(permissionSlot + 0))
 permissionSlot + 1: selectors.length (elements packed 8 per slot at keccak256(permissionSlot + 1))
-permissionSlot + 2: valueCap
-permissionSlot + 3: expiry (uint48)
+permissionSlot + 2: codeHashes.length (elements at keccak256(permissionSlot + 2))
+permissionSlot + 3: codeSelectors.length (elements packed 8 per slot at keccak256(permissionSlot + 3))
+permissionSlot + 4: valueCap
+permissionSlot + 5: expiry (uint48)
 ```
+
+A code-hash entry is for contracts deployed per job, such as a
+`CofferdamSpotEscrow` from the `EscrowFactory`, whose address does not exist
+when the grant is made. The account reads the target's `EXTCODEHASH` only when
+no address entry matches (ERC-7562 allows it for a deployed contract). Every
+`CofferdamSpotEscrow` with the same USDC and the same `selfWitnessed` flag
+has the same code hash, so a B2B witness grant names one hash and a consumer
+one another; the escrow's own role checks (`msg.sender == witness`) still
+decide who may act on a given job. Never name a proxy's code hash: every proxy
+of that shape shares it whatever it points to.
 
 Read it with `getPermission(authorityId)`. High authorities have an empty
 permission. A Partner recovery (§5.8) copies the old authority's permission to
@@ -369,8 +383,8 @@ Compute: `ethers.id(kindString)`. The old `"session"` kind is gone with the
 
 | Function | Selector |
 |---|---|
-| `deployAccount(address,bytes,(address[],bytes4[],uint256,uint48),bytes32)` | `0xa826bfe6` |
-| `getAddress(address,bytes,(address[],bytes4[],uint256,uint48),bytes32)` | `0xac6e539b` |
+| `deployAccount(address,bytes,(address[],bytes4[],bytes32[],bytes4[],uint256,uint48),bytes32)` | `0xbcb51ab1` |
+| `getAddress(address,bytes,(address[],bytes4[],bytes32[],bytes4[],uint256,uint48),bytes32)` | `0xa8ace465` |
 | `ENTRY_POINT()` | `0x94430fa5` |
 | `MODULE_REGISTRY()` | `0xb95ddb52` |
 | `CEREMONY_ATTESTERS()` | `0xd76f8c3b` |
@@ -379,7 +393,7 @@ Compute: `ethers.id(kindString)`. The old `"session"` kind is gone with the
 | `executeBatch(address[],uint256[],bytes[])` | `0x47e1da2a` |
 | `getAuthority(uint256)` | `0xffae2c5b` |
 | `getPermission(uint256)` | `0xffb5e276` |
-| `addAuthority(address,bytes,(address[],bytes4[],uint256,uint48))` | `0xdd39f605` |
+| `addAuthority(address,bytes,(address[],bytes4[],bytes32[],bytes4[],uint256,uint48))` | `0x84beee01` |
 | `revokeAuthority(uint256)` | `0x40405afc` |
 | `enrollFirstHigh(uint256,address,bytes,bytes,(uint48,uint48,bytes))` | `0xba670010` |
 | `firstHighChallenge(uint256)` | `0x5b1909f1` |
@@ -429,13 +443,16 @@ validation, so ERC-7562 storage rules hold.
 4. **Tier gating** (checked in `validateUserOp` against `userOp.callData`):
    - `High` may make any call.
    - `Partner` and `LowManaged` may `execute` / `executeBatch` only calls whose
-     `(target, selector)` is in their `Permission`, never to the account
+     `(target, selector)`, or whose target's `(codeHash, selector)`, is in
+     their `Permission`, never to the account
      itself, with value ≤ `valueCap`; and may call `enrollFirstHigh` naming
      themselves while no High exists. Anything else reverts
      `TierNotPermitted(tier)` or `CallNotPermitted(target, selector)`.
    - Only `High` adds or revokes authorities (`addAuthority`, `revokeAuthority`).
-5. **Permission shape** (checked when granted): 1 to 16 pairs; no zero target;
-   never the account itself; no asset-moving selector (`transfer`, `approve`,
+5. **Permission shape** (checked when granted): 1 to 16 pairs counting
+   address and code-hash entries; no zero target; never the account itself; no
+   code hash that is 0, `keccak256("")` (an account without code) or the
+   account's own; no asset-moving selector (`transfer`, `approve`,
    `transferFrom`, `increaseAllowance`, `permit`, `setApprovalForAll`, ERC-721
    / ERC-1155 `safeTransferFrom` / `safeBatchTransferFrom`, ERC-777 `send` /
    `operatorSend` / `authorizeOperator`, ERC-1363 `transferAndCall` /

@@ -40,6 +40,7 @@ describe('CofferdamAccount4337 tiers (decisions 0015, 0016)', () => {
   let counter: any;
   let counterAddr: string;
   let usdc: any;
+  let counterCode: string;
   let INC: string;
   let DEPOSIT: string;
 
@@ -66,6 +67,7 @@ describe('CofferdamAccount4337 tiers (decisions 0015, 0016)', () => {
     counter = await (await ethers.getContractFactory('MockCounter')).deploy();
     counterAddr = await counter.getAddress();
     usdc = await (await ethers.getContractFactory('USDC')).deploy('USD Coin', 'USDC');
+    counterCode = ethers.keccak256((await ethers.provider.getCode(counterAddr)) as string);
     INC = counter.interface.getFunction('increment')!.selector;
     DEPOSIT = counter.interface.getFunction('deposit')!.selector;
   });
@@ -153,8 +155,17 @@ describe('CofferdamAccount4337 tiers (decisions 0015, 0016)', () => {
         permission([[await usdc.getAddress(), transfer]], { expiry }),
         permission([[await usdc.getAddress(), approve]], { expiry }),
         permission([[ethers.ZeroAddress, INC]], { expiry }),
-        { targets: [counterAddr], selectors: [], valueCap: 0n, expiry }, // length mismatch
+        { ...NO_PERMISSION, targets: [counterAddr], expiry }, // length mismatch
         permission(Array.from({ length: 17 }, () => [counterAddr, INC] as [string, string]), { expiry }),
+        // code-hash entries
+        permission([], { expiry, code: [[ethers.ZeroHash, INC]] }),
+        permission([], { expiry, code: [[ethers.keccak256('0x'), INC]] }), // account without code
+        permission([], { expiry, code: [[counterCode, transfer]] }),
+        { ...permission([], { expiry, code: [[counterCode, INC]] }), codeSelectors: [] }, // length mismatch
+        permission(Array.from({ length: 16 }, () => [counterAddr, INC] as [string, string]), {
+          expiry,
+          code: [[counterCode, INC]],
+        }), // 17 entries in all
       ];
       for (const p of bad) {
         await expect(deployAccount(partnerModule, config, p)).to.be.revertedWithCustomError(Account, 'InvalidPermission');
@@ -245,6 +256,47 @@ describe('CofferdamAccount4337 tiers (decisions 0015, 0016)', () => {
       const digest = ethers.id('permit');
       const sig = packSig(0, key.sign(await account.replaySafeHash(digest)));
       expect(await account.isValidSignature(digest, sig)).to.equal(ERC1271_FAIL);
+    });
+  });
+
+  // ── Code-hash grants (contracts deployed per job) ─────────────────────────
+
+  describe('code-hash grant', () => {
+    it('reaches a contract deployed after the grant, by its code', async () => {
+      const expiry = BigInt(await time.latest()) + 90n * DAY;
+      const { account, addr, signAs } = await partnerAccount(permission([], { expiry, code: [[counterCode, INC]] }));
+      // A "job" contract with the granted code, deployed after the account.
+      const later = await (await ethers.getContractFactory('MockCounter')).deploy();
+      const inc = counter.interface.encodeFunctionData('increment');
+      expect(await validate(account, addr, 0, enc(account, 'execute', [await later.getAddress(), 0, inc]), signAs))
+        .to.equal(expiry << 160n);
+      const stored = await account.getPermission(0);
+      expect(stored.codeHashes).to.deep.equal([counterCode]);
+    });
+
+    it('does not reach other code, other selectors or code-less addresses', async () => {
+      const expiry = BigInt(await time.latest()) + 90n * DAY;
+      const { account, addr, signAs } = await partnerAccount(permission([], { expiry, code: [[counterCode, INC]] }));
+      const inc = counter.interface.encodeFunctionData('increment');
+      const dep = counter.interface.encodeFunctionData('deposit');
+      const cases = [
+        enc(account, 'execute', [counterAddr, 0, dep]), // granted code, other selector
+        enc(account, 'execute', [await usdc.getAddress(), 0, inc]), // other code
+        enc(account, 'execute', [ethers.Wallet.createRandom().address, 0, inc]), // no code
+        enc(account, 'execute', [counterAddr, 1, inc]), // value
+      ];
+      for (const callData of cases) {
+        await expect(validate(account, addr, 0, callData, signAs)).to.be.revertedWithCustomError(account, 'CallNotPermitted');
+      }
+    });
+
+    it("cannot name the account's own code", async () => {
+      const { account } = await deployAccount(highModule, webauthnKey().config);
+      const own = ethers.keccak256((await ethers.provider.getCode(await account.getAddress())) as string);
+      const grant = permission([], { code: [[own, INC]] });
+      const addCall = account.interface.encodeFunctionData('addAuthority', [managedModule.target, sessionKey().config, grant]);
+      await expect(account.connect(entryPoint).execute(await account.getAddress(), 0, addCall))
+        .to.be.revertedWithCustomError(account, 'InvalidPermission');
     });
   });
 

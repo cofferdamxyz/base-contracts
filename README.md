@@ -96,16 +96,21 @@ per deployed factory.
 | Tier | Module | Key | May sign |
 |---|---|---|---|
 | High | `WebAuthnPasskeyAuthority` | `cofferdam.xyz` passkey (rpIdHash pinned, UV), only on Cofferdam surfaces | anything: calls, value, authority changes, ERC-1271 |
-| Partner | `PartnerPasskeyAuthority` | the user's passkey on a partner app's RP | `execute` / `executeBatch` of its `Permission`'s `(target, selector)` pairs, zero value, until expiry; `enrollFirstHigh` while no High exists |
+| Partner | `PartnerPasskeyAuthority` | the user's passkey on a partner app's RP | `execute` / `executeBatch` of its `Permission`'s `(target, selector)` or `(codeHash, selector)` pairs, zero value, until expiry; `enrollFirstHigh` while no High exists |
 | Managed | `SessionKeyAuthority` | employer bridge ECDSA key | as Partner; value only when a High signer granted a cap |
 | LowUntrusted | none | retired | nothing: no module of this tier can be installed |
 
-- **Permissions** (`Permission { targets[], selectors[], valueCap, expiry }`)
-  are fixed when a Partner or Managed authority is granted and stored on the
-  account, so no Cofferdam key can widen a user's grant. A grant never lists
+- **Permissions** (`Permission { targets[], selectors[], codeHashes[],
+  codeSelectors[], valueCap, expiry }`) are fixed when a Partner or Managed
+  authority is granted and stored on the account, so no Cofferdam key can
+  widen a user's grant. A `(codeHash, selector)` entry reaches every contract
+  with that runtime code, for contracts deployed per job (each
+  `CofferdamSpotEscrow` from the `EscrowFactory` gets a new address; the
+  escrow's own role checks still decide who acts on it). A grant never lists
   the account itself or a token-moving selector (`transfer`, `approve`,
-  `transferFrom`, `permit`, `setApprovalForAll`, Permit2, …); at most 16 pairs.
-  The expiry is returned as `validUntil`.
+  `transferFrom`, `permit`, `setApprovalForAll`, Permit2, …); at most 16
+  pairs. The expiry is returned as `validUntil`. A partner grant should never
+  list `awardWorker`, which picks who an escrow pays.
 - **Module registry.** Every module, at genesis or later, must be listed in
   the `CofferdamModuleRegistry` the factory pins. Mainnet lists only the
   `cofferdam.xyz`-pinned module for High; raw `PasskeyAuthority` is for test

@@ -33,7 +33,7 @@ const ACCOUNT_ABI = [
   'function ceremonyNonce() view returns (uint256)',
   'function MODULE_REGISTRY() view returns (address)',
   'function CEREMONY_ATTESTERS() view returns (address)',
-  'function getPermission(uint256 authorityId) view returns (tuple(address[] targets, bytes4[] selectors, uint256 valueCap, uint48 expiry))',
+  'function getPermission(uint256 authorityId) view returns (tuple(address[] targets, bytes4[] selectors, bytes32[] codeHashes, bytes4[] codeSelectors, uint256 valueCap, uint48 expiry))',
   'function getAuthority(uint256 authorityId) view returns (address module, uint8 tier, bool active, bytes config)',
   'function isValidSignature(bytes32 digest, bytes sig) view returns (bytes4)',
 ] as const;
@@ -45,7 +45,7 @@ const MODULE_ABI = [
 
 const FACTORY_ABI = [
   'function ENTRY_POINT() view returns (address)',
-  'function getAddress(address initialModule, bytes initialConfig, tuple(address[] targets, bytes4[] selectors, uint256 valueCap, uint48 expiry) initialPermission, bytes32 salt) view returns (address)',
+  'function getAddress(address initialModule, bytes initialConfig, tuple(address[] targets, bytes4[] selectors, bytes32[] codeHashes, bytes4[] codeSelectors, uint256 valueCap, uint48 expiry) initialPermission, bytes32 salt) view returns (address)',
   'event AccountDeployed(address indexed account, address indexed initialModule, bytes32 salt)',
 ] as const;
 
@@ -208,6 +208,7 @@ async function inspectAccount(accountAddress: string, txHash?: string) {
       const expiry = Number(p.expiry);
       console.log(`      Permission: value cap ${p.valueCap} wei, ${expiry === 0 ? 'no expiry' : 'expires ' + new Date(expiry * 1000).toISOString()}`);
       p.targets.forEach((t: string, j: number) => console.log(`        ${t} ${p.selectors[j]}`));
+      p.codeHashes.forEach((h: string, j: number) => console.log(`        any contract with code ${h} ${p.codeSelectors[j]}`));
     }
   }
 

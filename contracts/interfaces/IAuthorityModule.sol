@@ -37,6 +37,14 @@ enum Tier {
 ///         Cofferdam key can widen it).
 /// @param targets   `targets[i]` may be called with selector `selectors[i]`.
 /// @param selectors Parallel to `targets`.
+/// @param codeHashes Any contract whose runtime code hash is `codeHashes[i]`
+///                  may be called with `codeSelectors[i]`. For contracts
+///                  deployed per job (e.g. `CofferdamSpotEscrow` from the
+///                  `EscrowFactory`), whose addresses do not exist when the
+///                  grant is made. Only for contracts whose code alone fixes
+///                  what they do (immutables included); never a proxy's code
+///                  hash, which every proxy of that shape shares.
+/// @param codeSelectors Parallel to `codeHashes`.
 /// @param valueCap  Maximum ETH value per call. Always 0 for Partner and for
 ///                  any grant made without a High signer.
 /// @param expiry    Unix time after which the authority's userOps are invalid
@@ -45,6 +53,8 @@ enum Tier {
 struct Permission {
     address[] targets;
     bytes4[] selectors;
+    bytes32[] codeHashes;
+    bytes4[] codeSelectors;
     uint256 valueCap;
     uint48 expiry;
 }

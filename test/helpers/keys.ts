@@ -6,19 +6,36 @@ export const TIER = { None: 0, LowUntrusted: 1, LowManaged: 2, High: 3, Partner:
 
 export const coder = ethers.AbiCoder.defaultAbiCoder();
 
-export const PERMISSION_TYPE = 'tuple(address[] targets, bytes4[] selectors, uint256 valueCap, uint48 expiry)';
+export const PERMISSION_TYPE =
+  'tuple(address[] targets, bytes4[] selectors, bytes32[] codeHashes, bytes4[] codeSelectors, uint256 valueCap, uint48 expiry)';
 
-export type Permission = { targets: string[]; selectors: string[]; valueCap: bigint; expiry: bigint };
+export type Permission = {
+  targets: string[];
+  selectors: string[];
+  codeHashes: string[];
+  codeSelectors: string[];
+  valueCap: bigint;
+  expiry: bigint;
+};
 
-export const NO_PERMISSION: Permission = { targets: [], selectors: [], valueCap: 0n, expiry: 0n };
+export const NO_PERMISSION: Permission = {
+  targets: [],
+  selectors: [],
+  codeHashes: [],
+  codeSelectors: [],
+  valueCap: 0n,
+  expiry: 0n,
+};
 
 export function permission(
   calls: Array<[string, string]>,
-  opts: { valueCap?: bigint; expiry?: bigint } = {},
+  opts: { valueCap?: bigint; expiry?: bigint; code?: Array<[string, string]> } = {},
 ): Permission {
   return {
     targets: calls.map(([t]) => t),
     selectors: calls.map(([, s]) => s),
+    codeHashes: (opts.code ?? []).map(([h]) => h),
+    codeSelectors: (opts.code ?? []).map(([, s]) => s),
     valueCap: opts.valueCap ?? 0n,
     expiry: opts.expiry ?? 0n,
   };

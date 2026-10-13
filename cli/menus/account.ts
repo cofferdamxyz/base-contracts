@@ -65,7 +65,14 @@ async function deployAccount(rpcUrl: string, wallet: PrefundedWallet): Promise<v
 
   let moduleAddress: string;
   let initConfig: string;
-  let permission = { targets: [] as string[], selectors: [] as string[], valueCap: 0n, expiry: 0n };
+  let permission = {
+    targets: [] as string[],
+    selectors: [] as string[],
+    codeHashes: [] as string[],
+    codeSelectors: [] as string[],
+    valueCap: 0n,
+    expiry: 0n,
+  };
 
   if (authorityType === 'session') {
     moduleAddress = config.sessionKeyAuthorityManaged!;
@@ -81,7 +88,7 @@ async function deployAccount(rpcUrl: string, wallet: PrefundedWallet): Promise<v
     // A Managed authority may call only what its permission lists (decision 0016).
     const target = await input({ message: 'Permitted target contract address:' });
     const fn = await input({ message: 'Permitted function signature:', default: 'increment()' });
-    permission = { targets: [ethers.getAddress(target)], selectors: [ethers.id(fn).slice(0, 10)], valueCap: 0n, expiry: 0n };
+    permission = { ...permission, targets: [ethers.getAddress(target)], selectors: [ethers.id(fn).slice(0, 10)] };
   } else {
     moduleAddress = config.webAuthnPasskeyAuthority!;
     const useRandom = await confirm({ message: 'Generate random passkey X/Y?', default: true });

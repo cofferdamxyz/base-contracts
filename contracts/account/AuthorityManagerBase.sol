@@ -35,9 +35,13 @@ abstract contract AuthorityManagerBase {
 
     uint8 public constant MAX_PASSKEYS = 3;
 
-    /// @notice Upper bound on `(target, selector)` pairs in one permission, so
-    ///         the check in `validateUserOp` has bounded gas.
+    /// @notice Upper bound on `(target, selector)` plus `(codeHash, selector)`
+    ///         pairs in one permission, so the check in `validateUserOp` has
+    ///         bounded gas.
     uint256 public constant MAX_PERMISSION_ENTRIES = 16;
+
+    /// @dev `extcodehash` of an account that exists but has no code.
+    bytes32 private constant EMPTY_CODE_HASH = keccak256("");
 
     mapping(uint256 => Authority) internal _authorities;
     uint256 public authorityCount;
@@ -203,11 +207,19 @@ abstract contract AuthorityManagerBase {
     /// @dev Grant-time rules for a Partner / Managed permission.
     function _checkPermissionShape(Tier t, Permission memory p, bool byHigh) private view {
         uint256 n = p.targets.length;
-        if (n == 0 || n != p.selectors.length || n > MAX_PERMISSION_ENTRIES) revert InvalidPermission();
+        uint256 m = p.codeHashes.length;
+        if (n != p.selectors.length || m != p.codeSelectors.length) revert InvalidPermission();
+        if (n + m == 0 || n + m > MAX_PERMISSION_ENTRIES) revert InvalidPermission();
         for (uint256 i = 0; i < n; i++) {
             address target = p.targets[i];
             if (target == address(0) || target == address(this)) revert InvalidPermission();
             if (_isAssetMovingSelector(p.selectors[i])) revert InvalidPermission();
+        }
+        for (uint256 i = 0; i < m; i++) {
+            bytes32 h = p.codeHashes[i];
+            // Not "no account" (0), not "account without code", not this account's own code.
+            if (h == bytes32(0) || h == EMPTY_CODE_HASH || h == address(this).codehash) revert InvalidPermission();
+            if (_isAssetMovingSelector(p.codeSelectors[i])) revert InvalidPermission();
         }
         if (p.expiry != 0 && p.expiry <= block.timestamp) revert InvalidPermission();
         if (t == Tier.Partner) {
@@ -221,7 +233,9 @@ abstract contract AuthorityManagerBase {
 
     /// @dev Check one call made by a Partner / Managed authority against its
     ///      permission. Never the account itself; value within the cap; the
-    ///      `(target, selector)` pair must be listed.
+    ///      `(target, selector)` pair, or the target's `(codeHash, selector)`
+    ///      pair, must be listed. The code hash is read only when no address
+    ///      entry matches; ERC-7562 allows EXTCODEHASH of a deployed contract.
     function _checkPermittedCall(uint256 authorityId, address target, uint256 value, bytes memory data)
         internal
         view
@@ -233,6 +247,13 @@ abstract contract AuthorityManagerBase {
         uint256 n = p.targets.length;
         for (uint256 i = 0; i < n; i++) {
             if (p.targets[i] == target && p.selectors[i] == selector) return;
+        }
+        uint256 m = p.codeHashes.length;
+        if (m != 0) {
+            bytes32 h = target.codehash;
+            for (uint256 i = 0; i < m; i++) {
+                if (p.codeHashes[i] == h && p.codeSelectors[i] == selector) return;
+            }
         }
         revert CallNotPermitted(target, selector);
     }
