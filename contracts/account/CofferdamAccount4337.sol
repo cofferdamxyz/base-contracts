@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {IAuthorityModule, Tier} from "../interfaces/IAuthorityModule.sol";
 import {AuthorityManagerBase} from "./AuthorityManagerBase.sol";
 import {IEntryPoint} from "../interfaces/IEntryPoint.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 /// @title CofferdamAccount4337
 /// @notice A multi-authority ERC-4337 smart account for Base. The onchain enforcer
@@ -29,17 +30,25 @@ import {IEntryPoint} from "../interfaces/IEntryPoint.sol";
 ///         Tier gating (enforced here, mirrored client-side in the SDK):
 ///           - High         → may `execute` / `addAuthority` / `revokeAuthority`.
 ///           - LowManaged   → may `execute` (company-bound ops) + `addAuthority`
-///                            of a High passkey via the OR-semantics path.
+///                            of a High passkey via the OR-semantics path,
+///                            only until the first passkey exists (ratchet).
 ///           - LowUntrusted → may ONLY call `enrollFirstPasskey` (zero value);
 ///                            everything else reverts. After the first passkey
 ///                            registers, the one-way ratchet permanently
 ///                            deactivates every LowUntrusted authority.
 ///
+///         `validateUserOp` enforces this by inspecting `userOp.callData`
+///         against the signing authority's tier (see `_checkCallPolicy`).
+///         Lower tiers may never reach the account's own management functions
+///         through `execute` / `executeBatch`; only High may self-call.
+///         ERC-1271 accepts High and LowManaged signatures only, over
+///         `replaySafeHash(digest)` (bound to this account and chain).
+///
 ///         SIGNATURE ENCODING for validateUserOp:
 ///           abi.encodePacked(uint256 authorityId, bytes userSignature)
 ///         The first 32 bytes select which authority to use; the rest is passed
 ///         to the module's `isValidSignature`.
-contract CofferdamAccount4337 is AuthorityManagerBase {
+contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
     /// @notice The canonical ERC-4337 EntryPoint v0.7.
     ///         0x0000000071727De22E5E9d8BAf0edAc6f37da032 on Base.
     IEntryPoint public immutable ENTRY_POINT;
@@ -52,6 +61,10 @@ contract CofferdamAccount4337 is AuthorityManagerBase {
     bytes32 private constant TAG_REVOKE_AUTHORITY = keccak256("CofferdamAccount4337.revokeAuthority");
     bytes32 private constant TAG_ENROLL_FIRST_PASSKEY = keccak256("CofferdamAccount4337.enrollFirstPasskey");
 
+    /// @dev EIP-712 type wrapping an ERC-1271 digest so a signature is only
+    ///      valid for this account on this chain.
+    bytes32 private constant MESSAGE_TYPEHASH = keccak256("CofferdamAccountMessage(bytes32 hash)");
+
     // ── Constructor ──────────────────────────────────────────────────────────
 
     /// @notice Bootstrap the account with a single initial authority. Either a
@@ -61,7 +74,9 @@ contract CofferdamAccount4337 is AuthorityManagerBase {
     /// @param initialModule The bootstrap authority module.
     /// @param initialConfig  Per-account material for that module (e.g. passkey
     ///                        pubkey, or abi.encode(sessionSigner)).
-    constructor(IEntryPoint entryPoint, IAuthorityModule initialModule, bytes memory initialConfig) {
+    constructor(IEntryPoint entryPoint, IAuthorityModule initialModule, bytes memory initialConfig)
+        EIP712("Cofferdam Account", "1")
+    {
         ENTRY_POINT = entryPoint;
         _initFirstAuthority(initialModule, initialConfig);
     }
@@ -96,8 +111,10 @@ contract CofferdamAccount4337 is AuthorityManagerBase {
             userSig.length := sub(sig.length, 32)
         }
 
-        // Authenticate via the authority module.
-        _authenticate(authorityId, userOpHash, bytes(userSig));
+        // Authenticate via the authority module, then check that the signer's
+        // tier may perform this call.
+        Tier t = _authenticate(authorityId, userOpHash, bytes(userSig));
+        _checkCallPolicy(t, authorityId, userOp.callData);
 
         // Pay the EntryPoint the missing funds (v0.7 still requires this).
         if (missingAccountFunds > 0) {
@@ -106,6 +123,42 @@ contract CofferdamAccount4337 is AuthorityManagerBase {
         }
 
         return 0; // success
+    }
+
+    /// @dev Tier gate on the userOp's top-level call. High may do anything.
+    ///      LowManaged may `execute` / `executeBatch` to any target except this
+    ///      account, and may `addAuthority` a High module until the ratchet
+    ///      fires; after that only High may manage authorities
+    ///      (`rules/cofferdam-identity.md`, IDENTITY_LAYER_DESIGN §2.5.2). LowUntrusted may only
+    ///      `enrollFirstPasskey` naming itself, before the ratchet fires.
+    function _checkCallPolicy(Tier t, uint256 authorityId, bytes calldata callData) internal view {
+        if (t == Tier.LowUntrusted) {
+            if (callData.length >= 4 && bytes4(callData[:4]) == this.enrollFirstPasskey.selector && !upgradeLocked) {
+                (uint256 lowAuthorityId) = abi.decode(callData[4:], (uint256));
+                if (lowAuthorityId == authorityId) return;
+            }
+            revert TierNotPermitted(t);
+        }
+        _requireTrustedTier(t);
+        if (t == Tier.High) return;
+
+        // LowManaged.
+        if (callData.length < 4) revert TierNotPermitted(t);
+        bytes4 selector = bytes4(callData[:4]);
+        if (selector == this.execute.selector) {
+            (address target) = abi.decode(callData[4:], (address));
+            if (target != address(this)) return;
+        } else if (selector == this.executeBatch.selector) {
+            (address[] memory targets) = abi.decode(callData[4:], (address[]));
+            for (uint256 i = 0; i < targets.length; i++) {
+                if (targets[i] == address(this)) revert TierNotPermitted(t);
+            }
+            return;
+        } else if (selector == this.addAuthority.selector && !upgradeLocked) {
+            (, IAuthorityModule newModule) = abi.decode(callData[4:], (uint256, IAuthorityModule));
+            if (newModule.tier() == Tier.High) return;
+        }
+        revert TierNotPermitted(t);
     }
 
     /// @notice Execute a single call. Called by the EntryPoint after validation.
@@ -202,6 +255,11 @@ contract CofferdamAccount4337 is AuthorityManagerBase {
     ///         raw hash for typed-data). The signature format is the same as
     ///         validateUserOp: abi.encodePacked(uint256 authorityId, bytes userSig)
     ///
+    ///         The authority must sign `replaySafeHash(digest)`, not `digest`
+    ///         itself, so a signature for one account (or chain) cannot be
+    ///         replayed on another account sharing the same passkey. Only High
+    ///         and LowManaged authorities can produce a valid signature.
+    ///
     ///         ERC-6492 COUNTERFACTUAL SUPPORT: Before this account is deployed,
     ///         off-chain signatures can be wrapped in an ERC-6492 envelope:
     ///         abi.encodePacked(
@@ -227,10 +285,19 @@ contract CofferdamAccount4337 is AuthorityManagerBase {
         }
         Authority storage a = _authorities[authorityId];
         if (address(a.module) == address(0) || !a.active) return bytes4(0xffffffff);
-        if (a.module.isValidSignature(address(this), digest, a.config, userSig)) {
+        if (a.tier != Tier.High && a.tier != Tier.LowManaged) return bytes4(0xffffffff);
+        if (a.module.isValidSignature(address(this), replaySafeHash(digest), a.config, userSig)) {
             return 0x1626ba7e; // ERC-1271 magic value
         }
         return bytes4(0xffffffff);
+    }
+
+    /// @notice The hash an authority signs for ERC-1271: `digest` wrapped in
+    ///         EIP-712 typed data `CofferdamAccountMessage(bytes32 hash)` under
+    ///         this account's domain (name "Cofferdam Account", version "1",
+    ///         chainId, verifyingContract = this account).
+    function replaySafeHash(bytes32 digest) public view returns (bytes32) {
+        return _hashTypedDataV4(keccak256(abi.encode(MESSAGE_TYPEHASH, digest)));
     }
 
     // ── Base Account Sub Account compatibility ───────────────────────────────

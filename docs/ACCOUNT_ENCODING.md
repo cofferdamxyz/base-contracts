@@ -236,6 +236,13 @@ userSignature = r (32 bytes) || s (32 bytes) || v (1 byte)
 Same encoding as §5.1 — `abi.encodePacked(uint256 authorityId, bytes userSig)`.
 Returns `0x1626ba7e` (magic value) on success, `0xffffffff` on failure.
 
+The authority signs `replaySafeHash(digest)`, not `digest` itself. It is the
+EIP-712 hash of `CofferdamAccountMessage(bytes32 hash)` under the domain
+`{name: "Cofferdam Account", version: "1", chainId, verifyingContract: account}`
+(also exposed via ERC-5267 `eip712Domain()`), so a signature is valid for one
+account on one chain only. Only `High` and `LowManaged` authorities can produce
+a valid ERC-1271 signature; `LowUntrusted` always returns `0xffffffff`.
+
 ### 5.6 ERC-6492 Counterfactual Signature
 
 Before deployment, signatures are wrapped:
@@ -345,6 +352,7 @@ Bundler → EntryPoint.handleOps([userOp], beneficiary)
     → Account decodes authorityId from signature[0:32]
     → Account calls _authenticate(authorityId, userOpHash, signature[32:])
       → Module.isValidSignature(account, userOpHash, config, userSig)
+    → Account checks userOp.callData against the authority's tier (§10.4)
     → Account returns validationData (0 = success)
   → EntryPoint calls account.execute(target, value, data) [if validation passed]
 ```
@@ -369,12 +377,20 @@ These invariants are enforced on-chain and should be verified during audits:
    authority can ever be re-activated or added. The ratchet fires on:
    - Genesis with a High-tier authority (passkey-first onboarding)
    - `enrollFirstPasskey` call (legacy-first → passkey upgrade)
+   - Any other addition of a High-tier authority (`addAuthority`)
 
 3. **Passkey cap**: `passkeyCount <= MAX_PASSKEYS (3)`. The 4th passkey
    addition reverts with `PasskeyCapReached()`.
 
-4. **Tier gating**: `LowUntrusted` may ONLY call `enrollFirstPasskey` (zero
-   value). All other management/execution requires `High` or `LowManaged`.
+4. **Tier gating** (checked in `validateUserOp` against `userOp.callData`):
+   - `High` may make any call.
+   - `LowManaged` may `execute` / `executeBatch` to any target other than the
+     account itself, and may `addAuthority` a High-tier module only while
+     `upgradeLocked == false`. Once a passkey exists, only `High` may add or
+     revoke authorities.
+   - `LowUntrusted` may ONLY call `enrollFirstPasskey` (zero value) with its
+     own id as `lowAuthorityId`, before the ratchet fires.
+   Anything else reverts with `TierNotPermitted(tier)`.
 
 5. **Signature binding**: Each operation type has a unique domain-separation
    tag (`TAG_EXECUTE`, `TAG_ADD_AUTHORITY`, etc.) preventing cross-operation

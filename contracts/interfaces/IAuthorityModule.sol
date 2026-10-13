@@ -50,6 +50,12 @@ interface IAuthorityModule {
     ///         module implementation MAY be deployed twice at different tiers
     ///         (e.g. `SessionKeyAuthority` as LowUntrusted vs LowManaged) — each
     ///         deployment returns its own immutable tier.
+    ///         MUST NOT read storage: `CofferdamAccount4337.validateUserOp` calls
+    ///         `tier()` on a module being added during validation, where
+    ///         ERC-7562 forbids reading another contract's storage, and a tier
+    ///         that could change between validation and execution would let a
+    ///         module pass the tier gate and then act as a different tier.
+    ///         Return a constant or an immutable.
     function tier() external view returns (Tier);
 
     /// @notice Stable identifier of the authority kind, e.g.
