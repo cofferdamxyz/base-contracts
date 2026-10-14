@@ -24,19 +24,27 @@
 
 ### 1.1 Canonical Addresses (Base Sepolia)
 
-The Base Sepolia deployment below predates decision 0016 (old factory, no
-registries). It is replaced by a redeploy with `scripts/deploy-auth.ts`; until
-then these addresses run the previous account code.
+Deployed 2026-10-14 with `scripts/deploy-auth.ts` (decision 0016 account
+layer) from the CofferdamDev deployer, which owns both registries and the
+paymaster on testnet. `CofferdamCeremonyAttesterRegistry` has no attester
+yet, so first-High upgrades and Partner recoveries are paused until one is
+added. Source of truth: `deployments/baseSepolia.json`.
 
 | Name | Address |
 |---|---|
 | EntryPoint v0.7 | `0x0000000071727De22E5E9d8BAf0edAc6f37da032` |
-| CofferdamAccountFactory4337 (pre-0016) | `0x35CeBf87f5DAE7be7cf755067d30fC65Fa541F3D` |
-| CofferdamPaymaster | `0x5ffb8bA851DCf7A592B85fc2567e72449214204e` |
-| WebAuthnPasskeyAuthority (pre-0016, no RP pin) | `0x279Cf7DF840a76EE9EcC1C177698E6EaB490Eea8` |
-| PasskeyAuthority | `0x25338619e03e92511feB63cc66Dfd9CAFB5654E6` |
-| SessionKeyAuthority (LowUntrusted, retired) | `0xc76337F62D298831deEeE8f4063567884680A14b` |
-| SessionKeyAuthority (LowManaged, pre-0016) | `0x4780DEc3E132E835C36895BFBbb71Bb63C638e54` |
+| CofferdamAccountFactory4337 | `0xC0F4EEd3EF9a17382Dac877468a8fA0Cc397bF3E` |
+| CofferdamModuleRegistry | `0x2C974835449AF2E5bFA76eeE151a2222Ce0f3eD1` |
+| CofferdamCeremonyAttesterRegistry | `0x28824840A8f5a764E797578291FD4377Ca13126b` |
+| CofferdamPaymaster | `0xa24651292DFd346A4da0298583b114543771d867` |
+| WebAuthnPasskeyAuthority (High, pinned to `cofferdam.xyz`) | `0xB20d91Cc70cDDbccF57fA9CA9C16FDb01978A471` |
+| PartnerPasskeyAuthority (Partner) | `0x41c9bCaB8D074FdC364455479E31496cb689a349` |
+| SessionKeyAuthority (Managed) | `0xD468774BDE3E2a1705b51791424432abD01CbaCE` |
+| PasskeyAuthority (raw P-256, testnet only) | `0xebe2d02a07859a50Ae9f3f54B9F327aeD0EB6F93` |
+
+The pre-0016 deployment (factory `0x35CeBf87…1F3D`, WebAuthn authority
+`0x279Cf7DF…Eea8`, paymasters `0x5ffb8bA8…204e` and `0xe73fec9b…0aF`) is
+retired; accounts created through it are orphaned and are not migrated.
 
 ## 2. Factory Calldata — `deployAccount` / `getAddress`
 

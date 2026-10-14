@@ -3,22 +3,19 @@
     "address": "0x0000000071727De22E5E9d8BAf0edAc6f37da032"
   },
   "PasskeyAuthority": {
-    "address": "0x25338619e03e92511feB63cc66Dfd9CAFB5654E6"
+    "address": "0xebe2d02a07859a50Ae9f3f54B9F327aeD0EB6F93"
   },
   "WebAuthnPasskeyAuthority": {
-    "address": "0x279Cf7DF840a76EE9EcC1C177698E6EaB490Eea8"
-  },
-  "SessionKeyAuthorityLowUntrusted": {
-    "address": "0xc76337F62D298831deEeE8f4063567884680A14b"
+    "address": "0xB20d91Cc70cDDbccF57fA9CA9C16FDb01978A471"
   },
   "SessionKeyAuthorityLowManaged": {
-    "address": "0x4780DEc3E132E835C36895BFBbb71Bb63C638e54"
+    "address": "0xD468774BDE3E2a1705b51791424432abD01CbaCE"
   },
   "CofferdamAccountFactory4337": {
-    "address": "0x35CeBf87f5DAE7be7cf755067d30fC65Fa541F3D"
+    "address": "0xC0F4EEd3EF9a17382Dac877468a8fA0Cc397bF3E"
   },
   "CofferdamPaymaster": {
-    "address": "0xe73fec9b903F1E1f990e9b86A05a0aeF7174E0aF"
+    "address": "0xa24651292DFd346A4da0298583b114543771d867"
   },
   "SelfAttesterRegistry": {
     "address": "0x8F3fF40Aa7Eb46b9AB214229D8f7833bbC47ae08"
@@ -40,5 +37,14 @@
   },
   "Verifier_vc_and_disclose": {
     "address": "0x26fBC868344AF4E99874edFd0E3756EcC2359bEb"
+  },
+  "PartnerPasskeyAuthority": {
+    "address": "0x41c9bCaB8D074FdC364455479E31496cb689a349"
+  },
+  "CofferdamModuleRegistry": {
+    "address": "0x2C974835449AF2E5bFA76eeE151a2222Ce0f3eD1"
+  },
+  "CofferdamCeremonyAttesterRegistry": {
+    "address": "0x28824840A8f5a764E797578291FD4377Ca13126b"
   }
 }
