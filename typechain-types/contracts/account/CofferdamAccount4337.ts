@@ -61,6 +61,28 @@ export declare namespace CofferdamAccount4337 {
     signature: string
   ] & { notBefore: bigint; expiry: bigint; signature: string };
 
+  export type SelfProofStruct = {
+    a: [BigNumberish, BigNumberish];
+    b: [[BigNumberish, BigNumberish], [BigNumberish, BigNumberish]];
+    c: [BigNumberish, BigNumberish];
+    pubSignals: BigNumberish[];
+    userContextData: BytesLike;
+  };
+
+  export type SelfProofStructOutput = [
+    a: [bigint, bigint],
+    b: [[bigint, bigint], [bigint, bigint]],
+    c: [bigint, bigint],
+    pubSignals: bigint[],
+    userContextData: string
+  ] & {
+    a: [bigint, bigint];
+    b: [[bigint, bigint], [bigint, bigint]];
+    c: [bigint, bigint];
+    pubSignals: bigint[];
+    userContextData: string;
+  };
+
   export type PartnerRecoveryStruct = {
     recoveredAt: BigNumberish;
     signature: BytesLike;
@@ -112,27 +134,37 @@ export interface CofferdamAccount4337Interface extends Interface {
   getFunction(
     nameOrSignature:
       | "ACTION_ENROLL_FIRST_HIGH"
+      | "ACTION_RECOVER_HIGH"
       | "ACTION_REPLACE_PARTNER"
       | "CEREMONY_ATTESTERS"
       | "ENTRY_POINT"
       | "MAX_PASSKEYS"
       | "MAX_PERMISSION_ENTRIES"
       | "MODULE_REGISTRY"
+      | "NULLIFIER_REGISTRY"
+      | "PROBATION_PERIOD"
       | "RECOVERY_AUTHORITY_ID"
+      | "RECOVERY_DELAY"
       | "addAuthority"
       | "authorityCount"
+      | "cancelRecovery"
       | "ceremonyHash"
       | "ceremonyNonce"
       | "eip712Domain"
       | "enrollFirstHigh"
       | "execute"
       | "executeBatch"
+      | "finalizeRecovery"
       | "firstHighChallenge"
       | "getAuthority"
       | "getPermission"
       | "isValidSignature"
       | "partnerRecoveryHash"
       | "passkeyCount"
+      | "pendingRecovery"
+      | "probationEndsAt"
+      | "recoverHigh"
+      | "recoveryChallenge"
       | "replacePartnerAuthority"
       | "replaySafeHash"
       | "revokeAuthority"
@@ -146,12 +178,19 @@ export interface CofferdamAccount4337Interface extends Interface {
       | "AuthorityRevoked"
       | "EIP712DomainChanged"
       | "FirstHighEnrolled"
+      | "HighRecovered"
       | "PartnerAuthorityReplaced"
       | "PermissionGranted"
+      | "RecoveryCancelled"
+      | "RecoveryRequested"
   ): EventFragment;
 
   encodeFunctionData(
     functionFragment: "ACTION_ENROLL_FIRST_HIGH",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "ACTION_RECOVER_HIGH",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -179,7 +218,19 @@ export interface CofferdamAccount4337Interface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "NULLIFIER_REGISTRY",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "PROBATION_PERIOD",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "RECOVERY_AUTHORITY_ID",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "RECOVERY_DELAY",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -188,6 +239,10 @@ export interface CofferdamAccount4337Interface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "authorityCount",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "cancelRecovery",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -228,6 +283,10 @@ export interface CofferdamAccount4337Interface extends Interface {
     values: [AddressLike[], BigNumberish[], BytesLike[]]
   ): string;
   encodeFunctionData(
+    functionFragment: "finalizeRecovery",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "firstHighChallenge",
     values: [BigNumberish]
   ): string;
@@ -250,6 +309,29 @@ export interface CofferdamAccount4337Interface extends Interface {
   encodeFunctionData(
     functionFragment: "passkeyCount",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "pendingRecovery",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "probationEndsAt",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "recoverHigh",
+    values: [
+      AddressLike,
+      BytesLike,
+      BytesLike,
+      CofferdamAccount4337.SelfProofStruct,
+      BytesLike,
+      CofferdamAccount4337.CeremonyAttestationStruct
+    ]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "recoveryChallenge",
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "replacePartnerAuthority",
@@ -282,6 +364,10 @@ export interface CofferdamAccount4337Interface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "ACTION_RECOVER_HIGH",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "ACTION_REPLACE_PARTNER",
     data: BytesLike
   ): Result;
@@ -306,7 +392,19 @@ export interface CofferdamAccount4337Interface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "NULLIFIER_REGISTRY",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "PROBATION_PERIOD",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "RECOVERY_AUTHORITY_ID",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "RECOVERY_DELAY",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -315,6 +413,10 @@ export interface CofferdamAccount4337Interface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "authorityCount",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "cancelRecovery",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -339,6 +441,10 @@ export interface CofferdamAccount4337Interface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "finalizeRecovery",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "firstHighChallenge",
     data: BytesLike
   ): Result;
@@ -360,6 +466,22 @@ export interface CofferdamAccount4337Interface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "passkeyCount",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "pendingRecovery",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "probationEndsAt",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "recoverHigh",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "recoveryChallenge",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -450,6 +572,18 @@ export namespace FirstHighEnrolledEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace HighRecoveredEvent {
+  export type InputTuple = [highAuthorityId: BigNumberish];
+  export type OutputTuple = [highAuthorityId: bigint];
+  export interface OutputObject {
+    highAuthorityId: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace PartnerAuthorityReplacedEvent {
   export type InputTuple = [
     oldAuthorityId: BigNumberish,
@@ -481,6 +615,41 @@ export namespace PermissionGrantedEvent {
     authorityId: bigint;
     permissionHash: string;
     expiry: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RecoveryCancelledEvent {
+  export type InputTuple = [module: AddressLike, configHash: BytesLike];
+  export type OutputTuple = [module: string, configHash: string];
+  export interface OutputObject {
+    module: string;
+    configHash: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RecoveryRequestedEvent {
+  export type InputTuple = [
+    module: AddressLike,
+    configHash: BytesLike,
+    readyAt: BigNumberish
+  ];
+  export type OutputTuple = [
+    module: string,
+    configHash: string,
+    readyAt: bigint
+  ];
+  export interface OutputObject {
+    module: string;
+    configHash: string;
+    readyAt: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -533,6 +702,8 @@ export interface CofferdamAccount4337 extends BaseContract {
 
   ACTION_ENROLL_FIRST_HIGH: TypedContractMethod<[], [string], "view">;
 
+  ACTION_RECOVER_HIGH: TypedContractMethod<[], [string], "view">;
+
   ACTION_REPLACE_PARTNER: TypedContractMethod<[], [string], "view">;
 
   CEREMONY_ATTESTERS: TypedContractMethod<[], [string], "view">;
@@ -545,7 +716,13 @@ export interface CofferdamAccount4337 extends BaseContract {
 
   MODULE_REGISTRY: TypedContractMethod<[], [string], "view">;
 
+  NULLIFIER_REGISTRY: TypedContractMethod<[], [string], "view">;
+
+  PROBATION_PERIOD: TypedContractMethod<[], [bigint], "view">;
+
   RECOVERY_AUTHORITY_ID: TypedContractMethod<[], [bigint], "view">;
+
+  RECOVERY_DELAY: TypedContractMethod<[], [bigint], "view">;
 
   addAuthority: TypedContractMethod<
     [
@@ -558,6 +735,8 @@ export interface CofferdamAccount4337 extends BaseContract {
   >;
 
   authorityCount: TypedContractMethod<[], [bigint], "view">;
+
+  cancelRecovery: TypedContractMethod<[], [void], "nonpayable">;
 
   ceremonyHash: TypedContractMethod<
     [
@@ -614,6 +793,8 @@ export interface CofferdamAccount4337 extends BaseContract {
     "nonpayable"
   >;
 
+  finalizeRecovery: TypedContractMethod<[], [bigint], "nonpayable">;
+
   firstHighChallenge: TypedContractMethod<
     [nonce: BigNumberish],
     [string],
@@ -652,6 +833,44 @@ export interface CofferdamAccount4337 extends BaseContract {
   >;
 
   passkeyCount: TypedContractMethod<[], [bigint], "view">;
+
+  pendingRecovery: TypedContractMethod<
+    [],
+    [
+      [string, bigint, bigint, string] & {
+        module: string;
+        readyAt: bigint;
+        nullifier: bigint;
+        config: string;
+      }
+    ],
+    "view"
+  >;
+
+  probationEndsAt: TypedContractMethod<
+    [authorityId: BigNumberish],
+    [bigint],
+    "view"
+  >;
+
+  recoverHigh: TypedContractMethod<
+    [
+      newModule: AddressLike,
+      newConfig: BytesLike,
+      newKeyAssertion: BytesLike,
+      proof: CofferdamAccount4337.SelfProofStruct,
+      selfAttesterSig: BytesLike,
+      attestation: CofferdamAccount4337.CeremonyAttestationStruct
+    ],
+    [void],
+    "nonpayable"
+  >;
+
+  recoveryChallenge: TypedContractMethod<
+    [nonce: BigNumberish],
+    [string],
+    "view"
+  >;
 
   replacePartnerAuthority: TypedContractMethod<
     [
@@ -692,6 +911,9 @@ export interface CofferdamAccount4337 extends BaseContract {
     nameOrSignature: "ACTION_ENROLL_FIRST_HIGH"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "ACTION_RECOVER_HIGH"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "ACTION_REPLACE_PARTNER"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
@@ -710,7 +932,16 @@ export interface CofferdamAccount4337 extends BaseContract {
     nameOrSignature: "MODULE_REGISTRY"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "NULLIFIER_REGISTRY"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "PROBATION_PERIOD"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "RECOVERY_AUTHORITY_ID"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "RECOVERY_DELAY"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "addAuthority"
@@ -726,6 +957,9 @@ export interface CofferdamAccount4337 extends BaseContract {
   getFunction(
     nameOrSignature: "authorityCount"
   ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "cancelRecovery"
+  ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "ceremonyHash"
   ): TypedContractMethod<
@@ -788,6 +1022,9 @@ export interface CofferdamAccount4337 extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "finalizeRecovery"
+  ): TypedContractMethod<[], [bigint], "nonpayable">;
+  getFunction(
     nameOrSignature: "firstHighChallenge"
   ): TypedContractMethod<[nonce: BigNumberish], [string], "view">;
   getFunction(
@@ -824,6 +1061,40 @@ export interface CofferdamAccount4337 extends BaseContract {
   getFunction(
     nameOrSignature: "passkeyCount"
   ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "pendingRecovery"
+  ): TypedContractMethod<
+    [],
+    [
+      [string, bigint, bigint, string] & {
+        module: string;
+        readyAt: bigint;
+        nullifier: bigint;
+        config: string;
+      }
+    ],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "probationEndsAt"
+  ): TypedContractMethod<[authorityId: BigNumberish], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "recoverHigh"
+  ): TypedContractMethod<
+    [
+      newModule: AddressLike,
+      newConfig: BytesLike,
+      newKeyAssertion: BytesLike,
+      proof: CofferdamAccount4337.SelfProofStruct,
+      selfAttesterSig: BytesLike,
+      attestation: CofferdamAccount4337.CeremonyAttestationStruct
+    ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "recoveryChallenge"
+  ): TypedContractMethod<[nonce: BigNumberish], [string], "view">;
   getFunction(
     nameOrSignature: "replacePartnerAuthority"
   ): TypedContractMethod<
@@ -886,6 +1157,13 @@ export interface CofferdamAccount4337 extends BaseContract {
     FirstHighEnrolledEvent.OutputObject
   >;
   getEvent(
+    key: "HighRecovered"
+  ): TypedContractEvent<
+    HighRecoveredEvent.InputTuple,
+    HighRecoveredEvent.OutputTuple,
+    HighRecoveredEvent.OutputObject
+  >;
+  getEvent(
     key: "PartnerAuthorityReplaced"
   ): TypedContractEvent<
     PartnerAuthorityReplacedEvent.InputTuple,
@@ -898,6 +1176,20 @@ export interface CofferdamAccount4337 extends BaseContract {
     PermissionGrantedEvent.InputTuple,
     PermissionGrantedEvent.OutputTuple,
     PermissionGrantedEvent.OutputObject
+  >;
+  getEvent(
+    key: "RecoveryCancelled"
+  ): TypedContractEvent<
+    RecoveryCancelledEvent.InputTuple,
+    RecoveryCancelledEvent.OutputTuple,
+    RecoveryCancelledEvent.OutputObject
+  >;
+  getEvent(
+    key: "RecoveryRequested"
+  ): TypedContractEvent<
+    RecoveryRequestedEvent.InputTuple,
+    RecoveryRequestedEvent.OutputTuple,
+    RecoveryRequestedEvent.OutputObject
   >;
 
   filters: {
@@ -945,6 +1237,17 @@ export interface CofferdamAccount4337 extends BaseContract {
       FirstHighEnrolledEvent.OutputObject
     >;
 
+    "HighRecovered(uint256)": TypedContractEvent<
+      HighRecoveredEvent.InputTuple,
+      HighRecoveredEvent.OutputTuple,
+      HighRecoveredEvent.OutputObject
+    >;
+    HighRecovered: TypedContractEvent<
+      HighRecoveredEvent.InputTuple,
+      HighRecoveredEvent.OutputTuple,
+      HighRecoveredEvent.OutputObject
+    >;
+
     "PartnerAuthorityReplaced(uint256,uint256)": TypedContractEvent<
       PartnerAuthorityReplacedEvent.InputTuple,
       PartnerAuthorityReplacedEvent.OutputTuple,
@@ -965,6 +1268,28 @@ export interface CofferdamAccount4337 extends BaseContract {
       PermissionGrantedEvent.InputTuple,
       PermissionGrantedEvent.OutputTuple,
       PermissionGrantedEvent.OutputObject
+    >;
+
+    "RecoveryCancelled(address,bytes32)": TypedContractEvent<
+      RecoveryCancelledEvent.InputTuple,
+      RecoveryCancelledEvent.OutputTuple,
+      RecoveryCancelledEvent.OutputObject
+    >;
+    RecoveryCancelled: TypedContractEvent<
+      RecoveryCancelledEvent.InputTuple,
+      RecoveryCancelledEvent.OutputTuple,
+      RecoveryCancelledEvent.OutputObject
+    >;
+
+    "RecoveryRequested(address,bytes32,uint48)": TypedContractEvent<
+      RecoveryRequestedEvent.InputTuple,
+      RecoveryRequestedEvent.OutputTuple,
+      RecoveryRequestedEvent.OutputObject
+    >;
+    RecoveryRequested: TypedContractEvent<
+      RecoveryRequestedEvent.InputTuple,
+      RecoveryRequestedEvent.OutputTuple,
+      RecoveryRequestedEvent.OutputObject
     >;
   };
 }

@@ -53,10 +53,12 @@ export interface AuthorityManagerBaseInterface extends Interface {
     nameOrSignature:
       | "MAX_PASSKEYS"
       | "MAX_PERMISSION_ENTRIES"
+      | "PROBATION_PERIOD"
       | "authorityCount"
       | "getAuthority"
       | "getPermission"
       | "passkeyCount"
+      | "probationEndsAt"
       | "upgradeLocked"
   ): FunctionFragment;
 
@@ -76,6 +78,10 @@ export interface AuthorityManagerBaseInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "PROBATION_PERIOD",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "authorityCount",
     values?: undefined
   ): string;
@@ -90,6 +96,10 @@ export interface AuthorityManagerBaseInterface extends Interface {
   encodeFunctionData(
     functionFragment: "passkeyCount",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "probationEndsAt",
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "upgradeLocked",
@@ -105,6 +115,10 @@ export interface AuthorityManagerBaseInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "PROBATION_PERIOD",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "authorityCount",
     data: BytesLike
   ): Result;
@@ -118,6 +132,10 @@ export interface AuthorityManagerBaseInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "passkeyCount",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "probationEndsAt",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -232,6 +250,8 @@ export interface AuthorityManagerBase extends BaseContract {
 
   MAX_PERMISSION_ENTRIES: TypedContractMethod<[], [bigint], "view">;
 
+  PROBATION_PERIOD: TypedContractMethod<[], [bigint], "view">;
+
   authorityCount: TypedContractMethod<[], [bigint], "view">;
 
   getAuthority: TypedContractMethod<
@@ -255,6 +275,12 @@ export interface AuthorityManagerBase extends BaseContract {
 
   passkeyCount: TypedContractMethod<[], [bigint], "view">;
 
+  probationEndsAt: TypedContractMethod<
+    [authorityId: BigNumberish],
+    [bigint],
+    "view"
+  >;
+
   upgradeLocked: TypedContractMethod<[], [boolean], "view">;
 
   getFunction<T extends ContractMethod = ContractMethod>(
@@ -266,6 +292,9 @@ export interface AuthorityManagerBase extends BaseContract {
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "MAX_PERMISSION_ENTRIES"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "PROBATION_PERIOD"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "authorityCount"
@@ -294,6 +323,9 @@ export interface AuthorityManagerBase extends BaseContract {
   getFunction(
     nameOrSignature: "passkeyCount"
   ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "probationEndsAt"
+  ): TypedContractMethod<[authorityId: BigNumberish], [bigint], "view">;
   getFunction(
     nameOrSignature: "upgradeLocked"
   ): TypedContractMethod<[], [boolean], "view">;

@@ -51,15 +51,29 @@ export type PermissionStructOutput = [
 export interface CofferdamAccountFactory4337Interface extends Interface {
   getFunction(
     nameOrSignature:
+      | "ACCOUNT_CODE_A"
+      | "ACCOUNT_CODE_B"
       | "CEREMONY_ATTESTERS"
       | "ENTRY_POINT"
       | "MODULE_REGISTRY"
+      | "NULLIFIER_REGISTRY"
+      | "PROBATION_PERIOD"
+      | "RECOVERY_DELAY"
+      | "accountCreationCode"
       | "deployAccount"
       | "getAddress"
   ): FunctionFragment;
 
   getEvent(nameOrSignatureOrTopic: "AccountDeployed"): EventFragment;
 
+  encodeFunctionData(
+    functionFragment: "ACCOUNT_CODE_A",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "ACCOUNT_CODE_B",
+    values?: undefined
+  ): string;
   encodeFunctionData(
     functionFragment: "CEREMONY_ATTESTERS",
     values?: undefined
@@ -70,6 +84,22 @@ export interface CofferdamAccountFactory4337Interface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "MODULE_REGISTRY",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "NULLIFIER_REGISTRY",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "PROBATION_PERIOD",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "RECOVERY_DELAY",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "accountCreationCode",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -82,6 +112,14 @@ export interface CofferdamAccountFactory4337Interface extends Interface {
   ): string;
 
   decodeFunctionResult(
+    functionFragment: "ACCOUNT_CODE_A",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "ACCOUNT_CODE_B",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "CEREMONY_ATTESTERS",
     data: BytesLike
   ): Result;
@@ -91,6 +129,22 @@ export interface CofferdamAccountFactory4337Interface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "MODULE_REGISTRY",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "NULLIFIER_REGISTRY",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "PROBATION_PERIOD",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "RECOVERY_DELAY",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "accountCreationCode",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -165,11 +219,23 @@ export interface CofferdamAccountFactory4337 extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  ACCOUNT_CODE_A: TypedContractMethod<[], [string], "view">;
+
+  ACCOUNT_CODE_B: TypedContractMethod<[], [string], "view">;
+
   CEREMONY_ATTESTERS: TypedContractMethod<[], [string], "view">;
 
   ENTRY_POINT: TypedContractMethod<[], [string], "view">;
 
   MODULE_REGISTRY: TypedContractMethod<[], [string], "view">;
+
+  NULLIFIER_REGISTRY: TypedContractMethod<[], [string], "view">;
+
+  PROBATION_PERIOD: TypedContractMethod<[], [bigint], "view">;
+
+  RECOVERY_DELAY: TypedContractMethod<[], [bigint], "view">;
+
+  accountCreationCode: TypedContractMethod<[], [string], "view">;
 
   deployAccount: TypedContractMethod<
     [
@@ -198,6 +264,12 @@ export interface CofferdamAccountFactory4337 extends BaseContract {
   ): T;
 
   getFunction(
+    nameOrSignature: "ACCOUNT_CODE_A"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "ACCOUNT_CODE_B"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "CEREMONY_ATTESTERS"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
@@ -205,6 +277,18 @@ export interface CofferdamAccountFactory4337 extends BaseContract {
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "MODULE_REGISTRY"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "NULLIFIER_REGISTRY"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "PROBATION_PERIOD"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "RECOVERY_DELAY"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "accountCreationCode"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "deployAccount"

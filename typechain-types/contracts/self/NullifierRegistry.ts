@@ -36,10 +36,12 @@ export interface NullifierRegistryInterface extends Interface {
       | "isNullifierBound"
       | "nullifierToAccount"
       | "pendingRebind"
+      | "provenNullifier"
       | "rebind"
       | "rebindCount"
       | "rebindDelay"
       | "rebindMessageHash"
+      | "recoveryMessageHash"
       | "selfDestChainId"
       | "verifier"
       | "verifyAndBind"
@@ -94,6 +96,19 @@ export interface NullifierRegistryInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
+    functionFragment: "provenNullifier",
+    values: [
+      AddressLike,
+      [BigNumberish, BigNumberish],
+      [[BigNumberish, BigNumberish], [BigNumberish, BigNumberish]],
+      [BigNumberish, BigNumberish],
+      BigNumberish[],
+      BytesLike,
+      BigNumberish,
+      BytesLike
+    ]
+  ): string;
+  encodeFunctionData(
     functionFragment: "rebind",
     values: [
       AddressLike,
@@ -115,6 +130,10 @@ export interface NullifierRegistryInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "rebindMessageHash",
+    values: [AddressLike, BigNumberish[], BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "recoveryMessageHash",
     values: [AddressLike, BigNumberish[], BigNumberish]
   ): string;
   encodeFunctionData(
@@ -175,6 +194,10 @@ export interface NullifierRegistryInterface extends Interface {
     functionFragment: "pendingRebind",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "provenNullifier",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "rebind", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "rebindCount",
@@ -186,6 +209,10 @@ export interface NullifierRegistryInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "rebindMessageHash",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "recoveryMessageHash",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -394,6 +421,21 @@ export interface NullifierRegistry extends BaseContract {
     "view"
   >;
 
+  provenNullifier: TypedContractMethod<
+    [
+      account: AddressLike,
+      a: [BigNumberish, BigNumberish],
+      b: [[BigNumberish, BigNumberish], [BigNumberish, BigNumberish]],
+      c: [BigNumberish, BigNumberish],
+      pubSignals: BigNumberish[],
+      userContextData: BytesLike,
+      nonce: BigNumberish,
+      attesterSig: BytesLike
+    ],
+    [bigint],
+    "view"
+  >;
+
   rebind: TypedContractMethod<
     [
       newAccount: AddressLike,
@@ -414,6 +456,12 @@ export interface NullifierRegistry extends BaseContract {
 
   rebindMessageHash: TypedContractMethod<
     [newAccount: AddressLike, pubSignals: BigNumberish[], epoch: BigNumberish],
+    [string],
+    "view"
+  >;
+
+  recoveryMessageHash: TypedContractMethod<
+    [account: AddressLike, pubSignals: BigNumberish[], nonce: BigNumberish],
     [string],
     "view"
   >;
@@ -479,6 +527,22 @@ export interface NullifierRegistry extends BaseContract {
     "view"
   >;
   getFunction(
+    nameOrSignature: "provenNullifier"
+  ): TypedContractMethod<
+    [
+      account: AddressLike,
+      a: [BigNumberish, BigNumberish],
+      b: [[BigNumberish, BigNumberish], [BigNumberish, BigNumberish]],
+      c: [BigNumberish, BigNumberish],
+      pubSignals: BigNumberish[],
+      userContextData: BytesLike,
+      nonce: BigNumberish,
+      attesterSig: BytesLike
+    ],
+    [bigint],
+    "view"
+  >;
+  getFunction(
     nameOrSignature: "rebind"
   ): TypedContractMethod<
     [
@@ -503,6 +567,13 @@ export interface NullifierRegistry extends BaseContract {
     nameOrSignature: "rebindMessageHash"
   ): TypedContractMethod<
     [newAccount: AddressLike, pubSignals: BigNumberish[], epoch: BigNumberish],
+    [string],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "recoveryMessageHash"
+  ): TypedContractMethod<
+    [account: AddressLike, pubSignals: BigNumberish[], nonce: BigNumberish],
     [string],
     "view"
   >;

@@ -197,6 +197,19 @@ const _abi = [
   },
   {
     inputs: [],
+    name: "PROBATION_PERIOD",
+    outputs: [
+      {
+        internalType: "uint48",
+        name: "",
+        type: "uint48",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
     name: "authorityCount",
     outputs: [
       {
@@ -301,6 +314,25 @@ const _abi = [
         internalType: "uint8",
         name: "",
         type: "uint8",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "authorityId",
+        type: "uint256",
+      },
+    ],
+    name: "probationEndsAt",
+    outputs: [
+      {
+        internalType: "uint48",
+        name: "",
+        type: "uint48",
       },
     ],
     stateMutability: "view",
