@@ -4,6 +4,8 @@ import { NO_PERMISSION, permission } from './helpers/keys';
 
 describe('AuthorityManagerBase (via CofferdamAccount4337)', () => {
   const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
+  // Read only by hard recovery; any non-zero address deploys the account.
+  const NULLIFIER_REGISTRY = ethers.Wallet.createRandom().address;
 
   async function registries(modules: string[]) {
     const [owner] = await ethers.getSigners();
@@ -20,7 +22,7 @@ describe('AuthorityManagerBase (via CofferdamAccount4337)', () => {
     const config = ethers.AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32'], [ethers.randomBytes(32), ethers.randomBytes(32)]);
 
     const Account = await ethers.getContractFactory('CofferdamAccount4337');
-    const account = await Account.deploy(ENTRYPOINT_V07, moduleRegistry, ceremonyRegistry, passkeyAuth, config, NO_PERMISSION);
+    const account = await Account.deploy(ENTRYPOINT_V07, moduleRegistry, ceremonyRegistry, NULLIFIER_REGISTRY, 0n, passkeyAuth, config, NO_PERMISSION);
     await account.waitForDeployment();
 
     expect(await account.upgradeLocked()).to.be.true;
@@ -38,7 +40,7 @@ describe('AuthorityManagerBase (via CofferdamAccount4337)', () => {
     const grant = permission([[await counter.getAddress(), counter.interface.getFunction('increment')!.selector]]);
 
     const Account = await ethers.getContractFactory('CofferdamAccount4337');
-    const account = await Account.deploy(ENTRYPOINT_V07, moduleRegistry, ceremonyRegistry, sessionAuth, config, grant);
+    const account = await Account.deploy(ENTRYPOINT_V07, moduleRegistry, ceremonyRegistry, NULLIFIER_REGISTRY, 0n, sessionAuth, config, grant);
     await account.waitForDeployment();
 
     expect(await account.upgradeLocked()).to.be.false;

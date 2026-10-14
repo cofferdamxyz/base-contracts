@@ -3,6 +3,8 @@ import { ethers } from 'hardhat';
 import { Contract, Signer, BigNumberish } from 'ethers';
 
 const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
+// Read only by hard recovery; any non-zero address deploys the account.
+const NULLIFIER_REGISTRY = ethers.Wallet.createRandom().address;
 
 /**
  * Pack two uint128 values into a bytes32 (high 128b = first, low 128b = second).
@@ -89,7 +91,7 @@ describe('EntryPoint v0.7 Integration', function () {
     const signerAddr = await signer.getAddress();
     const config = ethers.AbiCoder.defaultAbiCoder().encode(['address'], [signerAddr]);
     const Account = await ethers.getContractFactory('CofferdamAccount4337');
-    const account = await Account.deploy(ENTRYPOINT_V07, moduleRegistry, ceremonyRegistry, sessionAuthAddr, config, grant);
+    const account = await Account.deploy(ENTRYPOINT_V07, moduleRegistry, ceremonyRegistry, NULLIFIER_REGISTRY, 0n, sessionAuthAddr, config, grant);
     await account.waitForDeployment();
     const accountAddr = await account.getAddress();
 

@@ -6,13 +6,9 @@ import { deployAccountLayer } from './lib/accountLayer';
 async function main() {
   console.log('=== Cofferdam Base Contracts — Full Deployment ===\n');
 
-  // 1. Account layer
-  console.log('--- Account layer ---');
+  // 1. Self.xyz contracts (the account factory pins the nullifier registry)
+  console.log('--- Self.xyz contracts ---');
   const [deployer] = await ethers.getSigners();
-  const accountLayer = await deployAccountLayer();
-
-  // 2. Self.xyz contracts
-  console.log('\n--- Self.xyz contracts ---');
   const SelfAttesterRegistry = await ethers.getContractFactory('SelfAttesterRegistry');
   const attesterReg = await SelfAttesterRegistry.deploy(deployer.address, []);
   await attesterReg.waitForDeployment();
@@ -39,6 +35,10 @@ async function main() {
   );
   await nullifierReg.waitForDeployment();
   console.log('NullifierRegistry:', await nullifierReg.getAddress());
+
+  // 2. Account layer
+  console.log('\n--- Account layer ---');
+  const accountLayer = await deployAccountLayer(await nullifierReg.getAddress());
 
   // 3. Summary
   console.log('\n=== Deployment Summary ===');

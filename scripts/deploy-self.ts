@@ -69,12 +69,12 @@ async function main() {
   // attesters stay); without it a fresh registry is deployed with ATTESTER_ADDRESS.
   const SelfAttesterRegistry = await ethers.getContractFactory('SelfAttesterRegistry');
   const reuseAttesterRegistry = process.env.SELF_ATTESTER_REGISTRY_ADDRESS?.trim();
-  let attesterRegistry;
+  let attesterRegistry: any;
   if (reuseAttesterRegistry) {
     if (!ethers.isAddress(reuseAttesterRegistry)) {
       throw new Error(`SELF_ATTESTER_REGISTRY_ADDRESS is not a valid address: ${reuseAttesterRegistry}`);
     }
-    attesterRegistry = SelfAttesterRegistry.attach(reuseAttesterRegistry) as typeof attesterRegistry;
+    attesterRegistry = SelfAttesterRegistry.attach(reuseAttesterRegistry);
     console.log('Reusing SelfAttesterRegistry:', reuseAttesterRegistry);
     if (attesterAddress && !(await (attesterRegistry as any).isTrustedAttester(attesterAddress))) {
       throw new Error(`${attesterAddress} is not a trusted attester on ${reuseAttesterRegistry}`);

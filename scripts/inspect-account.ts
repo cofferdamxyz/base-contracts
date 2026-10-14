@@ -33,6 +33,10 @@ const ACCOUNT_ABI = [
   'function ceremonyNonce() view returns (uint256)',
   'function MODULE_REGISTRY() view returns (address)',
   'function CEREMONY_ATTESTERS() view returns (address)',
+  'function NULLIFIER_REGISTRY() view returns (address)',
+  'function RECOVERY_DELAY() view returns (uint256)',
+  'function probationEndsAt(uint256) view returns (uint48)',
+  'function pendingRecovery() view returns (address module, uint48 readyAt, uint256 nullifier, bytes config)',
   'function getPermission(uint256 authorityId) view returns (tuple(address[] targets, bytes4[] selectors, bytes32[] codeHashes, bytes4[] codeSelectors, uint256 valueCap, uint48 expiry))',
   'function getAuthority(uint256 authorityId) view returns (address module, uint8 tier, bool active, bytes config)',
   'function isValidSignature(bytes32 digest, bytes sig) view returns (bytes4)',
@@ -155,6 +159,12 @@ async function inspectAccount(accountAddress: string, txHash?: string) {
   console.log(`  Ceremony nonce: ${ceremonyNonce}`);
   console.log(`  Module registry:   ${await account.MODULE_REGISTRY()}`);
   console.log(`  Ceremony attesters: ${await account.CEREMONY_ATTESTERS()}`);
+  console.log(`  Nullifier registry: ${await account.NULLIFIER_REGISTRY()}`);
+  console.log(`  Recovery delay:     ${await account.RECOVERY_DELAY()} s`);
+  const pending = await account.pendingRecovery();
+  if (pending.module !== ethers.ZeroAddress) {
+    console.log(`  Pending recovery:   ${pending.module}, ready at ${new Date(Number(pending.readyAt) * 1000).toISOString()}`);
+  }
   console.log(`  Max passkeys: 3`);
 
   // ── Authority inspection ──────────────────────────────────────────────────
@@ -198,6 +208,11 @@ async function inspectAccount(accountAddress: string, txHash?: string) {
     console.log(`      Module:    ${module}${knownName ? ` (${knownName})` : ''}`);
     console.log(`      Tier:      ${tierName} (${tierNum})`);
     console.log(`      Kind:      ${kindLabel}`);
+    const probationEnds = Number(await account.probationEndsAt(i));
+    if (probationEnds > 0) {
+      const state = probationEnds * 1000 > Date.now() ? 'probationary until' : 'matured';
+      console.log(`      Probation: ${state} ${new Date(probationEnds * 1000).toISOString()}`);
+    }
     if (configDecoded) {
       console.log(`      Config:    ${configDecoded}`);
     } else {

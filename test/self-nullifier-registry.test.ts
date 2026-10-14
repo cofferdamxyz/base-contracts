@@ -687,7 +687,7 @@ describe('NullifierRegistry rebind (decision 0022)', () => {
     expect(pending.newAccount).to.equal(f.other.address);
     await expect(f.registry.finalizeRebind(NULLIFIER)).to.be.revertedWithCustomError(f.registry, 'RebindNotReady');
     await time.increase(3n * DAY);
-    await expect(f.registry.connect(f.outsider).finalizeRebind(NULLIFIER))
+    await expect((f.registry.connect(f.outsider) as any).finalizeRebind(NULLIFIER))
       .to.emit(f.registry, 'NullifierRebound')
       .withArgs(f.account.address, f.other.address, NULLIFIER, 0n);
     expect(await f.registry.nullifierToAccount(NULLIFIER)).to.equal(f.other.address);
@@ -699,8 +699,8 @@ describe('NullifierRegistry rebind (decision 0022)', () => {
   it('lets only the bound account cancel a pending rebind', async () => {
     const f = await bound({ rebindDelay: 3n * DAY });
     await f.registry.rebind(f.other.address, A, B, C, f.next.pubSignals, f.next.context, await f.signRebind(f.other.address, f.next.pubSignals, 0n));
-    await expect(f.registry.connect(f.outsider).cancelRebind(NULLIFIER)).to.be.revertedWithCustomError(f.registry, 'NotBoundAccount');
-    await expect(f.registry.connect(f.account).cancelRebind(NULLIFIER))
+    await expect((f.registry.connect(f.outsider) as any).cancelRebind(NULLIFIER)).to.be.revertedWithCustomError(f.registry, 'NotBoundAccount');
+    await expect((f.registry.connect(f.account) as any).cancelRebind(NULLIFIER))
       .to.emit(f.registry, 'RebindCancelled')
       .withArgs(f.account.address, NULLIFIER, f.other.address);
     await time.increase(3n * DAY);
@@ -720,5 +720,40 @@ describe('NullifierRegistry rebind (decision 0022)', () => {
     await f.registry.finalizeRebind(NULLIFIER);
     expect(await f.registry.nullifierToAccount(NULLIFIER)).to.equal(f.outsider.address);
     expect(await f.registry.accountToNullifier(f.other.address)).to.equal(0n);
+  });
+});
+
+describe('NullifierRegistry provenNullifier (decision 0023)', () => {
+  async function signRecovery(f: Awaited<ReturnType<typeof deployFixture>>, account: string, pubSignals: bigint[], nonce: bigint, signer = f.attester) {
+    return signer.signMessage(ethers.getBytes(await f.registry.recoveryMessageHash(account, pubSignals, nonce)));
+  }
+
+  it('returns the proof nullifier for the named account without binding anything', async () => {
+    const f = await deployFixture();
+    const p = buildBind({ account: f.account.address });
+    const sig = await signRecovery(f, f.account.address, p.pubSignals, 4n);
+    expect(await f.registry.provenNullifier(f.account.address, A, B, C, p.pubSignals, p.context, 4n, sig)).to.equal(NULLIFIER);
+    expect(await f.registry.isNullifierBound(NULLIFIER)).to.equal(false);
+  });
+
+  it('runs the bind checks: account in the context, attester co-sign on this nonce, the proof', async () => {
+    const f = await deployFixture();
+    const p = buildBind({ account: f.account.address });
+    const sig = await signRecovery(f, f.account.address, p.pubSignals, 4n);
+    await expect(f.registry.provenNullifier(f.other.address, A, B, C, p.pubSignals, p.context, 4n, sig))
+      .to.be.revertedWithCustomError(f.registry, 'UserIdentifierMismatch');
+    await expect(f.registry.provenNullifier(f.account.address, A, B, C, p.pubSignals, p.context, 5n, sig))
+      .to.be.revertedWithCustomError(f.registry, 'UntrustedAttester');
+    const bindShaped = await f.signBind(p.pubSignals);
+    await expect(f.registry.provenNullifier(f.account.address, A, B, C, p.pubSignals, p.context, 4n, bindShaped))
+      .to.be.revertedWithCustomError(f.registry, 'UntrustedAttester');
+    const wrongScope = buildBind({ account: f.account.address, scope: 1n });
+    await expect(f.registry.provenNullifier(f.account.address, A, B, C, wrongScope.pubSignals, wrongScope.context, 4n, await signRecovery(f, f.account.address, wrongScope.pubSignals, 4n)))
+      .to.be.revertedWithCustomError(f.registry, 'WrongScope');
+
+    const r = await deployFixture({ rejectProofs: true });
+    const q = buildBind({ account: r.account.address });
+    await expect(r.registry.provenNullifier(r.account.address, A, B, C, q.pubSignals, q.context, 0n, await signRecovery(r, r.account.address, q.pubSignals, 0n)))
+      .to.be.revertedWithCustomError(r.registry, 'InvalidProof');
   });
 });

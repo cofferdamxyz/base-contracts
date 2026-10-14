@@ -5,17 +5,18 @@
 > This document is intended for security auditors, integrators, and developers
 > building inspection/debugging tooling. It is the on-chain companion to
 > `cofferdam-sdk/IDENTITY_LAYER_DESIGN.md` §2.5 (tiered-authority model) and
-> decisions 0015 and 0016 in the `cofferdam` repository.
+> decisions 0015, 0016 and 0023 in the `cofferdam` repository.
 
 ## 1. Contract Inventory
 
 | Contract | Source | Role |
 |---|---|---|
 | `CofferdamAccount4337` | `contracts/account/CofferdamAccount4337.sol` | ERC-4337 smart account; holds authorities and permissions, validates UserOps, executes calls |
-| `CofferdamAccountFactory4337` | `contracts/account/CofferdamAccountFactory4337.sol` | CREATE2 factory; pins the EntryPoint and both registries into every account |
-| `AuthorityManagerBase` | `contracts/account/AuthorityManagerBase.sol` | Abstract base: authority registry, permissions, passkey cap, last-High guard |
+| `CofferdamAccountFactory4337` | `contracts/account/CofferdamAccountFactory4337.sol` | CREATE2 factory; pins the EntryPoint, the module and ceremony registries, the nullifier registry and the recovery delay into every account |
+| `AuthorityManagerBase` | `contracts/account/AuthorityManagerBase.sol` | Abstract base: authority registry, permissions, passkey cap, last-High guard, High probation |
 | `CofferdamModuleRegistry` | `contracts/registry/CofferdamModuleRegistry.sol` | Allowlist of authority modules an account may install (owner: Cofferdam Safe) |
-| `CofferdamCeremonyAttesterRegistry` | `contracts/registry/CofferdamCeremonyAttesterRegistry.sol` | Keys that co-sign first-High enrolment and Partner recovery (a `SelfAttesterRegistry`) |
+| `CofferdamCeremonyAttesterRegistry` | `contracts/registry/CofferdamCeremonyAttesterRegistry.sol` | Keys that co-sign first-High enrolment, Partner recovery and hard recovery (a `SelfAttesterRegistry`) |
+| `NullifierRegistry` | `contracts/self/NullifierRegistry.sol` | Self.xyz nullifier → account binding; `provenNullifier` checks a hard-recovery proof (§5.9) |
 | `CofferdamPaymaster` | `contracts/account/CofferdamPaymaster.sol` | Verifying paymaster (decision 0014) |
 | `WebAuthnPasskeyAuthority` | `contracts/auth/WebAuthnPasskeyAuthority.sol` | High: WebAuthn assertion, `rpIdHash == sha256("cofferdam.xyz")`, UV required |
 | `PartnerPasskeyAuthority` | `contracts/auth/PartnerPasskeyAuthority.sol` | Partner: WebAuthn assertion on the partner's RP (rpIdHash in config), UV required |
@@ -41,6 +42,11 @@ added. Source of truth: `deployments/baseSepolia.json`.
 | PartnerPasskeyAuthority (Partner) | `0x41c9bCaB8D074FdC364455479E31496cb689a349` |
 | SessionKeyAuthority (Managed) | `0xD468774BDE3E2a1705b51791424432abD01CbaCE` |
 | PasskeyAuthority (raw P-256, testnet only) | `0xebe2d02a07859a50Ae9f3f54B9F327aeD0EB6F93` |
+
+These addresses predate decision 0023: the hard-recovery factory needs a
+`NullifierRegistry` with `provenNullifier` and a new factory, so the Sepolia
+account layer is redeployed again (`deploy-self.ts`, then `deploy-auth.ts`)
+and this table moves with it.
 
 The pre-0016 deployment (factory `0x35CeBf87…1F3D`, WebAuthn authority
 `0x279Cf7DF…Eea8`, paymasters `0x5ffb8bA8…204e` and `0xe73fec9b…0aF`) is
@@ -89,13 +95,23 @@ address = keccak256(0xff, factory, salt, keccak256(initCode))[12:]
 where initCode = abi.encodePacked(
     type(CofferdamAccount4337).creationCode,
     abi.encode(ENTRY_POINT, MODULE_REGISTRY, CEREMONY_ATTESTERS,
+               NULLIFIER_REGISTRY, RECOVERY_DELAY,
                initialModule, initialConfig, initialPermission)
 )
 ```
 
 The same `(initialModule, initialConfig, initialPermission, salt)` always
-produces the same address for a given factory. The registries are factory
-immutables, so a factory with other registries yields other addresses. Because
+produces the same address for a given factory. The registries and the
+recovery delay are factory immutables, so a factory with other values yields
+other addresses.
+
+The account's creation code no longer fits beside the factory's own code
+under the 24,576-byte runtime limit, so the factory constructor stores it in
+two data contracts (`ACCOUNT_CODE_A`, `ACCOUNT_CODE_B`, each a STOP byte then
+one half) and reads them back with `EXTCODECOPY`; `accountCreationCode()`
+returns the reassembled bytes, equal to `type(CofferdamAccount4337).creationCode`.
+The pointers are immutables, so `deployAccount` reads no factory storage in
+ERC-4337 validation. Because
 the permission is part of the address, a deployer cannot swap a wider grant
 into a counterfactual address the user has already seen.
 
@@ -107,8 +123,9 @@ selector `0xa8ace465`. Returns the computed address without deploying.
 ## 3. Account Storage Layout
 
 `CofferdamAccount4337` inherits `AuthorityManagerBase, EIP712`. Storage is laid
-out sequentially from slot 0. `ENTRY_POINT`, `MODULE_REGISTRY` and
-`CEREMONY_ATTESTERS` are immutables (in code, not storage).
+out sequentially from slot 0. `ENTRY_POINT`, `MODULE_REGISTRY`,
+`CEREMONY_ATTESTERS`, `NULLIFIER_REGISTRY` and `RECOVERY_DELAY` are
+immutables (in code, not storage).
 
 ### 3.1 Slot Map
 
@@ -119,9 +136,11 @@ out sequentially from slot 0. `ENTRY_POINT`, `MODULE_REGISTRY` and
 | 2 | `passkeyCount` | `uint8` (low byte) | Active High-tier count |
 | 2 | `upgradeLocked` | `bool` (next byte) | True once a High authority has existed |
 | 3 | `_permissions` | `mapping(uint256 => Permission)` | Entries at `keccak256(abi.encode(id, 3))` |
-| 4 | `_nameFallback` | `string` | OpenZeppelin `EIP712` (unused: name fits a ShortString) |
-| 5 | `_versionFallback` | `string` | OpenZeppelin `EIP712` (unused) |
-| 6 | `ceremonyNonce` | `uint256` | Ceremony co-signs spent (§5.7) |
+| 4 | `_probationEnds` | `mapping(uint256 => uint48)` | Probation end of a High added by a High (§5.10); read with `probationEndsAt(id)` |
+| 5 | `_nameFallback` | `string` | OpenZeppelin `EIP712` (unused: name fits a ShortString) |
+| 6 | `_versionFallback` | `string` | OpenZeppelin `EIP712` (unused) |
+| 7 | `ceremonyNonce` | `uint256` | Ceremony co-signs spent (§5.7) |
+| 8–10 | `_pendingRecovery` | `struct { address module; uint48 readyAt; uint256 nullifier; bytes config; }` | Hard recovery waiting for `RECOVERY_DELAY` (§5.9); read with `pendingRecovery()` |
 
 ### 3.2 Packed Slot 2 Encoding
 
@@ -236,6 +255,7 @@ Return values:
 | Unknown or inactive authority, call the tier may not make | revert |
 | Module rejects the signature | `1` (`SIG_VALIDATION_FAILED`) |
 | High, accepted | `0` |
+| High added by a High, accepted, call reaching the account itself (§5.10) | `uint256(probationEnd) << 208` (`validAfter`) |
 | Partner / Managed, accepted | `uint256(permission.expiry) << 160` (`validUntil`; 0 = none) |
 | `enrollFirstHigh` by its own signer, accepted | `0` (not bound by the grant's expiry, so an expired partner grant never strands funds) |
 
@@ -357,6 +377,66 @@ function replacePartnerAuthority(
 - Execution checks the ceremony co-sign (§5.7), deactivates `oldId` and adds
   the new authority with the same module, tier and permission.
 
+### 5.9 Hard Recovery: `recoverHigh` / `finalizeRecovery` / `cancelRecovery` (decision 0023)
+
+Only once a High has existed (`upgradeLocked`), else `NoHighToRecover()`.
+A direct call, not a userOp: the proof check and the registry reads are not
+allowed in ERC-4337 validation, and no authority can sign it. The plane relays
+it; anyone may submit it.
+
+```solidity
+struct SelfProof {
+    uint256[2] a; uint256[2][2] b; uint256[2] c;   // Groth16 proof
+    uint256[21] pubSignals;                       // vc_and_disclose public signals
+    bytes userContextData;                        // preimage of the userIdentifier signal
+}
+
+function recoverHigh(
+    IAuthorityModule newModule,          // a listed High module
+    bytes newConfig,                     // abi.encode(qx, qy)
+    bytes newKeyAssertion,               // §5.2, over recoveryChallenge(ceremonyNonce)
+    SelfProof proof,
+    bytes selfAttesterSig,
+    CeremonyAttestation attestation      // action = keccak256("recover-high"), newKeyHash = keccak256(newConfig), partnerId = 0
+)
+```
+
+All bound to `nonce = ceremonyNonce` and consumed with it:
+
+1. `newKeyAssertion`: the new passkey over
+   `recoveryChallenge(nonce) = keccak256(abi.encode(keccak256("cofferdam-recover-high-v1"), chainid, account, nonce))`.
+2. `proof` and `selfAttesterSig`: `NULLIFIER_REGISTRY.provenNullifier(account,
+   a, b, c, pubSignals, userContextData, nonce, selfAttesterSig)` runs the
+   checks of `verifyAndBind` (attestation id, scope, `userContextData` names
+   the account, Groth16) with the Self attester's EIP-191 co-sign over
+   `recoveryMessageHash(account, pubSignals, nonce) = keccak256(abi.encode(chainid, registry, keccak256("cofferdam-recover-high-v1"), account, pubSignals, nonce))`
+   (a bind or rebind signature never matches), and returns the nullifier; it
+   must equal `NULLIFIER_REGISTRY.accountToNullifier(account)`, else
+   `NotBoundIdentity()`.
+3. `attestation`: the ceremony co-sign of §5.7 with the action above.
+
+With `RECOVERY_DELAY == 0` (testnets) the recovery applies in the same call.
+Otherwise it is stored as the pending recovery (a later request replaces it)
+and `RecoveryRequested` is emitted; after `readyAt` anyone may
+`finalizeRecovery()`, which re-checks that the nullifier is still bound to the
+account. Until then a High out of probation may `cancelRecovery()` (as the
+userOp's call or through `execute` to self). Applying it revokes every active
+High, bypassing the last-High guard, and adds the new High with no
+probation. Partner and Managed grants, funds and the identity binding stay.
+
+### 5.10 Probation of a High Added by a High (decision 0023)
+
+`addAuthority` signed by a High records `probationEndsAt(id) = block.timestamp
++ PROBATION_PERIOD` (72 hours) for a new High. The genesis High, a first High
+(`enrollFirstHigh`) and a recovered High have none (0). While a High has a
+probation end, `validateUserOp` returns it as `validAfter` for any call that
+reaches the account itself: a top-level call other than `execute` /
+`executeBatch` (`addAuthority`, `revokeAuthority`, `cancelRecovery`, …), or an
+`execute` / `executeBatch` naming the account. The EntryPoint then rejects
+the op until the probation ends, without the account reading
+`block.timestamp` in validation. Calls to other contracts and ERC-1271
+signatures work at once. Any other High may revoke it meanwhile.
+
 ## 6. Events
 
 | Event | Emitted by | Topic 0 |
@@ -367,6 +447,9 @@ function replacePartnerAuthority(
 | `PermissionGranted(uint256 indexed authorityId, bytes32 permissionHash, uint48 expiry)` | Account | `0xbeb185971c04fe30cf9261567660699df92c7ccc6cddec005acf7460082a5c79` |
 | `FirstHighEnrolled(uint256 indexed signerAuthorityId, uint256 indexed highAuthorityId)` | Account | `0xf3a7166bd3ffe995d3d2f6bcf566d01e4a051e751587776b1ebb18c13bc72ebe` |
 | `PartnerAuthorityReplaced(uint256 indexed oldAuthorityId, uint256 indexed newAuthorityId)` | Account | `0xa453a5029382d12d0d52c11069451ce5615ed1a9aadc7c427ba1f5a2dd7e70e0` |
+| `RecoveryRequested(address indexed module, bytes32 indexed configHash, uint48 readyAt)` | Account | `0x1af23b2e4a644b00b68fd086e5e5cccce36e500cf1ffa33330ca0f50bec17bf3` |
+| `RecoveryCancelled(address indexed module, bytes32 indexed configHash)` | Account | `0x5ec34f3f384538319a5eb81bc3f45fb37b28d5e456474f7a62318ef7a7130949` |
+| `HighRecovered(uint256 indexed highAuthorityId)` | Account | `0x644ff3c1ee95a7ea61ecd6a422caab0f54b21cb60e869710e214c1140ac74216` |
 
 `tier` in `AuthorityAdded` is not indexed (data, with `kind`).
 `permissionHash = keccak256(abi.encode(permission))` with the `Permission`
@@ -396,6 +479,9 @@ Compute: `ethers.id(kindString)`. The old `"session"` kind is gone with the
 | `ENTRY_POINT()` | `0x94430fa5` |
 | `MODULE_REGISTRY()` | `0xb95ddb52` |
 | `CEREMONY_ATTESTERS()` | `0xd76f8c3b` |
+| `NULLIFIER_REGISTRY()` (account and factory) | `0x4065e7b2` |
+| `RECOVERY_DELAY()` (account and factory) | `0x47b45652` |
+| `accountCreationCode()` (factory) | `0x31c884df` |
 | `validateUserOp((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes),bytes32,uint256)` | `0x19822f7c` |
 | `execute(address,uint256,bytes)` | `0xb61d27f6` |
 | `executeBatch(address[],uint256[],bytes[])` | `0x47e1da2a` |
@@ -409,6 +495,15 @@ Compute: `ethers.id(kindString)`. The old `"session"` kind is gone with the
 | `partnerRecoveryHash(uint256,bytes32,uint48)` | `0xbf7e7804` |
 | `ceremonyHash(bytes32,bytes32,bytes32,uint256,uint48,uint48)` | `0xce7cb29f` |
 | `ceremonyNonce()` | `0x72ffd414` |
+| `recoverHigh(address,bytes,bytes,(uint256[2],uint256[2][2],uint256[2],uint256[21],bytes),bytes,(uint48,uint48,bytes))` | `0x55238103` |
+| `finalizeRecovery()` | `0xe2ccb305` |
+| `cancelRecovery()` | `0x0ba234d6` |
+| `pendingRecovery()` | `0xfaeb4488` |
+| `recoveryChallenge(uint256)` | `0x5db6b2c1` |
+| `probationEndsAt(uint256)` | `0x664dc3d9` |
+| `PROBATION_PERIOD()` | `0x3d9233e4` |
+| `NullifierRegistry.provenNullifier(address,uint256[2],uint256[2][2],uint256[2],uint256[21],bytes,uint256,bytes)` | `0xf79e7b53` |
+| `NullifierRegistry.recoveryMessageHash(address,uint256[21],uint256)` | `0xd52727c1` |
 | `replaySafeHash(bytes32)` | `0xce1506be` |
 | `isValidSignature(bytes32,bytes)` | `0x1626ba7e` (ERC-1271) |
 
@@ -424,6 +519,7 @@ Bundler → EntryPoint.handleOps([userOp], beneficiary)
     → otherwise: unknown/inactive → revert
                  module.isValidSignature(account, userOpHash, config, sig[32:]) false → 1
                  call policy of the recorded tier (§10.4) → revert, or validUntil
+                 (Partner/Managed) / validAfter (probationary High, §5.10)
   → account.execute / executeBatch / management call
 ```
 
@@ -440,14 +536,17 @@ validation, so ERC-7562 storage rules hold.
 
 1. **EntryPoint-only execution**: `execute`, `executeBatch`, `validateUserOp`
    and `replacePartnerAuthority` require `msg.sender == ENTRY_POINT`;
-   `addAuthority`, `revokeAuthority` and `enrollFirstHigh` also accept a
-   self-call (from a High `execute`).
+   `addAuthority`, `revokeAuthority`, `enrollFirstHigh` and `cancelRecovery`
+   also accept a self-call (from a High `execute`). `recoverHigh` and
+   `finalizeRecovery` are open to anyone; their authority is the evidence
+   they check (§5.9).
 2. **Module allowlist**: every authority, genesis included, uses a module
    listed in `MODULE_REGISTRY` at the time it is added; a module reporting
    `None` or `LowUntrusted` is refused. Delisting a module stops new installs,
    not existing authorities.
 3. **Passkey cap and last High**: `passkeyCount <= MAX_PASSKEYS (3)`; revoking
-   the last active High reverts `LastHighAuthority()`.
+   the last active High reverts `LastHighAuthority()`. Only a hard recovery
+   replaces every High at once, installing the new one in the same step.
 4. **Tier gating** (checked in `validateUserOp` against `userOp.callData`):
    - `High` may make any call.
    - `Partner` and `LowManaged` may `execute` / `executeBatch` only calls whose
@@ -456,7 +555,8 @@ validation, so ERC-7562 storage rules hold.
      itself, with value ≤ `valueCap`; and may call `enrollFirstHigh` naming
      themselves while no High exists. Anything else reverts
      `TierNotPermitted(tier)` or `CallNotPermitted(target, selector)`.
-   - Only `High` adds or revokes authorities (`addAuthority`, `revokeAuthority`).
+   - Only `High` adds or revokes authorities (`addAuthority`, `revokeAuthority`),
+     and a High added by a High only after its 72-hour probation (§5.10).
 5. **Permission shape** (checked when granted): 1 to 16 pairs counting
    address and code-hash entries; no zero target; never the account itself; no
    code hash that is 0, `keccak256("")` (an account without code) or the
@@ -477,7 +577,12 @@ validation, so ERC-7562 storage rules hold.
    vouch, the new key's signature and a Cofferdam co-sign; it cannot change
    the partner, RP, backend key or permission.
 9. **ERC-1271 is High only** and replay-safe per account and chain (§5.5).
-10. **CREATE2 idempotency**: `deployAccount` returns the existing account if
+10. **Hard recovery needs the bound person and Cofferdam**: a fresh proof for
+    this account with the nullifier bound to it, the new `cofferdam.xyz`
+    passkey's assertion, the Self attester's and the ceremony attester's
+    co-signs, all on `ceremonyNonce`; then `RECOVERY_DELAY` (72 hours on
+    mainnet) during which a mature High may cancel (§5.9).
+11. **CREATE2 idempotency**: `deployAccount` returns the existing account if
     code is already at the address.
 
 ## 11. Inspector Tool
@@ -504,10 +609,10 @@ ACCOUNT=0xABf27176feCB5f1Be3acB40c235D26fEea504E98 yarn inspect:account --networ
 
 The inspector prints:
 - **Basic**: deployment status, balance, nonce, code size
-- **Account config**: EntryPoint (with correctness check), module and ceremony
-  registries, authority count, passkey count, High-has-existed flag,
-  `ceremonyNonce`
-- **Authorities**: per-authority module, tier, kind, active status, decoded
+- **Account config**: EntryPoint (with correctness check), module, ceremony
+  and nullifier registries, recovery delay and any pending recovery,
+  authority count, passkey count, High-has-existed flag, `ceremonyNonce`
+- **Authorities**: per-authority module, tier, kind, active status, probation, decoded
   config (P-256 key, partner RP/id/backend key, or bridge signer) and, for
   Partner and Managed, the permission
 - **Security summary**: active High / Partner / Managed counts and warnings

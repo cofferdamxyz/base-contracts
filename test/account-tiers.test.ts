@@ -22,6 +22,8 @@ const SIG_VALIDATION_FAILED = 1n;
 const RECOVERY_ID = ethers.MaxUint256;
 const PARTNER_ID = ethers.id('offshoresync');
 const DAY = 86400n;
+// The nullifier registry is only read by hard recovery (account-recovery.test.ts).
+const NULLIFIER = ethers.Wallet.createRandom().address;
 
 describe('CofferdamAccount4337 tiers (decisions 0015, 0016)', () => {
   // The account's EntryPoint is a plain signer, so tests can call
@@ -74,7 +76,7 @@ describe('CofferdamAccount4337 tiers (decisions 0015, 0016)', () => {
 
   async function deployAccount(module: any, config: string, perm: Permission = NO_PERMISSION) {
     const Account = await ethers.getContractFactory('CofferdamAccount4337');
-    const account: any = await Account.deploy(epAddr, moduleRegistry, ceremonyRegistry, module, config, perm);
+    const account: any = await Account.deploy(epAddr, moduleRegistry, ceremonyRegistry, NULLIFIER, 0n, module, config, perm);
     return { account, addr: await account.getAddress() };
   }
 
@@ -136,7 +138,9 @@ describe('CofferdamAccount4337 tiers (decisions 0015, 0016)', () => {
 
     it('rejects zero registries', async () => {
       const Account = await ethers.getContractFactory('CofferdamAccount4337');
-      await expect(Account.deploy(epAddr, ethers.ZeroAddress, ceremonyRegistry, highModule, webauthnKey().config, NO_PERMISSION))
+      await expect(Account.deploy(epAddr, ethers.ZeroAddress, ceremonyRegistry, NULLIFIER, 0n, highModule, webauthnKey().config, NO_PERMISSION))
+        .to.be.revertedWithCustomError(Account, 'ZeroAddress');
+      await expect(Account.deploy(epAddr, moduleRegistry, ceremonyRegistry, ethers.ZeroAddress, 0n, highModule, webauthnKey().config, NO_PERMISSION))
         .to.be.revertedWithCustomError(Account, 'ZeroAddress');
     });
 
@@ -667,7 +671,7 @@ describe('CofferdamAccount4337 tiers (decisions 0015, 0016)', () => {
       const reg = await (await ethers.getContractFactory('CofferdamModuleRegistry')).deploy(await owner.getAddress(), [highModule.target]);
       const Account = await ethers.getContractFactory('CofferdamAccount4337');
       const high = webauthnKey();
-      const account: any = await Account.deploy(epAddr, reg, ceremonyRegistry, highModule, high.config, NO_PERMISSION);
+      const account: any = await Account.deploy(epAddr, reg, ceremonyRegistry, NULLIFIER, 0n, highModule, high.config, NO_PERMISSION);
       await reg.disallowModule(highModule);
       const addr = await account.getAddress();
       const inc = counter.interface.encodeFunctionData('increment');
@@ -678,9 +682,9 @@ describe('CofferdamAccount4337 tiers (decisions 0015, 0016)', () => {
   });
 
   describe('CofferdamAccountFactory4337', () => {
-    it('pins the registries and binds the genesis grant into the address', async () => {
+    it('pins the registries and the recovery delay, and binds the genesis grant into the address', async () => {
       const Factory = await ethers.getContractFactory('CofferdamAccountFactory4337');
-      const factory: any = await Factory.deploy(epAddr, moduleRegistry, ceremonyRegistry);
+      const factory: any = await Factory.deploy(epAddr, moduleRegistry, ceremonyRegistry, NULLIFIER, 3n * DAY);
       const key = webauthnKey('offshoresync.com');
       const config = key.partnerConfig(PARTNER_ID, partnerBackend.address);
       const p = await partnerGrant();
@@ -695,6 +699,31 @@ describe('CofferdamAccount4337 tiers (decisions 0015, 0016)', () => {
       const account = await ethers.getContractAt('CofferdamAccount4337', predicted);
       expect(await account.MODULE_REGISTRY()).to.equal(await moduleRegistry.getAddress());
       expect(await account.CEREMONY_ATTESTERS()).to.equal(await ceremonyRegistry.getAddress());
+      expect(await account.NULLIFIER_REGISTRY()).to.equal(NULLIFIER);
+      expect(await account.RECOVERY_DELAY()).to.equal(3n * DAY);
+    });
+
+    it('reassembles the account creation code from its two halves', async () => {
+      const Factory = await ethers.getContractFactory('CofferdamAccountFactory4337');
+      const factory: any = await Factory.deploy(epAddr, moduleRegistry, ceremonyRegistry, NULLIFIER, 0n);
+      const Account = await ethers.getContractFactory('CofferdamAccount4337');
+      expect(await factory.accountCreationCode()).to.equal(Account.bytecode);
+      // The halves start with STOP, so calling them does nothing.
+      for (const half of [await factory.ACCOUNT_CODE_A(), await factory.ACCOUNT_CODE_B()]) {
+        expect((await ethers.provider.getCode(half)).slice(0, 4)).to.equal('0x00');
+      }
+      // A different delay is a different account address.
+      const other: any = await Factory.deploy(epAddr, moduleRegistry, ceremonyRegistry, NULLIFIER, 1n);
+      const high = webauthnKey();
+      const salt = ethers.id('salt');
+      expect(await other.getFunction('getAddress')(highModule, high.config, NO_PERMISSION, salt))
+        .to.not.equal(await factory.getFunction('getAddress')(highModule, high.config, NO_PERMISSION, salt));
+    });
+
+    it('rejects a zero nullifier registry', async () => {
+      const Factory = await ethers.getContractFactory('CofferdamAccountFactory4337');
+      await expect(Factory.deploy(epAddr, moduleRegistry, ceremonyRegistry, ethers.ZeroAddress, 0n))
+        .to.be.revertedWithCustomError(Factory, 'ZeroAddress');
     });
   });
 

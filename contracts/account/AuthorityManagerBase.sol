@@ -5,7 +5,8 @@ import {IAuthorityModule, Tier, Permission} from "../interfaces/IAuthorityModule
 
 /// @title AuthorityManagerBase
 /// @notice The chain-agnostic core of Cofferdam's tiered-authority model: the
-///         authority registry, the passkey cap, the last-High guard and the
+///         authority registry, the passkey cap, the last-High guard, the
+///         probation of newly added High passkeys (decision 0023) and the
 ///         per-authority permissions of the scoped tiers (Partner, Managed).
 ///         Specified in `cofferdam-sdk/IDENTITY_LAYER_DESIGN.md` §2.5 and
 ///         decisions 0015 / 0016 in the `cofferdam` repository. It is free of
@@ -40,6 +41,13 @@ abstract contract AuthorityManagerBase {
     ///         bounded gas.
     uint256 public constant MAX_PERMISSION_ENTRIES = 16;
 
+    /// @notice How long a High passkey added by another High stays
+    ///         probationary (decision 0023): it may transact, but its userOps
+    ///         that change the account itself (add, revoke, cancel a
+    ///         recovery) are valid only after this period, and any older High
+    ///         may revoke it meanwhile.
+    uint48 public constant PROBATION_PERIOD = 72 hours;
+
     /// @dev `extcodehash` of an account that exists but has no code.
     bytes32 private constant EMPTY_CODE_HASH = keccak256("");
 
@@ -57,6 +65,10 @@ abstract contract AuthorityManagerBase {
 
     /// @dev What each Partner / Managed authority may call (decision 0016).
     mapping(uint256 => Permission) internal _permissions;
+
+    /// @dev When a probationary High authority matures (decision 0023); 0 for
+    ///      every authority that never was probationary.
+    mapping(uint256 => uint48) internal _probationEnds;
 
     // ── Events ───────────────────────────────────────────────────────────────
 
@@ -86,6 +98,13 @@ abstract contract AuthorityManagerBase {
     {
         Authority storage a = _authorities[authorityId];
         return (address(a.module), a.tier, a.active, a.config);
+    }
+
+    /// @notice When a High authority added by another High leaves probation;
+    ///         0 for the genesis High, a first High, a recovered High and every
+    ///         other tier.
+    function probationEndsAt(uint256 authorityId) external view returns (uint48) {
+        return _probationEnds[authorityId];
     }
 
     /// @notice The permission of a Partner or Managed authority (empty for High).
@@ -137,7 +156,8 @@ abstract contract AuthorityManagerBase {
     ///      decision 0016). High is capped at MAX_PASSKEYS and latches
     ///      `upgradeLocked`. Partner and Managed carry a permission, validated
     ///      here; `byHigh` says whether a High signer authorised the grant
-    ///      (only then may a Managed permission carry value).
+    ///      (only then may a Managed permission carry value, and a High added
+    ///      that way starts its `PROBATION_PERIOD`).
     function _addAuthority(
         IAuthorityModule module,
         bytes memory config,
@@ -156,6 +176,7 @@ abstract contract AuthorityManagerBase {
             if (passkeyCount >= MAX_PASSKEYS) revert PasskeyCapReached();
             passkeyCount++;
             upgradeLocked = true;
+            if (byHigh) _probationEnds[id] = uint48(block.timestamp) + PROBATION_PERIOD;
         } else {
             _checkPermissionShape(t, permission, byHigh);
             _permissions[id] = permission;
@@ -181,6 +202,21 @@ abstract contract AuthorityManagerBase {
         }
         target.active = false;
         emit AuthorityRevoked(targetId);
+    }
+
+    /// @dev Deactivate every active High authority, bypassing the last-High
+    ///      guard. Only for hard recovery, which installs a new High in the
+    ///      same call (decision 0023).
+    function _revokeAllHigh() internal {
+        uint256 n = authorityCount;
+        for (uint256 i = 0; i < n; i++) {
+            Authority storage a = _authorities[i];
+            if (a.active && a.tier == Tier.High) {
+                a.active = false;
+                emit AuthorityRevoked(i);
+            }
+        }
+        passkeyCount = 0;
     }
 
     /// @dev Replace authority `oldId` with a new record on the same module

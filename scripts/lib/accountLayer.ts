@@ -1,12 +1,14 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { ethers, network } from 'hardhat';
 
 // ERC-4337 EntryPoint v0.7 — preinstalled on Base
 export const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
 
 /**
- * Deploy the account layer (decision 0016): authority modules, the module
- * registry, the ceremony attester registry, the factory that pins both, and
- * the paymaster.
+ * Deploy the account layer (decisions 0016, 0023): authority modules, the
+ * module registry, the ceremony attester registry, the factory that pins them
+ * with the nullifier registry and the hard-recovery delay, and the paymaster.
  *
  * - `REGISTRY_OWNER` owns both registries (the Cofferdam Safe on mainnet);
  *   defaults to the deployer off mainnet and is required on mainnet.
@@ -15,8 +17,13 @@ export const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
  *   paused until the owner adds one.
  * - The raw P-256 `PasskeyAuthority` has no RP binding: it is deployed and
  *   listed only off mainnet.
+ * - `nullifierRegistry` (or `NULLIFIER_REGISTRY`, else the `NullifierRegistry`
+ *   entry in deployments/<network>.json) is pinned into every account for
+ *   hard recovery; deploy it first (`deploy-self.ts`).
+ * - `RECOVERY_DELAY_SECONDS` is the hard-recovery delay pinned into every
+ *   account: 72 hours on mainnet, 0 elsewhere by default.
  */
-export async function deployAccountLayer(): Promise<Record<string, string>> {
+export async function deployAccountLayer(nullifierRegistry?: string): Promise<Record<string, string>> {
   const [deployer] = await ethers.getSigners();
   const isMainnet = network.name === 'base';
   const owner = process.env.REGISTRY_OWNER || (isMainnet ? '' : deployer.address);
@@ -26,6 +33,21 @@ export async function deployAccountLayer(): Promise<Record<string, string>> {
     .map((a) => a.trim())
     .filter(Boolean)
     .map((a) => ethers.getAddress(a));
+
+  const deploymentsFile = path.join(__dirname, '..', '..', 'deployments', `${network.name}.json`);
+  const recorded = fs.existsSync(deploymentsFile)
+    ? JSON.parse(fs.readFileSync(deploymentsFile, 'utf8')).NullifierRegistry?.address
+    : undefined;
+  const nullifier = nullifierRegistry || process.env.NULLIFIER_REGISTRY?.trim() || recorded;
+  if (!nullifier || !ethers.isAddress(nullifier)) {
+    throw new Error('No NullifierRegistry: deploy it first (deploy-self.ts) or set NULLIFIER_REGISTRY');
+  }
+  if ((await ethers.provider.getCode(nullifier)) === '0x') throw new Error(`No contract at NULLIFIER_REGISTRY ${nullifier}`);
+  const delayRaw = process.env.RECOVERY_DELAY_SECONDS?.trim();
+  const recoveryDelay = delayRaw ? BigInt(delayRaw) : isMainnet ? 259_200n : 0n;
+  if (isMainnet && recoveryDelay < 259_200n) throw new Error('RECOVERY_DELAY_SECONDS must be at least 72 hours on mainnet');
+  console.log('NullifierRegistry (pinned):', nullifier);
+  console.log('recoveryDelay:', recoveryDelay.toString(), 'seconds');
 
   async function deploy(name: string, args: unknown[] = []): Promise<string> {
     const c = await (await ethers.getContractFactory(name)).deploy(...args);
@@ -53,6 +75,8 @@ export async function deployAccountLayer(): Promise<Record<string, string>> {
     ENTRYPOINT_V07,
     out.CofferdamModuleRegistry,
     out.CofferdamCeremonyAttesterRegistry,
+    nullifier,
+    recoveryDelay,
   ]);
   out.CofferdamPaymaster = await deploy('CofferdamPaymaster', [ENTRYPOINT_V07]);
   if (attesters.length === 0) console.log('No CEREMONY_ATTESTERS: first-High upgrades are paused until one is added.');

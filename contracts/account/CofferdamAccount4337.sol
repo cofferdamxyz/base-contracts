@@ -6,6 +6,7 @@ import {AuthorityManagerBase} from "./AuthorityManagerBase.sol";
 import {IEntryPoint} from "../interfaces/IEntryPoint.sol";
 import {CofferdamModuleRegistry} from "../registry/CofferdamModuleRegistry.sol";
 import {CofferdamCeremonyAttesterRegistry} from "../registry/CofferdamCeremonyAttesterRegistry.sol";
+import {NullifierRegistry} from "../self/NullifierRegistry.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
@@ -13,7 +14,7 @@ import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/Messa
 /// @title CofferdamAccount4337
 /// @notice A multi-authority ERC-4337 smart account for Base. The onchain enforcer
 ///         of the tiered-authority model in `cofferdam-sdk/IDENTITY_LAYER_DESIGN.md`
-///         §2.5 and decisions 0015 / 0016 in the `cofferdam` repository.
+///         §2.5 and decisions 0015 / 0016 / 0023 in the `cofferdam` repository.
 ///
 /// @dev    Every authentication method plugs in behind one `IAuthorityModule`
 ///         ABI, and every module must be on the `CofferdamModuleRegistry` the
@@ -50,6 +51,21 @@ import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/Messa
 ///         Once High exists both are closed for good and only High may add or
 ///         revoke authorities.
 ///
+///         After High exists (decision 0023):
+///           - Probation: a High added by another High may transact at once,
+///             but its userOps that call the account itself (add, revoke,
+///             cancel a recovery) carry `validAfter` = the end of its
+///             `PROBATION_PERIOD`; any older High may revoke it meanwhile.
+///           - Hard recovery: `recoverHigh` is a direct call (relayed by the
+///             plane, never a userOp) authorised by evidence instead of a
+///             signature: a fresh Self `disclose` proof for this account whose
+///             nullifier is the one `NULLIFIER_REGISTRY` binds to it, the new
+///             `cofferdam.xyz` passkey's assertion, and the Self attester's
+///             and the ceremony attester's co-signs on the ceremony nonce.
+///             After `RECOVERY_DELAY` anyone may `finalizeRecovery`, which
+///             revokes every High and installs the new one; until then any
+///             surviving mature High may `cancelRecovery`.
+///
 ///         SIGNATURE ENCODING for validateUserOp:
 ///           abi.encodePacked(uint256 authorityId, bytes userSignature)
 ///         The first 32 bytes select which authority to use; the rest is passed
@@ -62,8 +78,18 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
     /// @notice The allowlist of authority modules this account may install.
     CofferdamModuleRegistry public immutable MODULE_REGISTRY;
 
-    /// @notice The keys that co-sign first-High enrolment and Partner recovery.
+    /// @notice The keys that co-sign first-High enrolment, Partner recovery and
+    ///         hard recovery.
     CofferdamCeremonyAttesterRegistry public immutable CEREMONY_ATTESTERS;
+
+    /// @notice The Self.xyz nullifier registry: hard recovery checks the proof
+    ///         through it and reads this account's binding from it.
+    NullifierRegistry public immutable NULLIFIER_REGISTRY;
+
+    /// @notice Seconds `recoverHigh` waits before `finalizeRecovery` may apply
+    ///         it; 0 applies it in the same call. 72 hours on mainnet, 0 on
+    ///         testnets (decision 0023), pinned by the factory.
+    uint256 public immutable RECOVERY_DELAY;
 
     /// @notice `userOp.signature` authorityId selecting the Partner recovery
     ///         format (see `replacePartnerAuthority`).
@@ -72,10 +98,12 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
     /// @notice Ceremony actions bound into `ceremonyHash`.
     bytes32 public constant ACTION_ENROLL_FIRST_HIGH = keccak256("enroll-first-high");
     bytes32 public constant ACTION_REPLACE_PARTNER = keccak256("replace-partner");
+    bytes32 public constant ACTION_RECOVER_HIGH = keccak256("recover-high");
 
     bytes32 private constant CEREMONY_TAG = keccak256("cofferdam-ceremony-v1");
     bytes32 private constant FIRST_HIGH_CHALLENGE_TAG = keccak256("cofferdam-first-high-v1");
     bytes32 private constant PARTNER_RECOVERY_TAG = keccak256("cofferdam-partner-recovery-v1");
+    bytes32 private constant RECOVERY_CHALLENGE_TAG = keccak256("cofferdam-recover-high-v1");
 
     /// @dev EIP-712 type wrapping an ERC-1271 digest so a signature is only
     ///      valid for this account on this chain.
@@ -104,8 +132,31 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
         bytes signature;
     }
 
+    /// @notice A Self.xyz `vc_and_disclose` proof with the `userContextData`
+    ///         preimage of its `userIdentifier` signal (see `NullifierRegistry`).
+    struct SelfProof {
+        uint256[2] a;
+        uint256[2][2] b;
+        uint256[2] c;
+        uint256[21] pubSignals;
+        bytes userContextData;
+    }
+
+    /// @notice A hard recovery waiting for `RECOVERY_DELAY`.
+    struct PendingRecovery {
+        IAuthorityModule module;
+        uint48 readyAt;
+        uint256 nullifier;
+        bytes config;
+    }
+
+    PendingRecovery internal _pendingRecovery;
+
     event FirstHighEnrolled(uint256 indexed signerAuthorityId, uint256 indexed highAuthorityId);
     event PartnerAuthorityReplaced(uint256 indexed oldAuthorityId, uint256 indexed newAuthorityId);
+    event RecoveryRequested(address indexed module, bytes32 indexed configHash, uint48 readyAt);
+    event RecoveryCancelled(address indexed module, bytes32 indexed configHash);
+    event HighRecovered(uint256 indexed highAuthorityId);
 
     error NotFromEntryPoint();
     error ZeroAddress();
@@ -114,6 +165,10 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
     error InvalidPartnerRecovery();
     error CeremonyNotActive();
     error UntrustedCeremonyAttester();
+    error NoHighToRecover();
+    error NotBoundIdentity();
+    error NoPendingRecovery();
+    error RecoveryNotReady(uint48 readyAt);
 
     modifier onlyEntryPoint() {
         if (msg.sender != address(ENTRY_POINT)) revert NotFromEntryPoint();
@@ -136,6 +191,8 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
     /// @param entryPoint         The canonical ERC-4337 EntryPoint address.
     /// @param moduleRegistry     The module allowlist (pinned by the factory).
     /// @param ceremonyAttesters  The ceremony co-sign registry (pinned by the factory).
+    /// @param nullifierRegistry  The Self.xyz nullifier registry (pinned by the factory).
+    /// @param recoveryDelay      The hard-recovery delay in seconds (pinned by the factory).
     /// @param initialModule      The genesis authority module.
     /// @param initialConfig      Per-account material for that module.
     /// @param initialPermission  The genesis grant for Partner / Managed;
@@ -144,15 +201,20 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
         IEntryPoint entryPoint,
         CofferdamModuleRegistry moduleRegistry,
         CofferdamCeremonyAttesterRegistry ceremonyAttesters,
+        NullifierRegistry nullifierRegistry,
+        uint256 recoveryDelay,
         IAuthorityModule initialModule,
         bytes memory initialConfig,
         Permission memory initialPermission
     ) EIP712("Cofferdam Account", "1") {
         if (address(entryPoint) == address(0)) revert ZeroAddress();
         if (address(moduleRegistry) == address(0) || address(ceremonyAttesters) == address(0)) revert ZeroAddress();
+        if (address(nullifierRegistry) == address(0)) revert ZeroAddress();
         ENTRY_POINT = entryPoint;
         MODULE_REGISTRY = moduleRegistry;
         CEREMONY_ATTESTERS = ceremonyAttesters;
+        NULLIFIER_REGISTRY = nullifierRegistry;
+        RECOVERY_DELAY = recoveryDelay;
         _initFirstAuthority(initialModule, initialConfig, initialPermission);
     }
 
@@ -168,7 +230,10 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
     ///         signature (so bundlers can estimate gas with a dummy signature)
     ///         and reverts on every other failure: unknown or inactive
     ///         authority, or a call the tier may not make. For Partner and
-    ///         Managed the result carries `validUntil` = the permission's expiry.
+    ///         Managed the result carries `validUntil` = the permission's expiry;
+    ///         for a probationary High's call to the account itself it carries
+    ///         `validAfter` = the end of its probation (no TIMESTAMP opcode in
+    ///         validation: the EntryPoint enforces the window).
     function validateUserOp(
         IEntryPoint.PackedUserOperation calldata userOp,
         bytes32 userOpHash,
@@ -195,7 +260,8 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
             if (!a.module.isValidSignature(address(this), userOpHash, a.config, userSig)) {
                 validationData = SIG_VALIDATION_FAILED;
             } else {
-                validationData = uint256(_checkCallPolicy(a.tier, authorityId, userOp.callData)) << 160;
+                (uint48 validUntil, uint48 validAfter) = _checkCallPolicy(a.tier, authorityId, userOp.callData);
+                validationData = (uint256(validUntil) << 160) | (uint256(validAfter) << 208);
             }
         }
 
@@ -207,7 +273,10 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
     }
 
     /// @dev Tier gate on the userOp's top-level call; returns `validUntil`
-    ///      (0 = no limit). High may do anything. Partner and Managed may
+    ///      (0 = no limit) and `validAfter`. High may do anything; a High that
+    ///      was added by another High gets `validAfter` = its probation end on
+    ///      any call that reaches the account itself (decision 0023). Partner
+    ///      and Managed may
     ///      `execute` / `executeBatch` calls their permission lists, until it
     ///      expires, and may call `enrollFirstHigh` naming themselves while no
     ///      High exists (not subject to expiry, so an expired grant never
@@ -215,9 +284,13 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
     function _checkCallPolicy(Tier t, uint256 authorityId, bytes calldata callData)
         internal
         view
-        returns (uint48 validUntil)
+        returns (uint48 validUntil, uint48 validAfter)
     {
-        if (t == Tier.High) return 0;
+        if (t == Tier.High) {
+            uint48 probationEnds = _probationEnds[authorityId];
+            if (probationEnds != 0 && _callsSelf(callData)) return (0, probationEnds);
+            return (0, 0);
+        }
         if (t != Tier.Partner && t != Tier.LowManaged) revert TierNotPermitted(t);
         if (callData.length < 4) revert TierNotPermitted(t);
 
@@ -225,7 +298,7 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
         if (selector == this.execute.selector) {
             (address target, uint256 value, bytes memory data) = abi.decode(callData[4:], (address, uint256, bytes));
             _checkPermittedCall(authorityId, target, value, data);
-            return _permissions[authorityId].expiry;
+            return (_permissions[authorityId].expiry, 0);
         }
         if (selector == this.executeBatch.selector) {
             (address[] memory targets, uint256[] memory values, bytes[] memory data) =
@@ -234,13 +307,33 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
             for (uint256 i = 0; i < targets.length; i++) {
                 _checkPermittedCall(authorityId, targets[i], values[i], data[i]);
             }
-            return _permissions[authorityId].expiry;
+            return (_permissions[authorityId].expiry, 0);
         }
         if (selector == this.enrollFirstHigh.selector && !upgradeLocked) {
             (uint256 signerId) = abi.decode(callData[4:], (uint256));
-            if (signerId == authorityId) return 0;
+            if (signerId == authorityId) return (0, 0);
         }
         revert TierNotPermitted(t);
+    }
+
+    /// @dev Whether a userOp's top-level call reaches the account itself: any
+    ///      selector other than `execute` / `executeBatch` (the management
+    ///      functions), or an `execute` / `executeBatch` naming this account.
+    function _callsSelf(bytes calldata callData) private view returns (bool) {
+        if (callData.length < 4) return true;
+        bytes4 selector = bytes4(callData[:4]);
+        if (selector == this.execute.selector) {
+            (address target) = abi.decode(callData[4:], (address));
+            return target == address(this);
+        }
+        if (selector == this.executeBatch.selector) {
+            (address[] memory targets) = abi.decode(callData[4:], (address[]));
+            for (uint256 i = 0; i < targets.length; i++) {
+                if (targets[i] == address(this)) return true;
+            }
+            return false;
+        }
+        return true;
     }
 
     /// @notice Execute a single call. Called by the EntryPoint after validation.
@@ -274,7 +367,9 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
 
     /// @notice Add an authority: a backup High passkey (≤ MAX_PASSKEYS), or a
     ///         Partner / Managed grant with its permission. Only High may call
-    ///         this (as the userOp's call, or through `execute` to self).
+    ///         this (as the userOp's call, or through `execute` to self), and
+    ///         only once out of probation. A High added here is probationary
+    ///         for `PROBATION_PERIOD` (decision 0023).
     /// @param newModule   A module listed in `MODULE_REGISTRY`.
     /// @param newConfig   Per-account material for that module.
     /// @param permission  Empty for High; the grant for Partner / Managed.
@@ -286,8 +381,8 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
         return _addAuthority(newModule, newConfig, permission, true);
     }
 
-    /// @notice Deactivate an authority. Only High may call this. The last
-    ///         active High authority can never be revoked.
+    /// @notice Deactivate an authority. Only a High out of probation may call
+    ///         this. The last active High authority can never be revoked.
     function revokeAuthority(uint256 targetId) external onlyEntryPointOrSelf {
         _revokeAuthorityRecord(targetId);
     }
@@ -416,6 +511,111 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
             return SIG_VALIDATION_FAILED;
         }
         return 0;
+    }
+
+    // ── Hard recovery (decision 0023) ────────────────────────────────────────
+
+    /// @notice Replace every High passkey with `newModule` / `newConfig` on the
+    ///         evidence of the bound person, for an account whose High
+    ///         passkeys are lost. Anyone may submit it (the plane relays it as
+    ///         a direct call; the proof check is not allowed in ERC-4337
+    ///         validation). It needs, all bound to `ceremonyNonce`:
+    ///           1. `newKeyAssertion`: the new passkey's assertion over
+    ///              `recoveryChallenge(nonce)`, verified by its module
+    ///              (`WebAuthnPasskeyAuthority` pins `cofferdam.xyz` and UV);
+    ///           2. `proof`: a fresh Self `disclose` proof whose
+    ///              `userContextData` names this account and whose nullifier
+    ///              is `NULLIFIER_REGISTRY.accountToNullifier(this)`, with
+    ///              `selfAttesterSig` over `NULLIFIER_REGISTRY.
+    ///              recoveryMessageHash(this, pubSignals, nonce)` (the Self
+    ///              attester signs behind its Celo gate);
+    ///           3. `attestation`: the ceremony attester's co-sign over
+    ///              `ceremonyHash(ACTION_RECOVER_HIGH, keccak256(newConfig), 0,
+    ///              nonce, notBefore, expiry)`.
+    ///         With `RECOVERY_DELAY` zero the recovery applies at once;
+    ///         otherwise it waits for `finalizeRecovery`. A later request
+    ///         replaces a pending one. Funds, grants and the identity binding
+    ///         stay. Only accounts that have had a High and bound Self.
+    function recoverHigh(
+        IAuthorityModule newModule,
+        bytes calldata newConfig,
+        bytes calldata newKeyAssertion,
+        SelfProof calldata proof,
+        bytes calldata selfAttesterSig,
+        CeremonyAttestation calldata attestation
+    ) external {
+        if (!upgradeLocked) revert NoHighToRecover();
+        if (newModule.tier() != Tier.High) revert TierNotPermitted(newModule.tier());
+        if (!_isAllowedModule(newModule)) revert ModuleNotAllowed(address(newModule));
+
+        uint256 nonce = ceremonyNonce;
+        if (!newModule.isValidSignature(address(this), recoveryChallenge(nonce), newConfig, newKeyAssertion)) {
+            revert InvalidNewKeyAssertion();
+        }
+        uint256 nullifier = NULLIFIER_REGISTRY.provenNullifier(
+            address(this), proof.a, proof.b, proof.c, proof.pubSignals, proof.userContextData, nonce, selfAttesterSig
+        );
+        if (nullifier == 0 || nullifier != NULLIFIER_REGISTRY.accountToNullifier(address(this))) {
+            revert NotBoundIdentity();
+        }
+        _consumeCeremony(ACTION_RECOVER_HIGH, keccak256(newConfig), bytes32(0), attestation);
+
+        if (RECOVERY_DELAY == 0) {
+            delete _pendingRecovery;
+            _applyRecovery(newModule, newConfig);
+            return;
+        }
+        uint48 readyAt = uint48(block.timestamp + RECOVERY_DELAY);
+        _pendingRecovery =
+            PendingRecovery({module: newModule, readyAt: readyAt, nullifier: nullifier, config: newConfig});
+        emit RecoveryRequested(address(newModule), keccak256(newConfig), readyAt);
+    }
+
+    /// @notice Apply a pending recovery once `RECOVERY_DELAY` has passed.
+    ///         Anyone may call it; the authorisation happened in
+    ///         `recoverHigh`. The identity must still be bound here.
+    function finalizeRecovery() external returns (uint256 highAuthorityId) {
+        PendingRecovery memory p = _pendingRecovery;
+        if (address(p.module) == address(0)) revert NoPendingRecovery();
+        if (block.timestamp < p.readyAt) revert RecoveryNotReady(p.readyAt);
+        if (NULLIFIER_REGISTRY.accountToNullifier(address(this)) != p.nullifier) revert NotBoundIdentity();
+        delete _pendingRecovery;
+        return _applyRecovery(p.module, p.config);
+    }
+
+    /// @notice Veto a pending recovery: the answer to a stolen passport plus
+    ///         recovery phrase. High only, as the userOp's call or through
+    ///         `execute` to self; a probationary High cannot.
+    function cancelRecovery() external onlyEntryPointOrSelf {
+        PendingRecovery memory p = _pendingRecovery;
+        if (address(p.module) == address(0)) revert NoPendingRecovery();
+        delete _pendingRecovery;
+        emit RecoveryCancelled(address(p.module), keccak256(p.config));
+    }
+
+    /// @notice The pending recovery, if any (`module` zero when none).
+    function pendingRecovery()
+        external
+        view
+        returns (address module, uint48 readyAt, uint256 nullifier, bytes memory config)
+    {
+        PendingRecovery storage p = _pendingRecovery;
+        return (address(p.module), p.readyAt, p.nullifier, p.config);
+    }
+
+    /// @notice The digest the new High passkey signs in `recoverHigh`:
+    ///         `(account, chainId, nonce)` under its own domain tag.
+    function recoveryChallenge(uint256 nonce) public view returns (bytes32) {
+        return keccak256(abi.encode(RECOVERY_CHALLENGE_TAG, block.chainid, address(this), nonce));
+    }
+
+    /// @dev Revoke every High and install the recovered one, which is not
+    ///      probationary: the delay already ran.
+    function _applyRecovery(IAuthorityModule module, bytes memory config) private returns (uint256 highAuthorityId) {
+        _revokeAllHigh();
+        Permission memory none;
+        highAuthorityId = _addAuthority(module, config, none, false);
+        emit HighRecovered(highAuthorityId);
     }
 
     // ── Ceremony attestations ────────────────────────────────────────────────

@@ -56,10 +56,10 @@ contracts/
 │   └── SessionKeyAuthority.sol          # Managed: employer bridge ECDSA key
 ├── registry/                            # MIT — governed allowlists (owner = Cofferdam Safe)
 │   ├── CofferdamModuleRegistry.sol      # Authority modules an account may install
-│   └── CofferdamCeremonyAttesterRegistry.sol # Keys that co-sign first-High and Partner recovery
+│   └── CofferdamCeremonyAttesterRegistry.sol # Keys that co-sign first-High, Partner recovery and hard recovery
 ├── self/                                # MIT — Self.xyz sybil resistance
 │   ├── SelfAttesterRegistry.sol         # Trusted Self.xyz TEE attester allow-list
-│   ├── NullifierRegistry.sol            # Passport nullifier → account binding; rebind moves it (decision 0022)
+│   ├── NullifierRegistry.sol            # Passport nullifier → account binding; rebind moves it (decision 0022); provenNullifier checks a recovery proof (0023)
 │   ├── ISelfGroth16Verifier.sol         # Groth16 verifier interface
 │   └── SelfPublicSignals.sol            # Public signal index constants
 ├── test/                                # MIT — test mocks
@@ -89,7 +89,7 @@ contracts/
 ## Account Authority Model
 
 `CofferdamAccount4337` enforces the tiers of `rules/cofferdam-identity.md` and
-decisions 0015 and 0016 (`cofferdam` repository) in `validateUserOp`, against
+decisions 0015, 0016 and 0023 (`cofferdam` repository) in `validateUserOp`, against
 the userOp's call data. Accounts are not upgradeable, so these rules are fixed
 per deployed factory.
 
@@ -128,6 +128,19 @@ per deployed factory.
   Cofferdam co-sign. Same partner, RP and permission; only the key changes.
 - **After High exists** only High adds or revokes authorities, the two paths
   above are closed, and the last active High can never be revoked.
+- **Probation** (decision 0023): a High added by another High may transact at
+  once, but for 72 hours (`PROBATION_PERIOD`) its ops that reach the account
+  itself (add, revoke, cancel a recovery) carry `validAfter` = the end of its
+  probation, and any older High may revoke it.
+- **Hard recovery** (decision 0023): when every High passkey is lost,
+  `recoverHigh` (a direct call the plane relays, not a userOp) replaces them
+  on a fresh Self proof for this account whose nullifier the
+  `NullifierRegistry` binds to it (`provenNullifier`), the new `cofferdam.xyz`
+  passkey's assertion, and the Self attester's and ceremony attester's
+  co-signs on `ceremonyNonce`. It applies after `RECOVERY_DELAY`, pinned by the
+  factory (72 hours on mainnet, 0 on testnets), through `finalizeRecovery`;
+  any mature High may `cancelRecovery` meanwhile. Grants, funds and the
+  identity binding stay.
 - A signature the module rejects returns `SIG_VALIDATION_FAILED`; every other
   failure (unknown or inactive authority, a call the tier may not make)
   reverts.
@@ -668,15 +681,15 @@ removes their Merkle leaf but doesn't pause the company.
 | Contract | Status | Notes |
 |---|---|---|
 | `CofferdamAccount4337` | ✅ Built | ERC-4337 account with tiered authority |
-| `CofferdamAccountFactory4337` | ✅ Built | CREATE2 deterministic deployment |
+| `CofferdamAccountFactory4337` | ✅ Built | CREATE2 deterministic deployment; pins the registries and the recovery delay |
 | `CofferdamPaymaster` | ✅ Stub | Dev/test only — production uses CDP. `postOp` uses the EntryPoint **v0.7** 4-arg signature (`mode, context, actualGasCost, actualUserOpFeePerGas`); the v0.6 3-arg shape reverts (`PostOpReverted`) under v0.7. `Ownable` (owner = deployer); `withdrawTo` is `onlyOwner` |
 | `PasskeyAuthority` | ✅ Built | Raw P-256 via RIP-7212 precompile; no RP binding, test networks only |
 | `WebAuthnPasskeyAuthority` | ✅ Built | High: WebAuthn assertion, `rpIdHash == sha256("cofferdam.xyz")`, UV |
 | `PartnerPasskeyAuthority` | ✅ Built | Partner: passkey on the partner's RP, scoped by a `Permission` |
 | `SessionKeyAuthority` | ✅ Built | Managed: employer bridge ECDSA key, scoped by a `Permission` |
 | `CofferdamModuleRegistry` | ✅ Built | Module allowlist pinned by the factory |
-| `CofferdamCeremonyAttesterRegistry` | ✅ Built | Ceremony co-sign keys (first High, Partner recovery) |
-| `NullifierRegistry` | ✅ Built | Self.xyz passport nullifier → account binding |
+| `CofferdamCeremonyAttesterRegistry` | ✅ Built | Ceremony co-sign keys (first High, Partner recovery, hard recovery) |
+| `NullifierRegistry` | ✅ Built | Self.xyz passport nullifier → account binding, rebind, recovery proof check |
 | `SelfAttesterRegistry` | ✅ Built | TEE attester allowlist |
 | `MockGroth16Verifier` | ✅ Built | Always-true verifier for mock testing |
 | `IB20Factory` | ✅ Interface | B20 + PolicyRegistry interfaces |

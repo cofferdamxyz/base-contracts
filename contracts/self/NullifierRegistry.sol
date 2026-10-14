@@ -13,6 +13,10 @@ import {SelfPublicSignals} from "./SelfPublicSignals.sol";
 ///         new account on a fresh proof, so a person who lost their device, or
 ///         whose account was created on retired contracts, recovers their
 ///         identity. At any time a nullifier maps to exactly one account.
+///         `provenNullifier` (decision 0023) lets an account check a fresh
+///         proof for itself without binding anything: hard recovery of the
+///         account's High passkey compares the result with
+///         `accountToNullifier(account)`.
 /// @dev    This contract is pure Solidity.
 ///         The `verifyAndBind` and `rebind` entrypoints compose three
 ///         independent security checks:
@@ -48,6 +52,10 @@ contract NullifierRegistry {
     /// @dev Domain tag of the rebind attestation, so a bind signature never
     ///      replays as a rebind.
     bytes32 private constant REBIND_TAG = keccak256("cofferdam-rebind-v1");
+
+    /// @dev Domain tag of the hard-recovery attestation (decision 0023), so a
+    ///      bind or rebind signature never replays as a recovery.
+    bytes32 private constant RECOVERY_TAG = keccak256("cofferdam-recover-high-v1");
 
     struct PendingRebind {
         address newAccount;
@@ -237,6 +245,43 @@ contract NullifierRegistry {
         return keccak256(abi.encode(block.chainid, address(this), REBIND_TAG, newAccount, pubSignals, epoch));
     }
 
+    // ── Proof check for hard recovery (decision 0023) ────────────────────────
+
+    /// @notice Check a fresh `disclose` proof for `account` and return its
+    ///         nullifier, binding nothing. The public-signal and user-context
+    ///         checks are those of `verifyAndBind`; the attester co-signs
+    ///         `recoveryMessageHash(account, pubSignals, nonce)`, where `nonce`
+    ///         is the account's single-use ceremony nonce. Reverts on any
+    ///         failure. `CofferdamAccount4337.recoverHigh` calls it with its
+    ///         own address and nonce and compares the result with
+    ///         `accountToNullifier(account)`, so only the bound person passes.
+    function provenNullifier(
+        address account,
+        uint256[2] calldata a,
+        uint256[2][2] calldata b,
+        uint256[2] calldata c,
+        uint256[21] calldata pubSignals,
+        bytes calldata userContextData,
+        uint256 nonce,
+        bytes calldata attesterSig
+    ) external view returns (uint256 nullifier) {
+        nullifier = _checkSignals(account, pubSignals, userContextData);
+        bytes32 msgHash = recoveryMessageHash(account, pubSignals, nonce);
+        if (!attesterRegistry.verifyAttesterSig(msgHash, attesterSig)) revert UntrustedAttester();
+        if (!verifier.verifyProof(a, b, c, pubSignals)) revert InvalidProof();
+    }
+
+    /// @notice What the attester signs (EIP-191) to co-sign a hard recovery of
+    ///         `account`: distinct from the bind and rebind hashes by the tag,
+    ///         and bound to the account's ceremony `nonce`.
+    function recoveryMessageHash(address account, uint256[21] calldata pubSignals, uint256 nonce)
+        public
+        view
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(block.chainid, address(this), RECOVERY_TAG, account, pubSignals, nonce));
+    }
+
     function _applyRebind(uint256 nullifier, address oldAccount, address newAccount, uint256 epoch) private {
         accountToNullifier[oldAccount] = 0;
         nullifierToAccount[nullifier] = newAccount;
@@ -244,8 +289,8 @@ contract NullifierRegistry {
         emit NullifierRebound(oldAccount, newAccount, nullifier, epoch);
     }
 
-    /// @dev The public-signal and user-context checks shared by `verifyAndBind`
-    ///      and `rebind`; returns the proof's nullifier.
+    /// @dev The public-signal and user-context checks shared by `verifyAndBind`,
+    ///      `rebind` and `provenNullifier`; returns the proof's nullifier.
     function _checkSignals(address account, uint256[21] calldata pubSignals, bytes calldata userContextData)
         private
         view
