@@ -20,11 +20,15 @@ import type {
 } from "../../common";
 
 export interface MockCounterInterface extends Interface {
-  getFunction(nameOrSignature: "increment" | "value"): FunctionFragment;
+  getFunction(
+    nameOrSignature: "deposit" | "increment" | "value"
+  ): FunctionFragment;
 
+  encodeFunctionData(functionFragment: "deposit", values?: undefined): string;
   encodeFunctionData(functionFragment: "increment", values?: undefined): string;
   encodeFunctionData(functionFragment: "value", values?: undefined): string;
 
+  decodeFunctionResult(functionFragment: "deposit", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "increment", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "value", data: BytesLike): Result;
 }
@@ -72,6 +76,8 @@ export interface MockCounter extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  deposit: TypedContractMethod<[], [void], "payable">;
+
   increment: TypedContractMethod<[], [void], "nonpayable">;
 
   value: TypedContractMethod<[], [bigint], "view">;
@@ -80,6 +86,9 @@ export interface MockCounter extends BaseContract {
     key: string | FunctionFragment
   ): T;
 
+  getFunction(
+    nameOrSignature: "deposit"
+  ): TypedContractMethod<[], [void], "payable">;
   getFunction(
     nameOrSignature: "increment"
   ): TypedContractMethod<[], [void], "nonpayable">;

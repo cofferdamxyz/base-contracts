@@ -23,6 +23,7 @@ import type {
 export interface WebAuthnPasskeyAuthorityInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "COFFERDAM_RP_ID_HASH"
       | "KIND"
       | "isValidSignature"
       | "kind"
@@ -30,6 +31,10 @@ export interface WebAuthnPasskeyAuthorityInterface extends Interface {
       | "tier"
   ): FunctionFragment;
 
+  encodeFunctionData(
+    functionFragment: "COFFERDAM_RP_ID_HASH",
+    values?: undefined
+  ): string;
   encodeFunctionData(functionFragment: "KIND", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "isValidSignature",
@@ -42,6 +47,10 @@ export interface WebAuthnPasskeyAuthorityInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "tier", values?: undefined): string;
 
+  decodeFunctionResult(
+    functionFragment: "COFFERDAM_RP_ID_HASH",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "KIND", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "isValidSignature",
@@ -98,6 +107,8 @@ export interface WebAuthnPasskeyAuthority extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  COFFERDAM_RP_ID_HASH: TypedContractMethod<[], [string], "view">;
+
   KIND: TypedContractMethod<[], [string], "view">;
 
   isValidSignature: TypedContractMethod<
@@ -121,6 +132,9 @@ export interface WebAuthnPasskeyAuthority extends BaseContract {
     key: string | FunctionFragment
   ): T;
 
+  getFunction(
+    nameOrSignature: "COFFERDAM_RP_ID_HASH"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "KIND"
   ): TypedContractMethod<[], [string], "view">;

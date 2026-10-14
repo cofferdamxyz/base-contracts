@@ -22,13 +22,7 @@ import type {
 
 export interface SessionKeyAuthorityInterface extends Interface {
   getFunction(
-    nameOrSignature:
-      | "KIND_POLIS_SSO"
-      | "KIND_SESSION"
-      | "isValidSignature"
-      | "kind"
-      | "kindOf"
-      | "tier"
+    nameOrSignature: "KIND_POLIS_SSO" | "isValidSignature" | "kind" | "tier"
   ): FunctionFragment;
 
   encodeFunctionData(
@@ -36,15 +30,10 @@ export interface SessionKeyAuthorityInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "KIND_SESSION",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
     functionFragment: "isValidSignature",
     values: [AddressLike, BytesLike, BytesLike, BytesLike]
   ): string;
   encodeFunctionData(functionFragment: "kind", values?: undefined): string;
-  encodeFunctionData(functionFragment: "kindOf", values?: undefined): string;
   encodeFunctionData(functionFragment: "tier", values?: undefined): string;
 
   decodeFunctionResult(
@@ -52,15 +41,10 @@ export interface SessionKeyAuthorityInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "KIND_SESSION",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
     functionFragment: "isValidSignature",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "kind", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "kindOf", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "tier", data: BytesLike): Result;
 }
 
@@ -109,8 +93,6 @@ export interface SessionKeyAuthority extends BaseContract {
 
   KIND_POLIS_SSO: TypedContractMethod<[], [string], "view">;
 
-  KIND_SESSION: TypedContractMethod<[], [string], "view">;
-
   isValidSignature: TypedContractMethod<
     [
       account: AddressLike,
@@ -124,8 +106,6 @@ export interface SessionKeyAuthority extends BaseContract {
 
   kind: TypedContractMethod<[], [string], "view">;
 
-  kindOf: TypedContractMethod<[], [string], "view">;
-
   tier: TypedContractMethod<[], [bigint], "view">;
 
   getFunction<T extends ContractMethod = ContractMethod>(
@@ -134,9 +114,6 @@ export interface SessionKeyAuthority extends BaseContract {
 
   getFunction(
     nameOrSignature: "KIND_POLIS_SSO"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "KIND_SESSION"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "isValidSignature"
@@ -152,9 +129,6 @@ export interface SessionKeyAuthority extends BaseContract {
   >;
   getFunction(
     nameOrSignature: "kind"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "kindOf"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "tier"

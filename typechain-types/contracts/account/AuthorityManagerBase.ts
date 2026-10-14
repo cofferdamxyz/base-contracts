@@ -23,12 +23,39 @@ import type {
   TypedContractMethod,
 } from "../../common";
 
+export type PermissionStruct = {
+  targets: AddressLike[];
+  selectors: BytesLike[];
+  codeHashes: BytesLike[];
+  codeSelectors: BytesLike[];
+  valueCap: BigNumberish;
+  expiry: BigNumberish;
+};
+
+export type PermissionStructOutput = [
+  targets: string[],
+  selectors: string[],
+  codeHashes: string[],
+  codeSelectors: string[],
+  valueCap: bigint,
+  expiry: bigint
+] & {
+  targets: string[];
+  selectors: string[];
+  codeHashes: string[];
+  codeSelectors: string[];
+  valueCap: bigint;
+  expiry: bigint;
+};
+
 export interface AuthorityManagerBaseInterface extends Interface {
   getFunction(
     nameOrSignature:
       | "MAX_PASSKEYS"
+      | "MAX_PERMISSION_ENTRIES"
       | "authorityCount"
       | "getAuthority"
+      | "getPermission"
       | "passkeyCount"
       | "upgradeLocked"
   ): FunctionFragment;
@@ -37,12 +64,15 @@ export interface AuthorityManagerBaseInterface extends Interface {
     nameOrSignatureOrTopic:
       | "AuthorityAdded"
       | "AuthorityRevoked"
-      | "FirstPasskeyEnrolled"
-      | "RatchetFired"
+      | "PermissionGranted"
   ): EventFragment;
 
   encodeFunctionData(
     functionFragment: "MAX_PASSKEYS",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "MAX_PERMISSION_ENTRIES",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -51,6 +81,10 @@ export interface AuthorityManagerBaseInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "getAuthority",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getPermission",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
@@ -67,11 +101,19 @@ export interface AuthorityManagerBaseInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "MAX_PERMISSION_ENTRIES",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "authorityCount",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
     functionFragment: "getAuthority",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getPermission",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -121,29 +163,22 @@ export namespace AuthorityRevokedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace FirstPasskeyEnrolledEvent {
+export namespace PermissionGrantedEvent {
   export type InputTuple = [
-    lowAuthorityId: BigNumberish,
-    passkeyAuthorityId: BigNumberish
+    authorityId: BigNumberish,
+    permissionHash: BytesLike,
+    expiry: BigNumberish
   ];
   export type OutputTuple = [
-    lowAuthorityId: bigint,
-    passkeyAuthorityId: bigint
+    authorityId: bigint,
+    permissionHash: string,
+    expiry: bigint
   ];
   export interface OutputObject {
-    lowAuthorityId: bigint;
-    passkeyAuthorityId: bigint;
+    authorityId: bigint;
+    permissionHash: string;
+    expiry: bigint;
   }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace RatchetFiredEvent {
-  export type InputTuple = [];
-  export type OutputTuple = [];
-  export interface OutputObject {}
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
   export type Log = TypedEventLog<Event>;
@@ -195,6 +230,8 @@ export interface AuthorityManagerBase extends BaseContract {
 
   MAX_PASSKEYS: TypedContractMethod<[], [bigint], "view">;
 
+  MAX_PERMISSION_ENTRIES: TypedContractMethod<[], [bigint], "view">;
+
   authorityCount: TypedContractMethod<[], [bigint], "view">;
 
   getAuthority: TypedContractMethod<
@@ -210,6 +247,12 @@ export interface AuthorityManagerBase extends BaseContract {
     "view"
   >;
 
+  getPermission: TypedContractMethod<
+    [authorityId: BigNumberish],
+    [PermissionStructOutput],
+    "view"
+  >;
+
   passkeyCount: TypedContractMethod<[], [bigint], "view">;
 
   upgradeLocked: TypedContractMethod<[], [boolean], "view">;
@@ -220,6 +263,9 @@ export interface AuthorityManagerBase extends BaseContract {
 
   getFunction(
     nameOrSignature: "MAX_PASSKEYS"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "MAX_PERMISSION_ENTRIES"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "authorityCount"
@@ -236,6 +282,13 @@ export interface AuthorityManagerBase extends BaseContract {
         config: string;
       }
     ],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "getPermission"
+  ): TypedContractMethod<
+    [authorityId: BigNumberish],
+    [PermissionStructOutput],
     "view"
   >;
   getFunction(
@@ -260,18 +313,11 @@ export interface AuthorityManagerBase extends BaseContract {
     AuthorityRevokedEvent.OutputObject
   >;
   getEvent(
-    key: "FirstPasskeyEnrolled"
+    key: "PermissionGranted"
   ): TypedContractEvent<
-    FirstPasskeyEnrolledEvent.InputTuple,
-    FirstPasskeyEnrolledEvent.OutputTuple,
-    FirstPasskeyEnrolledEvent.OutputObject
-  >;
-  getEvent(
-    key: "RatchetFired"
-  ): TypedContractEvent<
-    RatchetFiredEvent.InputTuple,
-    RatchetFiredEvent.OutputTuple,
-    RatchetFiredEvent.OutputObject
+    PermissionGrantedEvent.InputTuple,
+    PermissionGrantedEvent.OutputTuple,
+    PermissionGrantedEvent.OutputObject
   >;
 
   filters: {
@@ -297,26 +343,15 @@ export interface AuthorityManagerBase extends BaseContract {
       AuthorityRevokedEvent.OutputObject
     >;
 
-    "FirstPasskeyEnrolled(uint256,uint256)": TypedContractEvent<
-      FirstPasskeyEnrolledEvent.InputTuple,
-      FirstPasskeyEnrolledEvent.OutputTuple,
-      FirstPasskeyEnrolledEvent.OutputObject
+    "PermissionGranted(uint256,bytes32,uint48)": TypedContractEvent<
+      PermissionGrantedEvent.InputTuple,
+      PermissionGrantedEvent.OutputTuple,
+      PermissionGrantedEvent.OutputObject
     >;
-    FirstPasskeyEnrolled: TypedContractEvent<
-      FirstPasskeyEnrolledEvent.InputTuple,
-      FirstPasskeyEnrolledEvent.OutputTuple,
-      FirstPasskeyEnrolledEvent.OutputObject
-    >;
-
-    "RatchetFired()": TypedContractEvent<
-      RatchetFiredEvent.InputTuple,
-      RatchetFiredEvent.OutputTuple,
-      RatchetFiredEvent.OutputObject
-    >;
-    RatchetFired: TypedContractEvent<
-      RatchetFiredEvent.InputTuple,
-      RatchetFiredEvent.OutputTuple,
-      RatchetFiredEvent.OutputObject
+    PermissionGranted: TypedContractEvent<
+      PermissionGrantedEvent.InputTuple,
+      PermissionGrantedEvent.OutputTuple,
+      PermissionGrantedEvent.OutputObject
     >;
   };
 }

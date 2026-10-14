@@ -3,6 +3,7 @@
 /* eslint-disable */
 import type {
   BaseContract,
+  BigNumberish,
   BytesLike,
   FunctionFragment,
   Result,
@@ -22,28 +23,74 @@ import type {
   TypedContractMethod,
 } from "../../common";
 
+export type PermissionStruct = {
+  targets: AddressLike[];
+  selectors: BytesLike[];
+  codeHashes: BytesLike[];
+  codeSelectors: BytesLike[];
+  valueCap: BigNumberish;
+  expiry: BigNumberish;
+};
+
+export type PermissionStructOutput = [
+  targets: string[],
+  selectors: string[],
+  codeHashes: string[],
+  codeSelectors: string[],
+  valueCap: bigint,
+  expiry: bigint
+] & {
+  targets: string[];
+  selectors: string[];
+  codeHashes: string[];
+  codeSelectors: string[];
+  valueCap: bigint;
+  expiry: bigint;
+};
+
 export interface CofferdamAccountFactory4337Interface extends Interface {
   getFunction(
-    nameOrSignature: "ENTRY_POINT" | "deployAccount" | "getAddress"
+    nameOrSignature:
+      | "CEREMONY_ATTESTERS"
+      | "ENTRY_POINT"
+      | "MODULE_REGISTRY"
+      | "deployAccount"
+      | "getAddress"
   ): FunctionFragment;
 
   getEvent(nameOrSignatureOrTopic: "AccountDeployed"): EventFragment;
 
   encodeFunctionData(
+    functionFragment: "CEREMONY_ATTESTERS",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "ENTRY_POINT",
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "MODULE_REGISTRY",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "deployAccount",
-    values: [AddressLike, BytesLike, BytesLike]
+    values: [AddressLike, BytesLike, PermissionStruct, BytesLike]
   ): string;
   encodeFunctionData(
     functionFragment: "getAddress",
-    values: [AddressLike, BytesLike, BytesLike]
+    values: [AddressLike, BytesLike, PermissionStruct, BytesLike]
   ): string;
 
   decodeFunctionResult(
+    functionFragment: "CEREMONY_ATTESTERS",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "ENTRY_POINT",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "MODULE_REGISTRY",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -118,16 +165,30 @@ export interface CofferdamAccountFactory4337 extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  CEREMONY_ATTESTERS: TypedContractMethod<[], [string], "view">;
+
   ENTRY_POINT: TypedContractMethod<[], [string], "view">;
 
+  MODULE_REGISTRY: TypedContractMethod<[], [string], "view">;
+
   deployAccount: TypedContractMethod<
-    [initialModule: AddressLike, initialConfig: BytesLike, salt: BytesLike],
+    [
+      initialModule: AddressLike,
+      initialConfig: BytesLike,
+      initialPermission: PermissionStruct,
+      salt: BytesLike
+    ],
     [string],
     "nonpayable"
   >;
 
   getAddress: TypedContractMethod<
-    [initialModule: AddressLike, initialConfig: BytesLike, salt: BytesLike],
+    [
+      initialModule: AddressLike,
+      initialConfig: BytesLike,
+      initialPermission: PermissionStruct,
+      salt: BytesLike
+    ],
     [string],
     "view"
   >;
@@ -137,19 +198,35 @@ export interface CofferdamAccountFactory4337 extends BaseContract {
   ): T;
 
   getFunction(
+    nameOrSignature: "CEREMONY_ATTESTERS"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "ENTRY_POINT"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "MODULE_REGISTRY"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "deployAccount"
   ): TypedContractMethod<
-    [initialModule: AddressLike, initialConfig: BytesLike, salt: BytesLike],
+    [
+      initialModule: AddressLike,
+      initialConfig: BytesLike,
+      initialPermission: PermissionStruct,
+      salt: BytesLike
+    ],
     [string],
     "nonpayable"
   >;
   getFunction(
     nameOrSignature: "getAddress"
   ): TypedContractMethod<
-    [initialModule: AddressLike, initialConfig: BytesLike, salt: BytesLike],
+    [
+      initialModule: AddressLike,
+      initialConfig: BytesLike,
+      initialPermission: PermissionStruct,
+      salt: BytesLike
+    ],
     [string],
     "view"
   >;

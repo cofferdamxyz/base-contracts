@@ -30,6 +30,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC721Errors__factory>;
     getContractFactory(
+      name: "IERC5267",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IERC5267__factory>;
+    getContractFactory(
       name: "ERC20",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ERC20__factory>;
@@ -50,6 +54,18 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Create2__factory>;
     getContractFactory(
+      name: "ECDSA",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ECDSA__factory>;
+    getContractFactory(
+      name: "EIP712",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.EIP712__factory>;
+    getContractFactory(
+      name: "MessageHashUtils",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MessageHashUtils__factory>;
+    getContractFactory(
       name: "Errors",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Errors__factory>;
@@ -61,6 +77,10 @@ declare module "hardhat/types/runtime" {
       name: "ReentrancyGuard",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ReentrancyGuard__factory>;
+    getContractFactory(
+      name: "ShortStrings",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ShortStrings__factory>;
     getContractFactory(
       name: "Strings",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -85,6 +105,10 @@ declare module "hardhat/types/runtime" {
       name: "IPaymaster",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IPaymaster__factory>;
+    getContractFactory(
+      name: "PartnerPasskeyAuthority",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.PartnerPasskeyAuthority__factory>;
     getContractFactory(
       name: "PasskeyAuthority",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -150,6 +174,14 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IEntryPoint__factory>;
     getContractFactory(
+      name: "CofferdamCeremonyAttesterRegistry",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.CofferdamCeremonyAttesterRegistry__factory>;
+    getContractFactory(
+      name: "CofferdamModuleRegistry",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.CofferdamModuleRegistry__factory>;
+    getContractFactory(
       name: "ISelfGroth16Verifier",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ISelfGroth16Verifier__factory>;
@@ -182,6 +214,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.RejectingGroth16Verifier__factory>;
     getContractFactory(
+      name: "MockTierModule",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockTierModule__factory>;
+    getContractFactory(
       name: "USDC",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.USDC__factory>;
@@ -207,6 +243,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IERC721Errors>;
     getContractAt(
+      name: "IERC5267",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IERC5267>;
+    getContractAt(
       name: "ERC20",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -232,6 +273,21 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.Create2>;
     getContractAt(
+      name: "ECDSA",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ECDSA>;
+    getContractAt(
+      name: "EIP712",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.EIP712>;
+    getContractAt(
+      name: "MessageHashUtils",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MessageHashUtils>;
+    getContractAt(
       name: "Errors",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -246,6 +302,11 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.ReentrancyGuard>;
+    getContractAt(
+      name: "ShortStrings",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ShortStrings>;
     getContractAt(
       name: "Strings",
       address: string | ethers.Addressable,
@@ -276,6 +337,11 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.IPaymaster>;
+    getContractAt(
+      name: "PartnerPasskeyAuthority",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.PartnerPasskeyAuthority>;
     getContractAt(
       name: "PasskeyAuthority",
       address: string | ethers.Addressable,
@@ -357,6 +423,16 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IEntryPoint>;
     getContractAt(
+      name: "CofferdamCeremonyAttesterRegistry",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.CofferdamCeremonyAttesterRegistry>;
+    getContractAt(
+      name: "CofferdamModuleRegistry",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.CofferdamModuleRegistry>;
+    getContractAt(
       name: "ISelfGroth16Verifier",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -396,6 +472,11 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.RejectingGroth16Verifier>;
+    getContractAt(
+      name: "MockTierModule",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockTierModule>;
     getContractAt(
       name: "USDC",
       address: string | ethers.Addressable,
@@ -419,6 +500,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC721Errors>;
     deployContract(
+      name: "IERC5267",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IERC5267>;
+    deployContract(
       name: "ERC20",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ERC20>;
@@ -439,6 +524,18 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Create2>;
     deployContract(
+      name: "ECDSA",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ECDSA>;
+    deployContract(
+      name: "EIP712",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.EIP712>;
+    deployContract(
+      name: "MessageHashUtils",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MessageHashUtils>;
+    deployContract(
       name: "Errors",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Errors>;
@@ -450,6 +547,10 @@ declare module "hardhat/types/runtime" {
       name: "ReentrancyGuard",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ReentrancyGuard>;
+    deployContract(
+      name: "ShortStrings",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ShortStrings>;
     deployContract(
       name: "Strings",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -474,6 +575,10 @@ declare module "hardhat/types/runtime" {
       name: "IPaymaster",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IPaymaster>;
+    deployContract(
+      name: "PartnerPasskeyAuthority",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.PartnerPasskeyAuthority>;
     deployContract(
       name: "PasskeyAuthority",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -539,6 +644,14 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IEntryPoint>;
     deployContract(
+      name: "CofferdamCeremonyAttesterRegistry",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.CofferdamCeremonyAttesterRegistry>;
+    deployContract(
+      name: "CofferdamModuleRegistry",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.CofferdamModuleRegistry>;
+    deployContract(
       name: "ISelfGroth16Verifier",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ISelfGroth16Verifier>;
@@ -570,6 +683,10 @@ declare module "hardhat/types/runtime" {
       name: "RejectingGroth16Verifier",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.RejectingGroth16Verifier>;
+    deployContract(
+      name: "MockTierModule",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockTierModule>;
     deployContract(
       name: "USDC",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -596,6 +713,11 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC721Errors>;
     deployContract(
+      name: "IERC5267",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IERC5267>;
+    deployContract(
       name: "ERC20",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -621,6 +743,21 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Create2>;
     deployContract(
+      name: "ECDSA",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ECDSA>;
+    deployContract(
+      name: "EIP712",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.EIP712>;
+    deployContract(
+      name: "MessageHashUtils",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MessageHashUtils>;
+    deployContract(
       name: "Errors",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -635,6 +772,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ReentrancyGuard>;
+    deployContract(
+      name: "ShortStrings",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ShortStrings>;
     deployContract(
       name: "Strings",
       args: any[],
@@ -665,6 +807,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IPaymaster>;
+    deployContract(
+      name: "PartnerPasskeyAuthority",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.PartnerPasskeyAuthority>;
     deployContract(
       name: "PasskeyAuthority",
       args: any[],
@@ -746,6 +893,16 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IEntryPoint>;
     deployContract(
+      name: "CofferdamCeremonyAttesterRegistry",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.CofferdamCeremonyAttesterRegistry>;
+    deployContract(
+      name: "CofferdamModuleRegistry",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.CofferdamModuleRegistry>;
+    deployContract(
       name: "ISelfGroth16Verifier",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -785,6 +942,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.RejectingGroth16Verifier>;
+    deployContract(
+      name: "MockTierModule",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockTierModule>;
     deployContract(
       name: "USDC",
       args: any[],

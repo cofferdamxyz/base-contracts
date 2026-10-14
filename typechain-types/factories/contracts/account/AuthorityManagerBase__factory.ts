@@ -12,6 +12,22 @@ const _abi = [
   {
     inputs: [
       {
+        internalType: "address",
+        name: "target",
+        type: "address",
+      },
+      {
+        internalType: "bytes4",
+        name: "selector",
+        type: "bytes4",
+      },
+    ],
+    name: "CallNotPermitted",
+    type: "error",
+  },
+  {
+    inputs: [
+      {
         internalType: "uint256",
         name: "authorityId",
         type: "uint256",
@@ -32,30 +48,24 @@ const _abi = [
     type: "error",
   },
   {
-    inputs: [
-      {
-        internalType: "enum Tier",
-        name: "tier",
-        type: "uint8",
-      },
-    ],
-    name: "NotAPasskey",
-    type: "error",
-  },
-  {
-    inputs: [
-      {
-        internalType: "enum Tier",
-        name: "tier",
-        type: "uint8",
-      },
-    ],
-    name: "NotUntrustedLowTier",
+    inputs: [],
+    name: "InvalidPermission",
     type: "error",
   },
   {
     inputs: [],
-    name: "PasskeyAlreadyExists",
+    name: "LastHighAuthority",
+    type: "error",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "module",
+        type: "address",
+      },
+    ],
+    name: "ModuleNotAllowed",
     type: "error",
   },
   {
@@ -83,11 +93,6 @@ const _abi = [
       },
     ],
     name: "UnknownAuthority",
-    type: "error",
-  },
-  {
-    inputs: [],
-    name: "UpgradeLocked",
     type: "error",
   },
   {
@@ -145,23 +150,23 @@ const _abi = [
       {
         indexed: true,
         internalType: "uint256",
-        name: "lowAuthorityId",
+        name: "authorityId",
         type: "uint256",
       },
       {
-        indexed: true,
-        internalType: "uint256",
-        name: "passkeyAuthorityId",
-        type: "uint256",
+        indexed: false,
+        internalType: "bytes32",
+        name: "permissionHash",
+        type: "bytes32",
+      },
+      {
+        indexed: false,
+        internalType: "uint48",
+        name: "expiry",
+        type: "uint48",
       },
     ],
-    name: "FirstPasskeyEnrolled",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [],
-    name: "RatchetFired",
+    name: "PermissionGranted",
     type: "event",
   },
   {
@@ -172,6 +177,19 @@ const _abi = [
         internalType: "uint8",
         name: "",
         type: "uint8",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "MAX_PERMISSION_ENTRIES",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
       },
     ],
     stateMutability: "view",
@@ -219,6 +237,57 @@ const _abi = [
         internalType: "bytes",
         name: "config",
         type: "bytes",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "authorityId",
+        type: "uint256",
+      },
+    ],
+    name: "getPermission",
+    outputs: [
+      {
+        components: [
+          {
+            internalType: "address[]",
+            name: "targets",
+            type: "address[]",
+          },
+          {
+            internalType: "bytes4[]",
+            name: "selectors",
+            type: "bytes4[]",
+          },
+          {
+            internalType: "bytes32[]",
+            name: "codeHashes",
+            type: "bytes32[]",
+          },
+          {
+            internalType: "bytes4[]",
+            name: "codeSelectors",
+            type: "bytes4[]",
+          },
+          {
+            internalType: "uint256",
+            name: "valueCap",
+            type: "uint256",
+          },
+          {
+            internalType: "uint48",
+            name: "expiry",
+            type: "uint48",
+          },
+        ],
+        internalType: "struct Permission",
+        name: "",
+        type: "tuple",
       },
     ],
     stateMutability: "view",

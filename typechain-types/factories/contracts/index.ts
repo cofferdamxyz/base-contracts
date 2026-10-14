@@ -5,5 +5,6 @@ export * as account from "./account";
 export * as auth from "./auth";
 export * as enterprise from "./enterprise";
 export * as interfaces from "./interfaces";
+export * as registry from "./registry";
 export * as self from "./self";
 export * as test from "./test";

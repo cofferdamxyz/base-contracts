@@ -23,6 +23,55 @@ import type {
   TypedContractMethod,
 } from "../../common";
 
+export type PermissionStruct = {
+  targets: AddressLike[];
+  selectors: BytesLike[];
+  codeHashes: BytesLike[];
+  codeSelectors: BytesLike[];
+  valueCap: BigNumberish;
+  expiry: BigNumberish;
+};
+
+export type PermissionStructOutput = [
+  targets: string[],
+  selectors: string[],
+  codeHashes: string[],
+  codeSelectors: string[],
+  valueCap: bigint,
+  expiry: bigint
+] & {
+  targets: string[];
+  selectors: string[];
+  codeHashes: string[];
+  codeSelectors: string[];
+  valueCap: bigint;
+  expiry: bigint;
+};
+
+export declare namespace CofferdamAccount4337 {
+  export type CeremonyAttestationStruct = {
+    notBefore: BigNumberish;
+    expiry: BigNumberish;
+    signature: BytesLike;
+  };
+
+  export type CeremonyAttestationStructOutput = [
+    notBefore: bigint,
+    expiry: bigint,
+    signature: string
+  ] & { notBefore: bigint; expiry: bigint; signature: string };
+
+  export type PartnerRecoveryStruct = {
+    recoveredAt: BigNumberish;
+    signature: BytesLike;
+  };
+
+  export type PartnerRecoveryStructOutput = [
+    recoveredAt: bigint,
+    signature: string
+  ] & { recoveredAt: bigint; signature: string };
+}
+
 export declare namespace IEntryPoint {
   export type PackedUserOperationStruct = {
     sender: AddressLike;
@@ -62,18 +111,30 @@ export declare namespace IEntryPoint {
 export interface CofferdamAccount4337Interface extends Interface {
   getFunction(
     nameOrSignature:
+      | "ACTION_ENROLL_FIRST_HIGH"
+      | "ACTION_REPLACE_PARTNER"
+      | "CEREMONY_ATTESTERS"
       | "ENTRY_POINT"
       | "MAX_PASSKEYS"
+      | "MAX_PERMISSION_ENTRIES"
+      | "MODULE_REGISTRY"
+      | "RECOVERY_AUTHORITY_ID"
       | "addAuthority"
-      | "addOwnerAddress"
-      | "addOwnerPublicKey"
       | "authorityCount"
-      | "enrollFirstPasskey"
+      | "ceremonyHash"
+      | "ceremonyNonce"
+      | "eip712Domain"
+      | "enrollFirstHigh"
       | "execute"
       | "executeBatch"
+      | "firstHighChallenge"
       | "getAuthority"
+      | "getPermission"
       | "isValidSignature"
+      | "partnerRecoveryHash"
       | "passkeyCount"
+      | "replacePartnerAuthority"
+      | "replaySafeHash"
       | "revokeAuthority"
       | "upgradeLocked"
       | "validateUserOp"
@@ -83,10 +144,24 @@ export interface CofferdamAccount4337Interface extends Interface {
     nameOrSignatureOrTopic:
       | "AuthorityAdded"
       | "AuthorityRevoked"
-      | "FirstPasskeyEnrolled"
-      | "RatchetFired"
+      | "EIP712DomainChanged"
+      | "FirstHighEnrolled"
+      | "PartnerAuthorityReplaced"
+      | "PermissionGranted"
   ): EventFragment;
 
+  encodeFunctionData(
+    functionFragment: "ACTION_ENROLL_FIRST_HIGH",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "ACTION_REPLACE_PARTNER",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "CEREMONY_ATTESTERS",
+    values?: undefined
+  ): string;
   encodeFunctionData(
     functionFragment: "ENTRY_POINT",
     values?: undefined
@@ -96,24 +171,53 @@ export interface CofferdamAccount4337Interface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "MAX_PERMISSION_ENTRIES",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "MODULE_REGISTRY",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "RECOVERY_AUTHORITY_ID",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "addAuthority",
-    values: [BigNumberish, AddressLike, BytesLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "addOwnerAddress",
-    values: [AddressLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "addOwnerPublicKey",
-    values: [BytesLike, BytesLike]
+    values: [AddressLike, BytesLike, PermissionStruct]
   ): string;
   encodeFunctionData(
     functionFragment: "authorityCount",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "enrollFirstPasskey",
-    values: [BigNumberish, AddressLike, BytesLike]
+    functionFragment: "ceremonyHash",
+    values: [
+      BytesLike,
+      BytesLike,
+      BytesLike,
+      BigNumberish,
+      BigNumberish,
+      BigNumberish
+    ]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "ceremonyNonce",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "eip712Domain",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "enrollFirstHigh",
+    values: [
+      BigNumberish,
+      AddressLike,
+      BytesLike,
+      BytesLike,
+      CofferdamAccount4337.CeremonyAttestationStruct
+    ]
   ): string;
   encodeFunctionData(
     functionFragment: "execute",
@@ -124,7 +228,15 @@ export interface CofferdamAccount4337Interface extends Interface {
     values: [AddressLike[], BigNumberish[], BytesLike[]]
   ): string;
   encodeFunctionData(
+    functionFragment: "firstHighChallenge",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "getAuthority",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getPermission",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
@@ -132,12 +244,29 @@ export interface CofferdamAccount4337Interface extends Interface {
     values: [BytesLike, BytesLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "partnerRecoveryHash",
+    values: [BigNumberish, BytesLike, BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "passkeyCount",
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "replacePartnerAuthority",
+    values: [
+      BigNumberish,
+      BytesLike,
+      CofferdamAccount4337.PartnerRecoveryStruct,
+      CofferdamAccount4337.CeremonyAttestationStruct
+    ]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "replaySafeHash",
+    values: [BytesLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "revokeAuthority",
-    values: [BigNumberish, BigNumberish]
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "upgradeLocked",
@@ -149,6 +278,18 @@ export interface CofferdamAccount4337Interface extends Interface {
   ): string;
 
   decodeFunctionResult(
+    functionFragment: "ACTION_ENROLL_FIRST_HIGH",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "ACTION_REPLACE_PARTNER",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "CEREMONY_ATTESTERS",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "ENTRY_POINT",
     data: BytesLike
   ): Result;
@@ -157,15 +298,19 @@ export interface CofferdamAccount4337Interface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "MAX_PERMISSION_ENTRIES",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "MODULE_REGISTRY",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "RECOVERY_AUTHORITY_ID",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "addAuthority",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "addOwnerAddress",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "addOwnerPublicKey",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -173,7 +318,19 @@ export interface CofferdamAccount4337Interface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "enrollFirstPasskey",
+    functionFragment: "ceremonyHash",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "ceremonyNonce",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "eip712Domain",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "enrollFirstHigh",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "execute", data: BytesLike): Result;
@@ -182,7 +339,15 @@ export interface CofferdamAccount4337Interface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "firstHighChallenge",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "getAuthority",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getPermission",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -190,7 +355,19 @@ export interface CofferdamAccount4337Interface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "partnerRecoveryHash",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "passkeyCount",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "replacePartnerAuthority",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "replaySafeHash",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -244,18 +421,28 @@ export namespace AuthorityRevokedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace FirstPasskeyEnrolledEvent {
+export namespace EIP712DomainChangedEvent {
+  export type InputTuple = [];
+  export type OutputTuple = [];
+  export interface OutputObject {}
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace FirstHighEnrolledEvent {
   export type InputTuple = [
-    lowAuthorityId: BigNumberish,
-    passkeyAuthorityId: BigNumberish
+    signerAuthorityId: BigNumberish,
+    highAuthorityId: BigNumberish
   ];
   export type OutputTuple = [
-    lowAuthorityId: bigint,
-    passkeyAuthorityId: bigint
+    signerAuthorityId: bigint,
+    highAuthorityId: bigint
   ];
   export interface OutputObject {
-    lowAuthorityId: bigint;
-    passkeyAuthorityId: bigint;
+    signerAuthorityId: bigint;
+    highAuthorityId: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -263,10 +450,38 @@ export namespace FirstPasskeyEnrolledEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace RatchetFiredEvent {
-  export type InputTuple = [];
-  export type OutputTuple = [];
-  export interface OutputObject {}
+export namespace PartnerAuthorityReplacedEvent {
+  export type InputTuple = [
+    oldAuthorityId: BigNumberish,
+    newAuthorityId: BigNumberish
+  ];
+  export type OutputTuple = [oldAuthorityId: bigint, newAuthorityId: bigint];
+  export interface OutputObject {
+    oldAuthorityId: bigint;
+    newAuthorityId: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace PermissionGrantedEvent {
+  export type InputTuple = [
+    authorityId: BigNumberish,
+    permissionHash: BytesLike,
+    expiry: BigNumberish
+  ];
+  export type OutputTuple = [
+    authorityId: bigint,
+    permissionHash: string,
+    expiry: bigint
+  ];
+  export interface OutputObject {
+    authorityId: bigint;
+    permissionHash: string;
+    expiry: bigint;
+  }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
   export type Log = TypedEventLog<Event>;
@@ -316,37 +531,74 @@ export interface CofferdamAccount4337 extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  ACTION_ENROLL_FIRST_HIGH: TypedContractMethod<[], [string], "view">;
+
+  ACTION_REPLACE_PARTNER: TypedContractMethod<[], [string], "view">;
+
+  CEREMONY_ATTESTERS: TypedContractMethod<[], [string], "view">;
+
   ENTRY_POINT: TypedContractMethod<[], [string], "view">;
 
   MAX_PASSKEYS: TypedContractMethod<[], [bigint], "view">;
 
+  MAX_PERMISSION_ENTRIES: TypedContractMethod<[], [bigint], "view">;
+
+  MODULE_REGISTRY: TypedContractMethod<[], [string], "view">;
+
+  RECOVERY_AUTHORITY_ID: TypedContractMethod<[], [bigint], "view">;
+
   addAuthority: TypedContractMethod<
-    [authorityId: BigNumberish, newModule: AddressLike, newConfig: BytesLike],
-    [void],
-    "nonpayable"
-  >;
-
-  addOwnerAddress: TypedContractMethod<
-    [owner: AddressLike],
-    [void],
-    "nonpayable"
-  >;
-
-  addOwnerPublicKey: TypedContractMethod<
-    [qx: BytesLike, qy: BytesLike],
-    [void],
+    [
+      newModule: AddressLike,
+      newConfig: BytesLike,
+      permission: PermissionStruct
+    ],
+    [bigint],
     "nonpayable"
   >;
 
   authorityCount: TypedContractMethod<[], [bigint], "view">;
 
-  enrollFirstPasskey: TypedContractMethod<
+  ceremonyHash: TypedContractMethod<
     [
-      lowAuthorityId: BigNumberish,
-      passkeyModule: AddressLike,
-      passkeyConfig: BytesLike
+      action: BytesLike,
+      newKeyHash: BytesLike,
+      partnerId: BytesLike,
+      nonce: BigNumberish,
+      notBefore: BigNumberish,
+      expiry: BigNumberish
     ],
-    [void],
+    [string],
+    "view"
+  >;
+
+  ceremonyNonce: TypedContractMethod<[], [bigint], "view">;
+
+  eip712Domain: TypedContractMethod<
+    [],
+    [
+      [string, string, string, bigint, string, string, bigint[]] & {
+        fields: string;
+        name: string;
+        version: string;
+        chainId: bigint;
+        verifyingContract: string;
+        salt: string;
+        extensions: bigint[];
+      }
+    ],
+    "view"
+  >;
+
+  enrollFirstHigh: TypedContractMethod<
+    [
+      signerId: BigNumberish,
+      highModule: AddressLike,
+      highConfig: BytesLike,
+      highAssertion: BytesLike,
+      attestation: CofferdamAccount4337.CeremonyAttestationStruct
+    ],
+    [bigint],
     "nonpayable"
   >;
 
@@ -362,6 +614,12 @@ export interface CofferdamAccount4337 extends BaseContract {
     "nonpayable"
   >;
 
+  firstHighChallenge: TypedContractMethod<
+    [nonce: BigNumberish],
+    [string],
+    "view"
+  >;
+
   getAuthority: TypedContractMethod<
     [authorityId: BigNumberish],
     [
@@ -375,16 +633,41 @@ export interface CofferdamAccount4337 extends BaseContract {
     "view"
   >;
 
+  getPermission: TypedContractMethod<
+    [authorityId: BigNumberish],
+    [PermissionStructOutput],
+    "view"
+  >;
+
   isValidSignature: TypedContractMethod<
     [digest: BytesLike, sig: BytesLike],
     [string],
     "view"
   >;
 
+  partnerRecoveryHash: TypedContractMethod<
+    [oldId: BigNumberish, newConfigHash: BytesLike, recoveredAt: BigNumberish],
+    [string],
+    "view"
+  >;
+
   passkeyCount: TypedContractMethod<[], [bigint], "view">;
 
+  replacePartnerAuthority: TypedContractMethod<
+    [
+      oldId: BigNumberish,
+      newConfig: BytesLike,
+      arg2: CofferdamAccount4337.PartnerRecoveryStruct,
+      attestation: CofferdamAccount4337.CeremonyAttestationStruct
+    ],
+    [bigint],
+    "nonpayable"
+  >;
+
+  replaySafeHash: TypedContractMethod<[digest: BytesLike], [string], "view">;
+
   revokeAuthority: TypedContractMethod<
-    [authorityId: BigNumberish, targetId: BigNumberish],
+    [targetId: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -406,36 +689,88 @@ export interface CofferdamAccount4337 extends BaseContract {
   ): T;
 
   getFunction(
+    nameOrSignature: "ACTION_ENROLL_FIRST_HIGH"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "ACTION_REPLACE_PARTNER"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "CEREMONY_ATTESTERS"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "ENTRY_POINT"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "MAX_PASSKEYS"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "MAX_PERMISSION_ENTRIES"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "MODULE_REGISTRY"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "RECOVERY_AUTHORITY_ID"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "addAuthority"
   ): TypedContractMethod<
-    [authorityId: BigNumberish, newModule: AddressLike, newConfig: BytesLike],
-    [void],
+    [
+      newModule: AddressLike,
+      newConfig: BytesLike,
+      permission: PermissionStruct
+    ],
+    [bigint],
     "nonpayable"
   >;
-  getFunction(
-    nameOrSignature: "addOwnerAddress"
-  ): TypedContractMethod<[owner: AddressLike], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "addOwnerPublicKey"
-  ): TypedContractMethod<[qx: BytesLike, qy: BytesLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "authorityCount"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
-    nameOrSignature: "enrollFirstPasskey"
+    nameOrSignature: "ceremonyHash"
   ): TypedContractMethod<
     [
-      lowAuthorityId: BigNumberish,
-      passkeyModule: AddressLike,
-      passkeyConfig: BytesLike
+      action: BytesLike,
+      newKeyHash: BytesLike,
+      partnerId: BytesLike,
+      nonce: BigNumberish,
+      notBefore: BigNumberish,
+      expiry: BigNumberish
     ],
-    [void],
+    [string],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "ceremonyNonce"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "eip712Domain"
+  ): TypedContractMethod<
+    [],
+    [
+      [string, string, string, bigint, string, string, bigint[]] & {
+        fields: string;
+        name: string;
+        version: string;
+        chainId: bigint;
+        verifyingContract: string;
+        salt: string;
+        extensions: bigint[];
+      }
+    ],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "enrollFirstHigh"
+  ): TypedContractMethod<
+    [
+      signerId: BigNumberish,
+      highModule: AddressLike,
+      highConfig: BytesLike,
+      highAssertion: BytesLike,
+      attestation: CofferdamAccount4337.CeremonyAttestationStruct
+    ],
+    [bigint],
     "nonpayable"
   >;
   getFunction(
@@ -453,6 +788,9 @@ export interface CofferdamAccount4337 extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "firstHighChallenge"
+  ): TypedContractMethod<[nonce: BigNumberish], [string], "view">;
+  getFunction(
     nameOrSignature: "getAuthority"
   ): TypedContractMethod<
     [authorityId: BigNumberish],
@@ -467,18 +805,43 @@ export interface CofferdamAccount4337 extends BaseContract {
     "view"
   >;
   getFunction(
+    nameOrSignature: "getPermission"
+  ): TypedContractMethod<
+    [authorityId: BigNumberish],
+    [PermissionStructOutput],
+    "view"
+  >;
+  getFunction(
     nameOrSignature: "isValidSignature"
   ): TypedContractMethod<[digest: BytesLike, sig: BytesLike], [string], "view">;
+  getFunction(
+    nameOrSignature: "partnerRecoveryHash"
+  ): TypedContractMethod<
+    [oldId: BigNumberish, newConfigHash: BytesLike, recoveredAt: BigNumberish],
+    [string],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "passkeyCount"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
-    nameOrSignature: "revokeAuthority"
+    nameOrSignature: "replacePartnerAuthority"
   ): TypedContractMethod<
-    [authorityId: BigNumberish, targetId: BigNumberish],
-    [void],
+    [
+      oldId: BigNumberish,
+      newConfig: BytesLike,
+      arg2: CofferdamAccount4337.PartnerRecoveryStruct,
+      attestation: CofferdamAccount4337.CeremonyAttestationStruct
+    ],
+    [bigint],
     "nonpayable"
   >;
+  getFunction(
+    nameOrSignature: "replaySafeHash"
+  ): TypedContractMethod<[digest: BytesLike], [string], "view">;
+  getFunction(
+    nameOrSignature: "revokeAuthority"
+  ): TypedContractMethod<[targetId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "upgradeLocked"
   ): TypedContractMethod<[], [boolean], "view">;
@@ -509,18 +872,32 @@ export interface CofferdamAccount4337 extends BaseContract {
     AuthorityRevokedEvent.OutputObject
   >;
   getEvent(
-    key: "FirstPasskeyEnrolled"
+    key: "EIP712DomainChanged"
   ): TypedContractEvent<
-    FirstPasskeyEnrolledEvent.InputTuple,
-    FirstPasskeyEnrolledEvent.OutputTuple,
-    FirstPasskeyEnrolledEvent.OutputObject
+    EIP712DomainChangedEvent.InputTuple,
+    EIP712DomainChangedEvent.OutputTuple,
+    EIP712DomainChangedEvent.OutputObject
   >;
   getEvent(
-    key: "RatchetFired"
+    key: "FirstHighEnrolled"
   ): TypedContractEvent<
-    RatchetFiredEvent.InputTuple,
-    RatchetFiredEvent.OutputTuple,
-    RatchetFiredEvent.OutputObject
+    FirstHighEnrolledEvent.InputTuple,
+    FirstHighEnrolledEvent.OutputTuple,
+    FirstHighEnrolledEvent.OutputObject
+  >;
+  getEvent(
+    key: "PartnerAuthorityReplaced"
+  ): TypedContractEvent<
+    PartnerAuthorityReplacedEvent.InputTuple,
+    PartnerAuthorityReplacedEvent.OutputTuple,
+    PartnerAuthorityReplacedEvent.OutputObject
+  >;
+  getEvent(
+    key: "PermissionGranted"
+  ): TypedContractEvent<
+    PermissionGrantedEvent.InputTuple,
+    PermissionGrantedEvent.OutputTuple,
+    PermissionGrantedEvent.OutputObject
   >;
 
   filters: {
@@ -546,26 +923,48 @@ export interface CofferdamAccount4337 extends BaseContract {
       AuthorityRevokedEvent.OutputObject
     >;
 
-    "FirstPasskeyEnrolled(uint256,uint256)": TypedContractEvent<
-      FirstPasskeyEnrolledEvent.InputTuple,
-      FirstPasskeyEnrolledEvent.OutputTuple,
-      FirstPasskeyEnrolledEvent.OutputObject
+    "EIP712DomainChanged()": TypedContractEvent<
+      EIP712DomainChangedEvent.InputTuple,
+      EIP712DomainChangedEvent.OutputTuple,
+      EIP712DomainChangedEvent.OutputObject
     >;
-    FirstPasskeyEnrolled: TypedContractEvent<
-      FirstPasskeyEnrolledEvent.InputTuple,
-      FirstPasskeyEnrolledEvent.OutputTuple,
-      FirstPasskeyEnrolledEvent.OutputObject
+    EIP712DomainChanged: TypedContractEvent<
+      EIP712DomainChangedEvent.InputTuple,
+      EIP712DomainChangedEvent.OutputTuple,
+      EIP712DomainChangedEvent.OutputObject
     >;
 
-    "RatchetFired()": TypedContractEvent<
-      RatchetFiredEvent.InputTuple,
-      RatchetFiredEvent.OutputTuple,
-      RatchetFiredEvent.OutputObject
+    "FirstHighEnrolled(uint256,uint256)": TypedContractEvent<
+      FirstHighEnrolledEvent.InputTuple,
+      FirstHighEnrolledEvent.OutputTuple,
+      FirstHighEnrolledEvent.OutputObject
     >;
-    RatchetFired: TypedContractEvent<
-      RatchetFiredEvent.InputTuple,
-      RatchetFiredEvent.OutputTuple,
-      RatchetFiredEvent.OutputObject
+    FirstHighEnrolled: TypedContractEvent<
+      FirstHighEnrolledEvent.InputTuple,
+      FirstHighEnrolledEvent.OutputTuple,
+      FirstHighEnrolledEvent.OutputObject
+    >;
+
+    "PartnerAuthorityReplaced(uint256,uint256)": TypedContractEvent<
+      PartnerAuthorityReplacedEvent.InputTuple,
+      PartnerAuthorityReplacedEvent.OutputTuple,
+      PartnerAuthorityReplacedEvent.OutputObject
+    >;
+    PartnerAuthorityReplaced: TypedContractEvent<
+      PartnerAuthorityReplacedEvent.InputTuple,
+      PartnerAuthorityReplacedEvent.OutputTuple,
+      PartnerAuthorityReplacedEvent.OutputObject
+    >;
+
+    "PermissionGranted(uint256,bytes32,uint48)": TypedContractEvent<
+      PermissionGrantedEvent.InputTuple,
+      PermissionGrantedEvent.OutputTuple,
+      PermissionGrantedEvent.OutputObject
+    >;
+    PermissionGranted: TypedContractEvent<
+      PermissionGrantedEvent.InputTuple,
+      PermissionGrantedEvent.OutputTuple,
+      PermissionGrantedEvent.OutputObject
     >;
   };
 }

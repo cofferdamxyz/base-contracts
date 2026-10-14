@@ -7,3 +7,4 @@ import type * as mockUsdcSol from "./MockUSDC.sol";
 export type { mockUsdcSol };
 export type { MockCounter } from "./MockCounter";
 export type { MockEntryPoint } from "./MockEntryPoint";
+export type { MockTierModule } from "./MockTierModule";
