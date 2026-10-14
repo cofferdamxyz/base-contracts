@@ -34,8 +34,8 @@ rebind delay 0), then `scripts/deploy-auth.ts`. The factory pins that
 `NullifierRegistry`, `RECOVERY_DELAY = 0` and `PROBATION_PERIOD = 600`
 seconds. The ceremony attester
 `0xC912bFE0AD345035606182c23495b6883AA0934D` is listed in the new
-`CofferdamCeremonyAttesterRegistry`. The new paymaster has no EntryPoint
-deposit yet. Source of truth: `deployments/baseSepolia.json`.
+`CofferdamCeremonyAttesterRegistry`. The retired paymaster's EntryPoint
+deposit moved to the new one the same day (`yarn paymaster:move:sepolia`). Source of truth: `deployments/baseSepolia.json`.
 
 | Name | Address |
 |---|---|
