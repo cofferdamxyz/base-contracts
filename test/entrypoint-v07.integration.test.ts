@@ -91,7 +91,7 @@ describe('EntryPoint v0.7 Integration', function () {
     const signerAddr = await signer.getAddress();
     const config = ethers.AbiCoder.defaultAbiCoder().encode(['address'], [signerAddr]);
     const Account = await ethers.getContractFactory('CofferdamAccount4337');
-    const account = await Account.deploy(ENTRYPOINT_V07, moduleRegistry, ceremonyRegistry, NULLIFIER_REGISTRY, 0n, sessionAuthAddr, config, grant);
+    const account = await Account.deploy(ENTRYPOINT_V07, moduleRegistry, ceremonyRegistry, NULLIFIER_REGISTRY, 0n, 259_200n, sessionAuthAddr, config, grant);
     await account.waitForDeployment();
     const accountAddr = await account.getAddress();
 

@@ -35,6 +35,7 @@ const ACCOUNT_ABI = [
   'function CEREMONY_ATTESTERS() view returns (address)',
   'function NULLIFIER_REGISTRY() view returns (address)',
   'function RECOVERY_DELAY() view returns (uint256)',
+  'function PROBATION_PERIOD() view returns (uint48)',
   'function probationEndsAt(uint256) view returns (uint48)',
   'function pendingRecovery() view returns (address module, uint48 readyAt, uint256 nullifier, bytes config)',
   'function getPermission(uint256 authorityId) view returns (tuple(address[] targets, bytes4[] selectors, bytes32[] codeHashes, bytes4[] codeSelectors, uint256 valueCap, uint48 expiry))',
@@ -161,6 +162,7 @@ async function inspectAccount(accountAddress: string, txHash?: string) {
   console.log(`  Ceremony attesters: ${await account.CEREMONY_ATTESTERS()}`);
   console.log(`  Nullifier registry: ${await account.NULLIFIER_REGISTRY()}`);
   console.log(`  Recovery delay:     ${await account.RECOVERY_DELAY()} s`);
+  console.log(`  Probation period:   ${await account.PROBATION_PERIOD()} s`);
   const pending = await account.pendingRecovery();
   if (pending.module !== ethers.ZeroAddress) {
     console.log(`  Pending recovery:   ${pending.module}, ready at ${new Date(Number(pending.readyAt) * 1000).toISOString()}`);

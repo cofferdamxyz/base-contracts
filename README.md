@@ -129,7 +129,8 @@ per deployed factory.
 - **After High exists** only High adds or revokes authorities, the two paths
   above are closed, and the last active High can never be revoked.
 - **Probation** (decision 0023): a High added by another High may transact at
-  once, but for 72 hours (`PROBATION_PERIOD`) its ops that reach the account
+  once, but for `PROBATION_PERIOD` (factory-pinned: 72 hours on mainnet,
+  short on testnets) its ops that reach the account
   itself (add, revoke, cancel a recovery) carry `validAfter` = the end of its
   probation, and any older High may revoke it.
 - **Hard recovery** (decision 0023): when every High passkey is lost,

@@ -193,6 +193,7 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
     /// @param ceremonyAttesters  The ceremony co-sign registry (pinned by the factory).
     /// @param nullifierRegistry  The Self.xyz nullifier registry (pinned by the factory).
     /// @param recoveryDelay      The hard-recovery delay in seconds (pinned by the factory).
+    /// @param probationPeriod    The probation of a High added by a High (pinned by the factory).
     /// @param initialModule      The genesis authority module.
     /// @param initialConfig      Per-account material for that module.
     /// @param initialPermission  The genesis grant for Partner / Managed;
@@ -203,10 +204,11 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
         CofferdamCeremonyAttesterRegistry ceremonyAttesters,
         NullifierRegistry nullifierRegistry,
         uint256 recoveryDelay,
+        uint48 probationPeriod,
         IAuthorityModule initialModule,
         bytes memory initialConfig,
         Permission memory initialPermission
-    ) EIP712("Cofferdam Account", "1") {
+    ) AuthorityManagerBase(probationPeriod) EIP712("Cofferdam Account", "1") {
         if (address(entryPoint) == address(0)) revert ZeroAddress();
         if (address(moduleRegistry) == address(0) || address(ceremonyAttesters) == address(0)) revert ZeroAddress();
         if (address(nullifierRegistry) == address(0)) revert ZeroAddress();

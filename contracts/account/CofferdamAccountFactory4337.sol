@@ -13,17 +13,19 @@ import {NullifierRegistry} from "../self/NullifierRegistry.sol";
 /// @notice CREATE2 factory for counterfactual CofferdamAccount4337 deployment.
 ///         The account address is deterministic from (factory, entryPoint,
 ///         module registry, ceremony registry, nullifier registry, recovery
-///         delay, initialModule, initialConfig, initialPermission, salt) — the
+///         delay, probation period, initialModule, initialConfig,
+///         initialPermission, salt) — the
 ///         same inputs always produce the same address, enabling
 ///         gas-sponsored deployment before the user has any onchain presence.
 ///         The factory pins the module registry and the ceremony attester
-///         registry (decision 0016), and the nullifier registry and the
-///         hard-recovery delay (decision 0023) into every account.
+///         registry (decision 0016), and the nullifier registry, the
+///         hard-recovery delay and the High probation period (decision 0023)
+///         into every account.
 ///
 /// @dev    initCode = abi.encodePacked(
 ///           type(CofferdamAccount4337).creationCode,
 ///           abi.encode(entryPoint, moduleRegistry, ceremonyAttesters,
-///                      nullifierRegistry, recoveryDelay,
+///                      nullifierRegistry, recoveryDelay, probationPeriod,
 ///                      initialModule, initialConfig, initialPermission)
 ///         )
 ///         address  = keccak256(0xff, factory, salt, keccak256(initCode))[12:]
@@ -44,6 +46,9 @@ contract CofferdamAccountFactory4337 {
     /// @notice Hard-recovery delay pinned into every account: 72 hours on
     ///         mainnet, 0 on testnets (decision 0023).
     uint256 public immutable RECOVERY_DELAY;
+    /// @notice Probation of a High added by a High, pinned into every
+    ///         account: 72 hours on mainnet, short on testnets (decision 0023).
+    uint48 public immutable PROBATION_PERIOD;
 
     /// @notice The two halves of `type(CofferdamAccount4337).creationCode`.
     address public immutable ACCOUNT_CODE_A;
@@ -61,7 +66,8 @@ contract CofferdamAccountFactory4337 {
         CofferdamModuleRegistry moduleRegistry,
         CofferdamCeremonyAttesterRegistry ceremonyAttesters,
         NullifierRegistry nullifierRegistry,
-        uint256 recoveryDelay
+        uint256 recoveryDelay,
+        uint48 probationPeriod
     ) {
         if (address(nullifierRegistry) == address(0)) revert ZeroAddress();
         ENTRY_POINT = entryPoint;
@@ -69,6 +75,7 @@ contract CofferdamAccountFactory4337 {
         CEREMONY_ATTESTERS = ceremonyAttesters;
         NULLIFIER_REGISTRY = nullifierRegistry;
         RECOVERY_DELAY = recoveryDelay;
+        PROBATION_PERIOD = probationPeriod;
 
         bytes memory code = type(CofferdamAccount4337).creationCode;
         uint256 lenA = code.length / 2;
@@ -132,6 +139,7 @@ contract CofferdamAccountFactory4337 {
                 CEREMONY_ATTESTERS,
                 NULLIFIER_REGISTRY,
                 RECOVERY_DELAY,
+                PROBATION_PERIOD,
                 initialModule,
                 initialConfig,
                 initialPermission

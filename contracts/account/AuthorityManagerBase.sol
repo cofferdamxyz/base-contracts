@@ -45,8 +45,9 @@ abstract contract AuthorityManagerBase {
     ///         probationary (decision 0023): it may transact, but its userOps
     ///         that change the account itself (add, revoke, cancel a
     ///         recovery) are valid only after this period, and any older High
-    ///         may revoke it meanwhile.
-    uint48 public constant PROBATION_PERIOD = 72 hours;
+    ///         may revoke it meanwhile. Pinned by the factory: 72 hours on
+    ///         mainnet, short on testnets.
+    uint48 public immutable PROBATION_PERIOD;
 
     /// @dev `extcodehash` of an account that exists but has no code.
     bytes32 private constant EMPTY_CODE_HASH = keccak256("");
@@ -88,6 +89,10 @@ abstract contract AuthorityManagerBase {
     error LastHighAuthority();
     error InvalidPermission();
     error CallNotPermitted(address target, bytes4 selector);
+
+    constructor(uint48 probationPeriod) {
+        PROBATION_PERIOD = probationPeriod;
+    }
 
     // ── Views ──────────────────────────────────────────────────────────────
 

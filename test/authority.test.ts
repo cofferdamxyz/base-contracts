@@ -22,7 +22,7 @@ describe('AuthorityManagerBase (via CofferdamAccount4337)', () => {
     const config = ethers.AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32'], [ethers.randomBytes(32), ethers.randomBytes(32)]);
 
     const Account = await ethers.getContractFactory('CofferdamAccount4337');
-    const account = await Account.deploy(ENTRYPOINT_V07, moduleRegistry, ceremonyRegistry, NULLIFIER_REGISTRY, 0n, passkeyAuth, config, NO_PERMISSION);
+    const account = await Account.deploy(ENTRYPOINT_V07, moduleRegistry, ceremonyRegistry, NULLIFIER_REGISTRY, 0n, 259_200n, passkeyAuth, config, NO_PERMISSION);
     await account.waitForDeployment();
 
     expect(await account.upgradeLocked()).to.be.true;
@@ -40,7 +40,7 @@ describe('AuthorityManagerBase (via CofferdamAccount4337)', () => {
     const grant = permission([[await counter.getAddress(), counter.interface.getFunction('increment')!.selector]]);
 
     const Account = await ethers.getContractFactory('CofferdamAccount4337');
-    const account = await Account.deploy(ENTRYPOINT_V07, moduleRegistry, ceremonyRegistry, NULLIFIER_REGISTRY, 0n, sessionAuth, config, grant);
+    const account = await Account.deploy(ENTRYPOINT_V07, moduleRegistry, ceremonyRegistry, NULLIFIER_REGISTRY, 0n, 259_200n, sessionAuth, config, grant);
     await account.waitForDeployment();
 
     expect(await account.upgradeLocked()).to.be.false;

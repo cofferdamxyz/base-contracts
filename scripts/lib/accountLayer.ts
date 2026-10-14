@@ -22,6 +22,8 @@ export const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
  *   hard recovery; deploy it first (`deploy-self.ts`).
  * - `RECOVERY_DELAY_SECONDS` is the hard-recovery delay pinned into every
  *   account: 72 hours on mainnet, 0 elsewhere by default.
+ * - `PROBATION_PERIOD_SECONDS` is the probation of a High added by a High:
+ *   72 hours on mainnet, 600 seconds elsewhere by default.
  */
 export async function deployAccountLayer(nullifierRegistry?: string): Promise<Record<string, string>> {
   const [deployer] = await ethers.getSigners();
@@ -48,6 +50,11 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
   if (isMainnet && recoveryDelay < 259_200n) throw new Error('RECOVERY_DELAY_SECONDS must be at least 72 hours on mainnet');
   console.log('NullifierRegistry (pinned):', nullifier);
   console.log('recoveryDelay:', recoveryDelay.toString(), 'seconds');
+  const probationRaw = process.env.PROBATION_PERIOD_SECONDS?.trim();
+  const probationPeriod = probationRaw ? BigInt(probationRaw) : isMainnet ? 259_200n : 600n;
+  if (isMainnet && probationPeriod < 259_200n) throw new Error('PROBATION_PERIOD_SECONDS must be at least 72 hours on mainnet');
+  if (probationPeriod >= 2n ** 48n) throw new Error('PROBATION_PERIOD_SECONDS does not fit uint48');
+  console.log('probationPeriod:', probationPeriod.toString(), 'seconds');
 
   async function deploy(name: string, args: unknown[] = []): Promise<string> {
     const c = await (await ethers.getContractFactory(name)).deploy(...args);
@@ -77,6 +84,7 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
     out.CofferdamCeremonyAttesterRegistry,
     nullifier,
     recoveryDelay,
+    probationPeriod,
   ]);
   out.CofferdamPaymaster = await deploy('CofferdamPaymaster', [ENTRYPOINT_V07]);
   if (attesters.length === 0) console.log('No CEREMONY_ATTESTERS: first-High upgrades are paused until one is added.');

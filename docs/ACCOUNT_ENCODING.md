@@ -95,14 +95,14 @@ address = keccak256(0xff, factory, salt, keccak256(initCode))[12:]
 where initCode = abi.encodePacked(
     type(CofferdamAccount4337).creationCode,
     abi.encode(ENTRY_POINT, MODULE_REGISTRY, CEREMONY_ATTESTERS,
-               NULLIFIER_REGISTRY, RECOVERY_DELAY,
+               NULLIFIER_REGISTRY, RECOVERY_DELAY, PROBATION_PERIOD,
                initialModule, initialConfig, initialPermission)
 )
 ```
 
 The same `(initialModule, initialConfig, initialPermission, salt)` always
-produces the same address for a given factory. The registries and the
-recovery delay are factory immutables, so a factory with other values yields
+produces the same address for a given factory. The registries, the
+recovery delay and the probation period are factory immutables, so a factory with other values yields
 other addresses.
 
 The account's creation code no longer fits beside the factory's own code
@@ -124,8 +124,8 @@ selector `0xa8ace465`. Returns the computed address without deploying.
 
 `CofferdamAccount4337` inherits `AuthorityManagerBase, EIP712`. Storage is laid
 out sequentially from slot 0. `ENTRY_POINT`, `MODULE_REGISTRY`,
-`CEREMONY_ATTESTERS`, `NULLIFIER_REGISTRY` and `RECOVERY_DELAY` are
-immutables (in code, not storage).
+`CEREMONY_ATTESTERS`, `NULLIFIER_REGISTRY`, `RECOVERY_DELAY` and
+`PROBATION_PERIOD` are immutables (in code, not storage).
 
 ### 3.1 Slot Map
 
@@ -427,7 +427,8 @@ probation. Partner and Managed grants, funds and the identity binding stay.
 ### 5.10 Probation of a High Added by a High (decision 0023)
 
 `addAuthority` signed by a High records `probationEndsAt(id) = block.timestamp
-+ PROBATION_PERIOD` (72 hours) for a new High. The genesis High, a first High
++ PROBATION_PERIOD` for a new High; `PROBATION_PERIOD` is pinned by the factory
+(72 hours on mainnet, 600 seconds by default on testnets, `PROBATION_PERIOD_SECONDS`). The genesis High, a first High
 (`enrollFirstHigh`) and a recovered High have none (0). While a High has a
 probation end, `validateUserOp` returns it as `validAfter` for any call that
 reaches the account itself: a top-level call other than `execute` /
@@ -481,6 +482,7 @@ Compute: `ethers.id(kindString)`. The old `"session"` kind is gone with the
 | `CEREMONY_ATTESTERS()` | `0xd76f8c3b` |
 | `NULLIFIER_REGISTRY()` (account and factory) | `0x4065e7b2` |
 | `RECOVERY_DELAY()` (account and factory) | `0x47b45652` |
+| `PROBATION_PERIOD()` (account and factory) | `0x3d9233e4` |
 | `accountCreationCode()` (factory) | `0x31c884df` |
 | `validateUserOp((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes),bytes32,uint256)` | `0x19822f7c` |
 | `execute(address,uint256,bytes)` | `0xb61d27f6` |
@@ -501,7 +503,6 @@ Compute: `ethers.id(kindString)`. The old `"session"` kind is gone with the
 | `pendingRecovery()` | `0xfaeb4488` |
 | `recoveryChallenge(uint256)` | `0x5db6b2c1` |
 | `probationEndsAt(uint256)` | `0x664dc3d9` |
-| `PROBATION_PERIOD()` | `0x3d9233e4` |
 | `NullifierRegistry.provenNullifier(address,uint256[2],uint256[2][2],uint256[2],uint256[21],bytes,uint256,bytes)` | `0xf79e7b53` |
 | `NullifierRegistry.recoveryMessageHash(address,uint256[21],uint256)` | `0xd52727c1` |
 | `replaySafeHash(bytes32)` | `0xce1506be` |
@@ -556,7 +557,7 @@ validation, so ERC-7562 storage rules hold.
      themselves while no High exists. Anything else reverts
      `TierNotPermitted(tier)` or `CallNotPermitted(target, selector)`.
    - Only `High` adds or revokes authorities (`addAuthority`, `revokeAuthority`),
-     and a High added by a High only after its 72-hour probation (§5.10).
+     and a High added by a High only after its probation (§5.10; 72 hours on mainnet).
 5. **Permission shape** (checked when granted): 1 to 16 pairs counting
    address and code-hash entries; no zero target; never the account itself; no
    code hash that is 0, `keccak256("")` (an account without code) or the

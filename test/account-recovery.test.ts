@@ -87,12 +87,12 @@ describe('CofferdamAccount4337 hard recovery and probation (decision 0023)', () 
   }
 
   /** A High-genesis account, bound to `nullifier` on `registry` unless `bind` is false. */
-  async function setup(opts: { delay?: bigint; bind?: boolean; registry?: any; nullifier?: bigint } = {}) {
+  async function setup(opts: { delay?: bigint; probation?: bigint; bind?: boolean; registry?: any; nullifier?: bigint } = {}) {
     const registry = opts.registry ?? (await nullifierRegistry());
     const high = webauthnKey();
     const Account = await ethers.getContractFactory('CofferdamAccount4337');
     const account: any = await Account.deploy(
-      epAddr, moduleRegistry, ceremonyRegistry, registry, opts.delay ?? 0n, highModule, high.config, NO_PERMISSION,
+      epAddr, moduleRegistry, ceremonyRegistry, registry, opts.delay ?? 0n, opts.probation ?? PROBATION, highModule, high.config, NO_PERMISSION,
     );
     const addr = await account.getAddress();
     if (opts.bind ?? true) {
@@ -251,7 +251,7 @@ describe('CofferdamAccount4337 hard recovery and probation (decision 0023)', () 
       const key = webauthnKey('offshoresync.com');
       const grant = permission([[counterAddr, INC]], { expiry: BigInt(await time.latest()) + 90n * DAY });
       const account: any = await (await ethers.getContractFactory('CofferdamAccount4337')).deploy(
-        epAddr, moduleRegistry, ceremonyRegistry, registry, 0n, partnerModule, key.partnerConfig(PARTNER_ID, partnerBackend.address), grant,
+        epAddr, moduleRegistry, ceremonyRegistry, registry, 0n, PROBATION, partnerModule, key.partnerConfig(PARTNER_ID, partnerBackend.address), grant,
       );
       ACTION = await account.ACTION_RECOVER_HIGH();
       await expect(recover(account, await bundle(account, registry)))
@@ -379,6 +379,13 @@ describe('CofferdamAccount4337 hard recovery and probation (decision 0023)', () 
       expect(await validate(account, addr, 0, enc(account, 'revokeAuthority', [1]), (h) => high.sign(h))).to.equal(0n);
       await account.connect(entryPoint).revokeAuthority(1);
       expect((await account.getAuthority(1)).active).to.be.false;
+    });
+
+    it('takes its length from the factory-pinned period', async () => {
+      const s = await setup({ bind: false, probation: 600n });
+      await s.account.connect(entryPoint).addAuthority(highModule, webauthnKey().config, NO_PERMISSION);
+      expect(await s.account.PROBATION_PERIOD()).to.equal(600n);
+      expect(await s.account.probationEndsAt(1)).to.equal(BigInt(await time.latest()) + 600n);
     });
 
     it('every High added by a High starts its own probation', async () => {
