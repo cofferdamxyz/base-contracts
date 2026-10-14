@@ -25,28 +25,36 @@
 
 ### 1.1 Canonical Addresses (Base Sepolia)
 
-Deployed 2026-10-14 with `scripts/deploy-auth.ts` (decision 0016 account
-layer) from the CofferdamDev deployer, which owns both registries and the
-paymaster on testnet. `CofferdamCeremonyAttesterRegistry` has no attester
-yet, so first-High upgrades and Partner recoveries are paused until one is
-added. Source of truth: `deployments/baseSepolia.json`.
+Deployed 2026-10-14 for decision 0023 from the CofferdamDev deployer, which
+owns both registries and the paymaster on testnet: `scripts/deploy-self.ts`
+first (a new `NullifierRegistry` with `provenNullifier`, reusing the real
+`Verifier_vc_and_disclose` `0x26fBC868344AF4E99874edFd0E3756EcC2359bEb` and
+the `SelfAttesterRegistry` `0x8F3fF40Aa7Eb46b9AB214229D8f7833bbC47ae08`,
+rebind delay 0), then `scripts/deploy-auth.ts`. The factory pins that
+`NullifierRegistry`, `RECOVERY_DELAY = 0` and `PROBATION_PERIOD = 600`
+seconds. The ceremony attester
+`0xC912bFE0AD345035606182c23495b6883AA0934D` is listed in the new
+`CofferdamCeremonyAttesterRegistry`. The new paymaster has no EntryPoint
+deposit yet. Source of truth: `deployments/baseSepolia.json`.
 
 | Name | Address |
 |---|---|
 | EntryPoint v0.7 | `0x0000000071727De22E5E9d8BAf0edAc6f37da032` |
-| CofferdamAccountFactory4337 | `0xC0F4EEd3EF9a17382Dac877468a8fA0Cc397bF3E` |
-| CofferdamModuleRegistry | `0x2C974835449AF2E5bFA76eeE151a2222Ce0f3eD1` |
-| CofferdamCeremonyAttesterRegistry | `0x28824840A8f5a764E797578291FD4377Ca13126b` |
-| CofferdamPaymaster | `0xa24651292DFd346A4da0298583b114543771d867` |
-| WebAuthnPasskeyAuthority (High, pinned to `cofferdam.xyz`) | `0xB20d91Cc70cDDbccF57fA9CA9C16FDb01978A471` |
-| PartnerPasskeyAuthority (Partner) | `0x41c9bCaB8D074FdC364455479E31496cb689a349` |
-| SessionKeyAuthority (Managed) | `0xD468774BDE3E2a1705b51791424432abD01CbaCE` |
-| PasskeyAuthority (raw P-256, testnet only) | `0xebe2d02a07859a50Ae9f3f54B9F327aeD0EB6F93` |
+| CofferdamAccountFactory4337 | `0xbfe7c71A3D423316bc8B7C40858eC6B9736847E2` |
+| CofferdamModuleRegistry | `0x5b437804978116fECe00DC1c983C9aDa24d4A8Ad` |
+| CofferdamCeremonyAttesterRegistry | `0x44A2B59d5D39f773C2e65469e0Dd3217E53823Af` |
+| NullifierRegistry (pinned by the factory) | `0xF025204964A355D3125CF15Bd606B8CFc92FbDB6` |
+| CofferdamPaymaster | `0x85657a56b23525047cF67d462c6Bf2B3C6d66B18` |
+| WebAuthnPasskeyAuthority (High, pinned to `cofferdam.xyz`) | `0xd62c4deDeD3E2fEF52c8733aa1c899C7714a87C5` |
+| PartnerPasskeyAuthority (Partner) | `0xf1a9E1c2411DeaBA6F45630754dB1824779eC129` |
+| SessionKeyAuthority (Managed) | `0x7c6801603C34FEc9D13c350388f35920FdD8bb6E` |
+| PasskeyAuthority (raw P-256, testnet only) | `0xcc5ef249E501127fBD43c26ee4ea943aC743Af33` |
 
-These addresses predate decision 0023: the hard-recovery factory needs a
-`NullifierRegistry` with `provenNullifier` and a new factory, so the Sepolia
-account layer is redeployed again (`deploy-self.ts`, then `deploy-auth.ts`)
-and this table moves with it.
+The decision 0016 deployment of the same day (factory
+`0xC0F4EEd3…bF3E`, module registry `0x2C974835…3eD1`, ceremony registry
+`0x28824840…126b`, paymaster `0xa2465129…d867`, `NullifierRegistry` v2
+`0xC4931d44…505F`) is superseded; accounts created through it keep working
+against those contracts but are not migrated.
 
 The pre-0016 deployment (factory `0x35CeBf87…1F3D`, WebAuthn authority
 `0x279Cf7DF…Eea8`, paymasters `0x5ffb8bA8…204e` and `0xe73fec9b…0aF`) is
