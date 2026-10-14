@@ -59,7 +59,7 @@ contracts/
 │   └── CofferdamCeremonyAttesterRegistry.sol # Keys that co-sign first-High and Partner recovery
 ├── self/                                # MIT — Self.xyz sybil resistance
 │   ├── SelfAttesterRegistry.sol         # Trusted Self.xyz TEE attester allow-list
-│   ├── NullifierRegistry.sol            # Passport nullifier → account binding
+│   ├── NullifierRegistry.sol            # Passport nullifier → account binding; rebind moves it (decision 0022)
 │   ├── ISelfGroth16Verifier.sol         # Groth16 verifier interface
 │   └── SelfPublicSignals.sol            # Public signal index constants
 ├── test/                                # MIT — test mocks

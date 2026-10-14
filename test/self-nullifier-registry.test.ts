@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import { time } from '@nomicfoundation/hardhat-network-helpers';
 import { ethers } from 'hardhat';
 
 import {
@@ -74,7 +75,7 @@ function buildBind(opts: BindOptions): { pubSignals: bigint[]; context: string }
 }
 
 async function deployFixture(
-  opts: { rejectProofs?: boolean; scope?: bigint; selfDestChainId?: number } = {}
+  opts: { rejectProofs?: boolean; scope?: bigint; selfDestChainId?: number; rebindDelay?: bigint } = {}
 ) {
   const [deployer, attester, account, other, outsider] = await ethers.getSigners();
 
@@ -93,7 +94,8 @@ async function deployFixture(
     await verifier.getAddress(),
     await attesterRegistry.getAddress(),
     opts.scope ?? COFFERDAM_BIND_V1_SCOPE,
-    opts.selfDestChainId ?? COFFERDAM_SELF_DEST_CHAIN_ID
+    opts.selfDestChainId ?? COFFERDAM_SELF_DEST_CHAIN_ID,
+    opts.rebindDelay ?? 0n
   );
   await registry.waitForDeployment();
 
@@ -110,7 +112,20 @@ async function deployFixture(
     return signer.signMessage(ethers.getBytes(msgHash));
   }
 
+  /** The attester Worker's rebind co-sign: EIP-191 over `rebindMessageHash(newAccount, pubSignals, epoch)`. */
+  async function signRebind(
+    newAccount: string,
+    pubSignals: bigint[],
+    epoch: bigint,
+    signer = attester,
+    target = registry
+  ): Promise<string> {
+    const msgHash = await target.rebindMessageHash(newAccount, pubSignals, epoch);
+    return signer.signMessage(ethers.getBytes(msgHash));
+  }
+
   return {
+    signRebind,
     deployer,
     attester,
     account,
@@ -220,7 +235,7 @@ describe('NullifierRegistry', () => {
         ethers.ZeroAddress,
         ethers.ZeroAddress,
         COFFERDAM_BIND_V1_SCOPE,
-        COFFERDAM_SELF_DEST_CHAIN_ID
+        COFFERDAM_SELF_DEST_CHAIN_ID, 0n
       )
     ).to.be.revertedWithCustomError(NullifierRegistry, 'ZeroAddress');
   });
@@ -239,7 +254,7 @@ describe('NullifierRegistry', () => {
         await verifier.getAddress(),
         await attesterRegistry.getAddress(),
         0,
-        COFFERDAM_SELF_DEST_CHAIN_ID
+        COFFERDAM_SELF_DEST_CHAIN_ID, 0n
       )
     ).to.be.revertedWithCustomError(NullifierRegistry, 'ZeroScope');
   });
@@ -252,7 +267,7 @@ describe('NullifierRegistry', () => {
         await verifier.getAddress(),
         await attesterRegistry.getAddress(),
         COFFERDAM_BIND_V1_SCOPE,
-        0
+        0, 0n
       )
     ).to.be.revertedWithCustomError(NullifierRegistry, 'ZeroDestChainId');
   });
@@ -444,7 +459,7 @@ describe('NullifierRegistry', () => {
       await verifier.getAddress(),
       await attesterRegistry.getAddress(),
       COFFERDAM_BIND_V1_SCOPE,
-      COFFERDAM_SELF_DEST_CHAIN_ID
+      COFFERDAM_SELF_DEST_CHAIN_ID, 0n
     );
     await otherRegistry.waitForDeployment();
 
@@ -599,5 +614,111 @@ describe('SelfAttesterRegistry', () => {
     await (await (attesterRegistry.connect(other) as any).acceptOwnership()).wait();
     expect(await attesterRegistry.owner()).to.equal(other.address);
     expect(await attesterRegistry.pendingOwner()).to.equal(ethers.ZeroAddress);
+  });
+});
+
+describe('NullifierRegistry rebind (decision 0022)', () => {
+  const DAY = 24n * 60n * 60n;
+
+  /** Bind `account`, then build a fresh proof for `newAccount` with the same nullifier. */
+  async function bound(opts: { rebindDelay?: bigint } = {}) {
+    const f = await deployFixture(opts);
+    const first = buildBind({ account: f.account.address });
+    await f.registry.verifyAndBind(f.account.address, A, B, C, first.pubSignals, first.context, await f.signBind(first.pubSignals));
+    const next = buildBind({ account: f.other.address });
+    return { ...f, next };
+  }
+
+  it('moves the nullifier to the new account at once when the delay is zero', async () => {
+    const f = await bound();
+    const sig = await f.signRebind(f.other.address, f.next.pubSignals, 0n);
+    await expect(f.registry.rebind(f.other.address, A, B, C, f.next.pubSignals, f.next.context, sig))
+      .to.emit(f.registry, 'NullifierRebound')
+      .withArgs(f.account.address, f.other.address, NULLIFIER, 0n);
+    expect(await f.registry.nullifierToAccount(NULLIFIER)).to.equal(f.other.address);
+    expect(await f.registry.accountToNullifier(f.other.address)).to.equal(NULLIFIER);
+    expect(await f.registry.accountToNullifier(f.account.address)).to.equal(0n);
+    expect(await f.registry.isAccountBound(f.account.address)).to.equal(false);
+    expect(await f.registry.rebindCount(NULLIFIER)).to.equal(1n);
+  });
+
+  it('consumes the epoch: the same rebind signature never works twice, and a bind signature never rebinds', async () => {
+    const f = await bound();
+    const sig = await f.signRebind(f.other.address, f.next.pubSignals, 0n);
+    await f.registry.rebind(f.other.address, A, B, C, f.next.pubSignals, f.next.context, sig);
+    // Move it back with a proof for the original account, then replay the first signature.
+    const back = buildBind({ account: f.account.address });
+    await f.registry.rebind(f.account.address, A, B, C, back.pubSignals, back.context, await f.signRebind(f.account.address, back.pubSignals, 1n));
+    await expect(f.registry.rebind(f.other.address, A, B, C, f.next.pubSignals, f.next.context, sig))
+      .to.be.revertedWithCustomError(f.registry, 'UntrustedAttester');
+    // A bind-shaped signature (attesterMessageHash) is not a rebind co-sign.
+    const bindShaped = await f.attester.signMessage(ethers.getBytes(await f.registry.attesterMessageHash(f.other.address, f.next.pubSignals)));
+    await expect(f.registry.rebind(f.other.address, A, B, C, f.next.pubSignals, f.next.context, bindShaped))
+      .to.be.revertedWithCustomError(f.registry, 'UntrustedAttester');
+  });
+
+  it('refuses an unbound nullifier, the same account, a bound new account and a mismatched context', async () => {
+    const f = await deployFixture();
+    const fresh = buildBind({ account: f.other.address });
+    await expect(f.registry.rebind(f.other.address, A, B, C, fresh.pubSignals, fresh.context, await f.signRebind(f.other.address, fresh.pubSignals, 0n)))
+      .to.be.revertedWithCustomError(f.registry, 'NullifierNotBound');
+    const b = await bound();
+    const same = buildBind({ account: b.account.address });
+    await expect(b.registry.rebind(b.account.address, A, B, C, same.pubSignals, same.context, await b.signRebind(b.account.address, same.pubSignals, 0n)))
+      .to.be.revertedWithCustomError(b.registry, 'SameAccount');
+    // `other` binds a second passport first, then cannot receive the first one.
+    const second = buildBind({ account: b.other.address, nullifier: 0x5ee2n });
+    await b.registry.verifyAndBind(b.other.address, A, B, C, second.pubSignals, second.context, await b.attester.signMessage(ethers.getBytes(await b.registry.attesterMessageHash(b.other.address, second.pubSignals))));
+    await expect(b.registry.rebind(b.other.address, A, B, C, b.next.pubSignals, b.next.context, await b.signRebind(b.other.address, b.next.pubSignals, 0n)))
+      .to.be.revertedWithCustomError(b.registry, 'AccountAlreadyBound');
+    // The context names the old account while the call targets `outsider`.
+    const c = await bound();
+    await expect(c.registry.rebind(c.outsider.address, A, B, C, c.next.pubSignals, c.next.context, await c.signRebind(c.outsider.address, c.next.pubSignals, 0n)))
+      .to.be.revertedWithCustomError(c.registry, 'UserIdentifierMismatch');
+  });
+
+  it('waits for the delay, then anyone finalizes', async () => {
+    const f = await bound({ rebindDelay: 3n * DAY });
+    const sig = await f.signRebind(f.other.address, f.next.pubSignals, 0n);
+    await expect(f.registry.rebind(f.other.address, A, B, C, f.next.pubSignals, f.next.context, sig))
+      .to.emit(f.registry, 'RebindRequested');
+    expect(await f.registry.nullifierToAccount(NULLIFIER)).to.equal(f.account.address);
+    const pending = await f.registry.pendingRebind(NULLIFIER);
+    expect(pending.newAccount).to.equal(f.other.address);
+    await expect(f.registry.finalizeRebind(NULLIFIER)).to.be.revertedWithCustomError(f.registry, 'RebindNotReady');
+    await time.increase(3n * DAY);
+    await expect(f.registry.connect(f.outsider).finalizeRebind(NULLIFIER))
+      .to.emit(f.registry, 'NullifierRebound')
+      .withArgs(f.account.address, f.other.address, NULLIFIER, 0n);
+    expect(await f.registry.nullifierToAccount(NULLIFIER)).to.equal(f.other.address);
+    expect(await f.registry.accountToNullifier(f.account.address)).to.equal(0n);
+    expect((await f.registry.pendingRebind(NULLIFIER)).newAccount).to.equal(ethers.ZeroAddress);
+    await expect(f.registry.finalizeRebind(NULLIFIER)).to.be.revertedWithCustomError(f.registry, 'NoPendingRebind');
+  });
+
+  it('lets only the bound account cancel a pending rebind', async () => {
+    const f = await bound({ rebindDelay: 3n * DAY });
+    await f.registry.rebind(f.other.address, A, B, C, f.next.pubSignals, f.next.context, await f.signRebind(f.other.address, f.next.pubSignals, 0n));
+    await expect(f.registry.connect(f.outsider).cancelRebind(NULLIFIER)).to.be.revertedWithCustomError(f.registry, 'NotBoundAccount');
+    await expect(f.registry.connect(f.account).cancelRebind(NULLIFIER))
+      .to.emit(f.registry, 'RebindCancelled')
+      .withArgs(f.account.address, NULLIFIER, f.other.address);
+    await time.increase(3n * DAY);
+    await expect(f.registry.finalizeRebind(NULLIFIER)).to.be.revertedWithCustomError(f.registry, 'NoPendingRebind');
+    expect(await f.registry.nullifierToAccount(NULLIFIER)).to.equal(f.account.address);
+    // The consumed epoch means a new co-sign is needed for another attempt.
+    expect(await f.registry.rebindCount(NULLIFIER)).to.equal(1n);
+  });
+
+  it('replaces a pending rebind with a later request', async () => {
+    const f = await bound({ rebindDelay: 3n * DAY });
+    await f.registry.rebind(f.other.address, A, B, C, f.next.pubSignals, f.next.context, await f.signRebind(f.other.address, f.next.pubSignals, 0n));
+    const third = buildBind({ account: f.outsider.address });
+    await f.registry.rebind(f.outsider.address, A, B, C, third.pubSignals, third.context, await f.signRebind(f.outsider.address, third.pubSignals, 1n));
+    expect((await f.registry.pendingRebind(NULLIFIER)).newAccount).to.equal(f.outsider.address);
+    await time.increase(3n * DAY);
+    await f.registry.finalizeRebind(NULLIFIER);
+    expect(await f.registry.nullifierToAccount(NULLIFIER)).to.equal(f.outsider.address);
+    expect(await f.registry.accountToNullifier(f.other.address)).to.equal(0n);
   });
 });

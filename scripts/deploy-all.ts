@@ -1,5 +1,6 @@
 import { ethers, network } from 'hardhat';
 import { writeDeployments } from './lib/deployments';
+import { COFFERDAM_SELF_DEST_CHAIN_ID } from './lib/selfUserContext';
 import { deployAccountLayer } from './lib/accountLayer';
 
 async function main() {
@@ -32,7 +33,9 @@ async function main() {
   const nullifierReg = await NullifierRegistry.deploy(
     verifierAddress,
     await attesterReg.getAddress(),
-    BigInt(scope)
+    BigInt(scope),
+    COFFERDAM_SELF_DEST_CHAIN_ID,
+    0n // rebindDelay: immediate on local chains (decision 0022)
   );
   await nullifierReg.waitForDeployment();
   console.log('NullifierRegistry:', await nullifierReg.getAddress());

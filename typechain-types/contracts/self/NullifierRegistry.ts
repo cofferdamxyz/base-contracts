@@ -29,16 +29,29 @@ export interface NullifierRegistryInterface extends Interface {
       | "accountToNullifier"
       | "attesterMessageHash"
       | "attesterRegistry"
+      | "cancelRebind"
       | "expectedScope"
+      | "finalizeRebind"
       | "isAccountBound"
       | "isNullifierBound"
       | "nullifierToAccount"
+      | "pendingRebind"
+      | "rebind"
+      | "rebindCount"
+      | "rebindDelay"
+      | "rebindMessageHash"
       | "selfDestChainId"
       | "verifier"
       | "verifyAndBind"
   ): FunctionFragment;
 
-  getEvent(nameOrSignatureOrTopic: "NullifierBound"): EventFragment;
+  getEvent(
+    nameOrSignatureOrTopic:
+      | "NullifierBound"
+      | "NullifierRebound"
+      | "RebindCancelled"
+      | "RebindRequested"
+  ): EventFragment;
 
   encodeFunctionData(
     functionFragment: "accountToNullifier",
@@ -53,8 +66,16 @@ export interface NullifierRegistryInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "cancelRebind",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "expectedScope",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "finalizeRebind",
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "isAccountBound",
@@ -67,6 +88,34 @@ export interface NullifierRegistryInterface extends Interface {
   encodeFunctionData(
     functionFragment: "nullifierToAccount",
     values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "pendingRebind",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "rebind",
+    values: [
+      AddressLike,
+      [BigNumberish, BigNumberish],
+      [[BigNumberish, BigNumberish], [BigNumberish, BigNumberish]],
+      [BigNumberish, BigNumberish],
+      BigNumberish[],
+      BytesLike,
+      BytesLike
+    ]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "rebindCount",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "rebindDelay",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "rebindMessageHash",
+    values: [AddressLike, BigNumberish[], BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "selfDestChainId",
@@ -99,7 +148,15 @@ export interface NullifierRegistryInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "cancelRebind",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "expectedScope",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "finalizeRebind",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -112,6 +169,23 @@ export interface NullifierRegistryInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "nullifierToAccount",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "pendingRebind",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "rebind", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "rebindCount",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "rebindDelay",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "rebindMessageHash",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -143,6 +217,81 @@ export namespace NullifierBoundEvent {
     nullifier: bigint;
     attestationId: bigint;
     scope: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace NullifierReboundEvent {
+  export type InputTuple = [
+    oldAccount: AddressLike,
+    newAccount: AddressLike,
+    nullifier: BigNumberish,
+    epoch: BigNumberish
+  ];
+  export type OutputTuple = [
+    oldAccount: string,
+    newAccount: string,
+    nullifier: bigint,
+    epoch: bigint
+  ];
+  export interface OutputObject {
+    oldAccount: string;
+    newAccount: string;
+    nullifier: bigint;
+    epoch: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RebindCancelledEvent {
+  export type InputTuple = [
+    account: AddressLike,
+    nullifier: BigNumberish,
+    newAccount: AddressLike
+  ];
+  export type OutputTuple = [
+    account: string,
+    nullifier: bigint,
+    newAccount: string
+  ];
+  export interface OutputObject {
+    account: string;
+    nullifier: bigint;
+    newAccount: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RebindRequestedEvent {
+  export type InputTuple = [
+    oldAccount: AddressLike,
+    newAccount: AddressLike,
+    nullifier: BigNumberish,
+    epoch: BigNumberish,
+    readyAt: BigNumberish
+  ];
+  export type OutputTuple = [
+    oldAccount: string,
+    newAccount: string,
+    nullifier: bigint,
+    epoch: bigint,
+    readyAt: bigint
+  ];
+  export interface OutputObject {
+    oldAccount: string;
+    newAccount: string;
+    nullifier: bigint;
+    epoch: bigint;
+    readyAt: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -207,7 +356,19 @@ export interface NullifierRegistry extends BaseContract {
 
   attesterRegistry: TypedContractMethod<[], [string], "view">;
 
+  cancelRebind: TypedContractMethod<
+    [nullifier: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   expectedScope: TypedContractMethod<[], [bigint], "view">;
+
+  finalizeRebind: TypedContractMethod<
+    [nullifier: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
 
   isAccountBound: TypedContractMethod<
     [account: AddressLike],
@@ -223,6 +384,36 @@ export interface NullifierRegistry extends BaseContract {
 
   nullifierToAccount: TypedContractMethod<
     [arg0: BigNumberish],
+    [string],
+    "view"
+  >;
+
+  pendingRebind: TypedContractMethod<
+    [arg0: BigNumberish],
+    [[string, bigint] & { newAccount: string; readyAt: bigint }],
+    "view"
+  >;
+
+  rebind: TypedContractMethod<
+    [
+      newAccount: AddressLike,
+      a: [BigNumberish, BigNumberish],
+      b: [[BigNumberish, BigNumberish], [BigNumberish, BigNumberish]],
+      c: [BigNumberish, BigNumberish],
+      pubSignals: BigNumberish[],
+      userContextData: BytesLike,
+      attesterSig: BytesLike
+    ],
+    [void],
+    "nonpayable"
+  >;
+
+  rebindCount: TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
+
+  rebindDelay: TypedContractMethod<[], [bigint], "view">;
+
+  rebindMessageHash: TypedContractMethod<
+    [newAccount: AddressLike, pubSignals: BigNumberish[], epoch: BigNumberish],
     [string],
     "view"
   >;
@@ -263,8 +454,14 @@ export interface NullifierRegistry extends BaseContract {
     nameOrSignature: "attesterRegistry"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "cancelRebind"
+  ): TypedContractMethod<[nullifier: BigNumberish], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "expectedScope"
   ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "finalizeRebind"
+  ): TypedContractMethod<[nullifier: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "isAccountBound"
   ): TypedContractMethod<[account: AddressLike], [boolean], "view">;
@@ -274,6 +471,41 @@ export interface NullifierRegistry extends BaseContract {
   getFunction(
     nameOrSignature: "nullifierToAccount"
   ): TypedContractMethod<[arg0: BigNumberish], [string], "view">;
+  getFunction(
+    nameOrSignature: "pendingRebind"
+  ): TypedContractMethod<
+    [arg0: BigNumberish],
+    [[string, bigint] & { newAccount: string; readyAt: bigint }],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "rebind"
+  ): TypedContractMethod<
+    [
+      newAccount: AddressLike,
+      a: [BigNumberish, BigNumberish],
+      b: [[BigNumberish, BigNumberish], [BigNumberish, BigNumberish]],
+      c: [BigNumberish, BigNumberish],
+      pubSignals: BigNumberish[],
+      userContextData: BytesLike,
+      attesterSig: BytesLike
+    ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "rebindCount"
+  ): TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "rebindDelay"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "rebindMessageHash"
+  ): TypedContractMethod<
+    [newAccount: AddressLike, pubSignals: BigNumberish[], epoch: BigNumberish],
+    [string],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "selfDestChainId"
   ): TypedContractMethod<[], [bigint], "view">;
@@ -303,6 +535,27 @@ export interface NullifierRegistry extends BaseContract {
     NullifierBoundEvent.OutputTuple,
     NullifierBoundEvent.OutputObject
   >;
+  getEvent(
+    key: "NullifierRebound"
+  ): TypedContractEvent<
+    NullifierReboundEvent.InputTuple,
+    NullifierReboundEvent.OutputTuple,
+    NullifierReboundEvent.OutputObject
+  >;
+  getEvent(
+    key: "RebindCancelled"
+  ): TypedContractEvent<
+    RebindCancelledEvent.InputTuple,
+    RebindCancelledEvent.OutputTuple,
+    RebindCancelledEvent.OutputObject
+  >;
+  getEvent(
+    key: "RebindRequested"
+  ): TypedContractEvent<
+    RebindRequestedEvent.InputTuple,
+    RebindRequestedEvent.OutputTuple,
+    RebindRequestedEvent.OutputObject
+  >;
 
   filters: {
     "NullifierBound(address,uint256,uint256,uint256)": TypedContractEvent<
@@ -314,6 +567,39 @@ export interface NullifierRegistry extends BaseContract {
       NullifierBoundEvent.InputTuple,
       NullifierBoundEvent.OutputTuple,
       NullifierBoundEvent.OutputObject
+    >;
+
+    "NullifierRebound(address,address,uint256,uint256)": TypedContractEvent<
+      NullifierReboundEvent.InputTuple,
+      NullifierReboundEvent.OutputTuple,
+      NullifierReboundEvent.OutputObject
+    >;
+    NullifierRebound: TypedContractEvent<
+      NullifierReboundEvent.InputTuple,
+      NullifierReboundEvent.OutputTuple,
+      NullifierReboundEvent.OutputObject
+    >;
+
+    "RebindCancelled(address,uint256,address)": TypedContractEvent<
+      RebindCancelledEvent.InputTuple,
+      RebindCancelledEvent.OutputTuple,
+      RebindCancelledEvent.OutputObject
+    >;
+    RebindCancelled: TypedContractEvent<
+      RebindCancelledEvent.InputTuple,
+      RebindCancelledEvent.OutputTuple,
+      RebindCancelledEvent.OutputObject
+    >;
+
+    "RebindRequested(address,address,uint256,uint256,uint48)": TypedContractEvent<
+      RebindRequestedEvent.InputTuple,
+      RebindRequestedEvent.OutputTuple,
+      RebindRequestedEvent.OutputObject
+    >;
+    RebindRequested: TypedContractEvent<
+      RebindRequestedEvent.InputTuple,
+      RebindRequestedEvent.OutputTuple,
+      RebindRequestedEvent.OutputObject
     >;
   };
 }

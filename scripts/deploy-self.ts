@@ -46,7 +46,7 @@ async function main() {
   //    processes do NOT inherit. Use `export FOO=bar`, or prefix the command
   //    inline: `ATTESTER_ADDRESS=0x.. npx hardhat run ...`.
   const attesterAddress = process.env.ATTESTER_ADDRESS;
-  if (!attesterAddress) {
+  if (!attesterAddress && !process.env.SELF_ATTESTER_REGISTRY_ADDRESS) {
     if (process.env.ALLOW_NO_ATTESTER !== '1') {
       throw new Error(
         'ATTESTER_ADDRESS is not set, so no trusted attester would be registered and\n' +
@@ -65,14 +65,29 @@ async function main() {
     throw new Error('ATTESTER_ADDRESS is the zero address.');
   }
 
+  // SELF_ATTESTER_REGISTRY_ADDRESS reuses a deployed allow-list (its owner and
+  // attesters stay); without it a fresh registry is deployed with ATTESTER_ADDRESS.
   const SelfAttesterRegistry = await ethers.getContractFactory('SelfAttesterRegistry');
-  const attesterRegistry = await SelfAttesterRegistry.deploy(
-    deployer.address,
-    attesterAddress ? [attesterAddress] : []
-  );
-  await attesterRegistry.waitForDeployment();
-  console.log('SelfAttesterRegistry:', await attesterRegistry.getAddress());
-  if (attesterAddress) console.log('  trusted attester:', attesterAddress);
+  const reuseAttesterRegistry = process.env.SELF_ATTESTER_REGISTRY_ADDRESS?.trim();
+  let attesterRegistry;
+  if (reuseAttesterRegistry) {
+    if (!ethers.isAddress(reuseAttesterRegistry)) {
+      throw new Error(`SELF_ATTESTER_REGISTRY_ADDRESS is not a valid address: ${reuseAttesterRegistry}`);
+    }
+    attesterRegistry = SelfAttesterRegistry.attach(reuseAttesterRegistry) as typeof attesterRegistry;
+    console.log('Reusing SelfAttesterRegistry:', reuseAttesterRegistry);
+    if (attesterAddress && !(await (attesterRegistry as any).isTrustedAttester(attesterAddress))) {
+      throw new Error(`${attesterAddress} is not a trusted attester on ${reuseAttesterRegistry}`);
+    }
+  } else {
+    attesterRegistry = await SelfAttesterRegistry.deploy(
+      deployer.address,
+      attesterAddress ? [attesterAddress] : []
+    );
+    await attesterRegistry.waitForDeployment();
+    console.log('SelfAttesterRegistry:', await attesterRegistry.getAddress());
+    if (attesterAddress) console.log('  trusted attester:', attesterAddress);
+  }
 
   // 3. Deploy NullifierRegistry. `expectedScope` is immutable, so a scope
   //    change means redeploying and re-binding every user. Re-derive it
@@ -136,12 +151,19 @@ async function main() {
   }
   console.log('selfDestChainId:', selfDestChainId, '(Self SelfApp.chainID, not the host chain)');
 
+  // Rebind delay (decision 0022): 0 applies a rebind at once (testnets);
+  // mainnet waits 72 hours so the bound account can cancel a takeover.
+  const rebindDelayRaw = process.env.REBIND_DELAY_SECONDS?.trim();
+  const rebindDelay = rebindDelayRaw ? BigInt(rebindDelayRaw) : network.name === 'base' ? 259_200n : 0n;
+  console.log('rebindDelay:', rebindDelay.toString(), 'seconds');
+
   const NullifierRegistry = await ethers.getContractFactory('NullifierRegistry');
   const nullifierRegistry = await NullifierRegistry.deploy(
     verifierAddress,
     await attesterRegistry.getAddress(),
     scope,
-    selfDestChainId
+    selfDestChainId,
+    rebindDelay
   );
   await nullifierRegistry.waitForDeployment();
   console.log('NullifierRegistry:', await nullifierRegistry.getAddress());
