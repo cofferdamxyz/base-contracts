@@ -188,6 +188,9 @@ yarn test
 # Deploy to Base Sepolia
 yarn deploy:all:sepolia
 
+# After a paymaster redeploy: move the EntryPoint deposit (DRY_RUN=1 previews)
+OLD_PAYMASTER=0x... yarn paymaster:move:sepolia
+
 # Launch enterprise CLI (requires submodule — see License Split below)
 yarn enterprise:cli
 ```
