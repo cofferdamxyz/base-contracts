@@ -1,77 +1,56 @@
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
+import { NO_PERMISSION, permission } from './helpers/keys';
 
 describe('AuthorityManagerBase (via CofferdamAccount4337)', () => {
   const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
 
-  it('should deploy a passkey-first account and close the ratchet', async () => {
-    const PasskeyAuthority = await ethers.getContractFactory('PasskeyAuthority');
-    const passkeyAuth = await PasskeyAuthority.deploy();
-    await passkeyAuth.waitForDeployment();
+  async function registries(modules: string[]) {
+    const [owner] = await ethers.getSigners();
+    const moduleRegistry = await (await ethers.getContractFactory('CofferdamModuleRegistry')).deploy(owner.address, modules);
+    const ceremonyRegistry = await (await ethers.getContractFactory('CofferdamCeremonyAttesterRegistry')).deploy(owner.address, []);
+    return { moduleRegistry, ceremonyRegistry };
+  }
+
+  it('should deploy a passkey-first account with the first-High paths closed', async () => {
+    const passkeyAuth = await (await ethers.getContractFactory('PasskeyAuthority')).deploy();
+    const { moduleRegistry, ceremonyRegistry } = await registries([await passkeyAuth.getAddress()]);
 
     // Generate a dummy P-256 public key
-    const qx = ethers.randomBytes(32);
-    const qy = ethers.randomBytes(32);
-    const config = ethers.AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32'], [qx, qy]);
+    const config = ethers.AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32'], [ethers.randomBytes(32), ethers.randomBytes(32)]);
 
     const Account = await ethers.getContractFactory('CofferdamAccount4337');
-    const account = await Account.deploy(ENTRYPOINT_V07, await passkeyAuth.getAddress(), config);
+    const account = await Account.deploy(ENTRYPOINT_V07, moduleRegistry, ceremonyRegistry, passkeyAuth, config, NO_PERMISSION);
     await account.waitForDeployment();
 
-    // A passkey at genesis should close the ratchet
     expect(await account.upgradeLocked()).to.be.true;
     expect(await account.passkeyCount()).to.equal(1);
     expect(await account.authorityCount()).to.equal(1);
   });
 
-  it('should deploy a session-first account with ratchet open', async () => {
-    const SessionKeyAuthority = await ethers.getContractFactory('SessionKeyAuthority');
-    const sessionAuth = await SessionKeyAuthority.deploy(1); // LowUntrusted
-    await sessionAuth.waitForDeployment();
+  it('should deploy a Managed-first account with no High yet', async () => {
+    const sessionAuth = await (await ethers.getContractFactory('SessionKeyAuthority')).deploy();
+    const counter = await (await ethers.getContractFactory('MockCounter')).deploy();
+    const { moduleRegistry, ceremonyRegistry } = await registries([await sessionAuth.getAddress()]);
 
     const [signer] = await ethers.getSigners();
     const config = ethers.AbiCoder.defaultAbiCoder().encode(['address'], [signer.address]);
+    const grant = permission([[await counter.getAddress(), counter.interface.getFunction('increment')!.selector]]);
 
     const Account = await ethers.getContractFactory('CofferdamAccount4337');
-    const account = await Account.deploy(ENTRYPOINT_V07, await sessionAuth.getAddress(), config);
+    const account = await Account.deploy(ENTRYPOINT_V07, moduleRegistry, ceremonyRegistry, sessionAuth, config, grant);
     await account.waitForDeployment();
 
-    // Session key at genesis: ratchet NOT locked, no passkeys
     expect(await account.upgradeLocked()).to.be.false;
     expect(await account.passkeyCount()).to.equal(0);
     expect(await account.authorityCount()).to.equal(1);
   });
 });
 
-describe('CofferdamAccountFactory4337', () => {
-  const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
-
-  it('should compute deterministic counterfactual addresses', async () => {
-    const PasskeyAuthority = await ethers.getContractFactory('PasskeyAuthority');
-    const passkeyAuth = await PasskeyAuthority.deploy();
-    await passkeyAuth.waitForDeployment();
-
-    const Factory = await ethers.getContractFactory('CofferdamAccountFactory4337');
-    const factory = await Factory.deploy(ENTRYPOINT_V07);
-    await factory.waitForDeployment();
-
-    const qx = ethers.id('test-qx');
-    const qy = ethers.id('test-qy');
-    const config = ethers.AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32'], [qx, qy]);
-    const salt = ethers.id('test-salt');
-
-    const authorityAddress = await passkeyAuth.getAddress();
-    const addr1 = await factory.getFunction('getAddress')(authorityAddress, config, salt);
-    const addr2 = await factory.getFunction('getAddress')(authorityAddress, config, salt);
-    expect(addr1).to.equal(addr2);
-    expect(addr1).to.not.equal(ethers.ZeroAddress);
-  });
-});
-
 describe('SessionKeyAuthority', () => {
   it('should verify a valid session signer signature', async () => {
     const SessionKeyAuthority = await ethers.getContractFactory('SessionKeyAuthority');
-    const sessionAuth = await SessionKeyAuthority.deploy(1); // LowUntrusted
+    const sessionAuth = await SessionKeyAuthority.deploy();
     await sessionAuth.waitForDeployment();
 
     const [signer] = await ethers.getSigners();

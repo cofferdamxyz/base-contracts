@@ -20,7 +20,7 @@ export async function accountMenu(rpcUrl: string, wallet: PrefundedWallet): Prom
       { name: 'List saved accounts', value: 'list' },
       { name: 'Check account balance & authorities', value: 'inspect' },
       { name: 'Fund account with ETH', value: 'fund' },
-      { name: 'Send ETH from account (via EntryPoint)', value: 'send' },
+      { name: 'Make a permitted call from a Managed account (via EntryPoint)', value: 'send' },
       { name: 'Deposit to EntryPoint for gas', value: 'deposit' },
       { name: 'Back', value: 'back' },
     ],
@@ -58,16 +58,24 @@ async function deployAccount(rpcUrl: string, wallet: PrefundedWallet): Promise<v
   const authorityType = await select({
     message: 'Select initial authority type:',
     choices: [
-      { name: 'SessionKeyAuthority (LowUntrusted) — legacy/session onboarding', value: 'session' },
+      { name: 'SessionKeyAuthority (Managed) — employer bridge key, scoped calls', value: 'session' },
       { name: 'WebAuthnPasskeyAuthority (High) — passkey-first onboarding', value: 'passkey' },
     ],
   });
 
   let moduleAddress: string;
   let initConfig: string;
+  let permission = {
+    targets: [] as string[],
+    selectors: [] as string[],
+    codeHashes: [] as string[],
+    codeSelectors: [] as string[],
+    valueCap: 0n,
+    expiry: 0n,
+  };
 
   if (authorityType === 'session') {
-    moduleAddress = config.sessionKeyAuthorityUntrusted!;
+    moduleAddress = config.sessionKeyAuthorityManaged!;
     const sessionWallets = getWallets();
     const sessionChoice = await select({
       message: 'Select session signer wallet:',
@@ -77,6 +85,10 @@ async function deployAccount(rpcUrl: string, wallet: PrefundedWallet): Promise<v
       })),
     });
     initConfig = ethers.AbiCoder.defaultAbiCoder().encode(['address'], [sessionWallets[sessionChoice].address]);
+    // A Managed authority may call only what its permission lists (decision 0016).
+    const target = await input({ message: 'Permitted target contract address:' });
+    const fn = await input({ message: 'Permitted function signature:', default: 'increment()' });
+    permission = { ...permission, targets: [ethers.getAddress(target)], selectors: [ethers.id(fn).slice(0, 10)] };
   } else {
     moduleAddress = config.webAuthnPasskeyAuthority!;
     const useRandom = await confirm({ message: 'Generate random passkey X/Y?', default: true });
@@ -105,8 +117,11 @@ async function deployAccount(rpcUrl: string, wallet: PrefundedWallet): Promise<v
     signer,
     'account/CofferdamAccount4337',
     config.entryPoint,
+    config.moduleRegistry,
+    config.ceremonyAttesterRegistry,
     moduleAddress,
-    initConfig
+    initConfig,
+    permission
   );
   const accountAddr = await account.getAddress();
   printKV('Account deployed', accountAddr);
@@ -155,7 +170,7 @@ async function inspectAccount(rpcUrl: string, wallet: PrefundedWallet): Promise<
 
   for (let i = 0n; i < authorityCount; i++) {
     const auth = await account.getAuthority(i);
-    const tierNames = ['None', 'LowUntrusted', 'LowManaged', 'High'];
+    const tierNames = ['None', 'LowUntrusted (retired)', 'Managed', 'High', 'Partner'];
     const tierName = tierNames[Number(auth.tier)] || `Unknown(${auth.tier})`;
     printKV(`  Authority #${i}`, `${fmtAddr(auth.module)} | tier=${tierName} | active=${auth.active}`);
   }
@@ -225,7 +240,7 @@ async function sendFromAccount(rpcUrl: string, wallet: PrefundedWallet): Promise
 
   let signingWallet: PrefundedWallet;
 
-  if (tier === 1 || tier === 2) {
+  if (tier === 2) {
     const sessionSignerAddr = ethers.AbiCoder.defaultAbiCoder().decode(['address'], authConfig)[0];
     const wallets = getWallets();
     const match = wallets.find(w => w.address.toLowerCase() === (sessionSignerAddr as string).toLowerCase());
@@ -235,23 +250,27 @@ async function sendFromAccount(rpcUrl: string, wallet: PrefundedWallet): Promise
       return;
     }
     signingWallet = match;
-    printKV('Authority', tier === 1 ? 'SessionKey (untrusted)' : 'SessionKey (managed)');
+    printKV('Authority', 'SessionKey (managed)');
     printKV('Module', fmtAddr(moduleAddr));
     printKV('Session signer', `${match.label} — ${fmtAddr(match.address)}`);
   } else {
     console.log('\n  ⚠ This account uses a passkey authority (WebAuthn/P256).');
     console.log('  Passkey signing is not supported in the CLI.');
-    console.log('  Use a session-key account instead, or implement WebAuthn signing.');
+    console.log('  Use a Managed (session-key) account instead, or implement WebAuthn signing.');
     return;
   }
 
-  const toAddr = await input({ message: 'Recipient address:' });
-  const amountStr = await input({ message: 'Amount in ETH:', default: '0.01' });
-  const amount = ethers.parseEther(amountStr);
+  // Managed may call only its permitted (target, selector) pairs, with no
+  // value unless a High signer granted a value cap.
+  const permission = await account.getPermission(0n);
+  const toAddr = await input({ message: 'Target address:', default: permission.targets[0] });
+  const fn = await input({ message: 'Function signature (no arguments):', default: 'increment()' });
+  const amount = 0n;
+  const data = ethers.id(fn).slice(0, 10);
 
   const accountIface = loadArtifact('account/CofferdamAccount4337').abi;
   const accountInterface = new ethers.Interface(accountIface);
-  const callData = accountInterface.encodeFunctionData('execute', [toAddr, amount, '0x']);
+  const callData = accountInterface.encodeFunctionData('execute', [toAddr, amount, data]);
   const nonce = await ep.getNonce(accountAddr, 0);
 
   const feeData = await provider.getFeeData();
@@ -291,8 +310,8 @@ async function sendFromAccount(rpcUrl: string, wallet: PrefundedWallet): Promise
 
   const signedUserOp = { ...userOp, signature };
 
-  printKV('Recipient', fmtAddr(toAddr));
-  printKV('Amount', `${ethers.formatEther(amount)} ETH`);
+  printKV('Target', fmtAddr(toAddr));
+  printKV('Call', fn);
 
   const ok = await confirm({ message: 'Submit this UserOp?' });
   if (!ok) return;

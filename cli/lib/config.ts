@@ -5,8 +5,10 @@ export interface DeploymentConfig {
   entryPoint: string;
   passkeyAuthority?: string;
   webAuthnPasskeyAuthority?: string;
-  sessionKeyAuthorityUntrusted?: string;
+  partnerPasskeyAuthority?: string;
   sessionKeyAuthorityManaged?: string;
+  moduleRegistry?: string;
+  ceremonyAttesterRegistry?: string;
   accountFactory?: string;
   paymaster?: string;
   selfAttesterRegistry?: string;

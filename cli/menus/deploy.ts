@@ -39,19 +39,33 @@ export async function deployMenu(rpcUrl: string, wallet: PrefundedWallet): Promi
 async function deployAuth(signer: ethers.Wallet): Promise<void> {
   printHeader('Deploying Auth Framework');
 
+  // Raw P-256 (no RP binding): local and test networks only (decision 0016).
   const passkeyAuth = await deployContract(signer, 'auth/PasskeyAuthority');
-  printKV('PasskeyAuthority', await passkeyAuth.getAddress());
+  printKV('PasskeyAuthority (test only)', await passkeyAuth.getAddress());
 
   const webAuthnAuth = await deployContract(signer, 'auth/WebAuthnPasskeyAuthority');
-  printKV('WebAuthnPasskeyAuthority', await webAuthnAuth.getAddress());
+  printKV('WebAuthnPasskeyAuthority (High)', await webAuthnAuth.getAddress());
 
-  const sessionUntrusted = await deployContract(signer, 'auth/SessionKeyAuthority', 1);
-  printKV('SessionKeyAuthority (untrusted)', await sessionUntrusted.getAddress());
+  const partnerAuth = await deployContract(signer, 'auth/PartnerPasskeyAuthority');
+  printKV('PartnerPasskeyAuthority (Partner)', await partnerAuth.getAddress());
 
-  const sessionManaged = await deployContract(signer, 'auth/SessionKeyAuthority', 2);
-  printKV('SessionKeyAuthority (managed)', await sessionManaged.getAddress());
+  const sessionManaged = await deployContract(signer, 'auth/SessionKeyAuthority');
+  printKV('SessionKeyAuthority (Managed)', await sessionManaged.getAddress());
 
-  const factory = await deployContract(signer, 'account/CofferdamAccountFactory4337', ENTRYPOINT_V07);
+  const modules = await Promise.all([passkeyAuth, webAuthnAuth, partnerAuth, sessionManaged].map((m) => m.getAddress()));
+  const moduleRegistry = await deployContract(signer, 'registry/CofferdamModuleRegistry', signer.address, modules);
+  printKV('CofferdamModuleRegistry', await moduleRegistry.getAddress());
+
+  const ceremonyRegistry = await deployContract(signer, 'registry/CofferdamCeremonyAttesterRegistry', signer.address, []);
+  printKV('CofferdamCeremonyAttesterRegistry', await ceremonyRegistry.getAddress());
+
+  const factory = await deployContract(
+    signer,
+    'account/CofferdamAccountFactory4337',
+    ENTRYPOINT_V07,
+    await moduleRegistry.getAddress(),
+    await ceremonyRegistry.getAddress(),
+  );
   printKV('CofferdamAccountFactory4337', await factory.getAddress());
 
   const paymaster = await deployContract(signer, 'account/CofferdamPaymaster', ENTRYPOINT_V07);
@@ -61,8 +75,10 @@ async function deployAuth(signer: ethers.Wallet): Promise<void> {
     entryPoint: ENTRYPOINT_V07,
     passkeyAuthority: await passkeyAuth.getAddress(),
     webAuthnPasskeyAuthority: await webAuthnAuth.getAddress(),
-    sessionKeyAuthorityUntrusted: await sessionUntrusted.getAddress(),
+    partnerPasskeyAuthority: await partnerAuth.getAddress(),
     sessionKeyAuthorityManaged: await sessionManaged.getAddress(),
+    moduleRegistry: await moduleRegistry.getAddress(),
+    ceremonyAttesterRegistry: await ceremonyRegistry.getAddress(),
     accountFactory: await factory.getAddress(),
     paymaster: await paymaster.getAddress(),
   });

@@ -3,7 +3,7 @@
 ## Scope
 
 Cofferdam's Base contracts: the ERC-4337 account layer (`contracts/account/`,
-`contracts/auth/`), the Self.xyz registries (`contracts/self/`) and the
+`contracts/auth/`, `contracts/registry/`), the Self.xyz registries (`contracts/self/`) and the
 interfaces, all MIT, plus the proprietary enterprise module as the private git
 submodule `contracts/enterprise/` (`cofferdamxyz/enterprise-contracts`,
 `ADR-001-CORE-ENTERPRISE-SPLIT.md`). Hardhat with TypeScript tests;

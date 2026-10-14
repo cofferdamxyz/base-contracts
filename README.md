@@ -45,14 +45,18 @@ contracts/
 │   ├── IEntryPoint.sol                  # ERC-4337 EntryPoint v0.7 minimal interface
 │   └── IB20Factory.sol                  # B20 + PolicyRegistry interfaces
 ├── account/                             # MIT — ERC-4337 account layer
-│   ├── AuthorityManagerBase.sol         # Authority registry + one-way ratchet
+│   ├── AuthorityManagerBase.sol         # Authority registry, permissions, last-High guard
 │   ├── CofferdamAccount4337.sol         # ERC-4337 account (validateUserOp + execute)
 │   ├── CofferdamAccountFactory4337.sol  # CREATE2 counterfactual factory
 │   └── CofferdamPaymaster.sol           # Stub verifying paymaster, EntryPoint v0.7 4-arg postOp (→ CDP in production)
 ├── auth/                                # MIT — authority modules
-│   ├── PasskeyAuthority.sol             # P-256 raw signature (RIP-7212 precompile)
-│   ├── WebAuthnPasskeyAuthority.sol     # Full WebAuthn assertion verification
-│   └── SessionKeyAuthority.sol          # ECDSA session-signer bridge (legacy auth)
+│   ├── PasskeyAuthority.sol             # P-256 raw signature (test networks only)
+│   ├── WebAuthnPasskeyAuthority.sol     # High: WebAuthn assertion, rpIdHash pinned to cofferdam.xyz
+│   ├── PartnerPasskeyAuthority.sol      # Partner: passkey on a partner app's RP
+│   └── SessionKeyAuthority.sol          # Managed: employer bridge ECDSA key
+├── registry/                            # MIT — governed allowlists (owner = Cofferdam Safe)
+│   ├── CofferdamModuleRegistry.sol      # Authority modules an account may install
+│   └── CofferdamCeremonyAttesterRegistry.sol # Keys that co-sign first-High and Partner recovery
 ├── self/                                # MIT — Self.xyz sybil resistance
 │   ├── SelfAttesterRegistry.sol         # Trusted Self.xyz TEE attester allow-list
 │   ├── NullifierRegistry.sol            # Passport nullifier → account binding
@@ -60,6 +64,7 @@ contracts/
 │   └── SelfPublicSignals.sol            # Public signal index constants
 ├── test/                                # MIT — test mocks
 │   ├── MockCounter.sol
+│   ├── MockTierModule.sol
 │   └── MockGroth16Verifier.sol
 └── enterprise/  ← GIT SUBMODULE (proprietary, github.com/cofferdamxyz/enterprise-contracts)
     ├── LICENSE                          # Proprietary license terms
@@ -80,6 +85,54 @@ contracts/
         ├── lib/                             # CSV import, provisioning, Merkle, wallets
         └── menus/                           # Deploy, company, orgtree, spot, payroll, state
 ```
+
+## Account Authority Model
+
+`CofferdamAccount4337` enforces the tiers of `rules/cofferdam-identity.md` and
+decisions 0015 and 0016 (`cofferdam` repository) in `validateUserOp`, against
+the userOp's call data. Accounts are not upgradeable, so these rules are fixed
+per deployed factory.
+
+| Tier | Module | Key | May sign |
+|---|---|---|---|
+| High | `WebAuthnPasskeyAuthority` | `cofferdam.xyz` passkey (rpIdHash pinned, UV), only on Cofferdam surfaces | anything: calls, value, authority changes, ERC-1271 |
+| Partner | `PartnerPasskeyAuthority` | the user's passkey on a partner app's RP | `execute` / `executeBatch` of its `Permission`'s `(target, selector)` or `(codeHash, selector)` pairs, zero value, until expiry; `enrollFirstHigh` while no High exists |
+| Managed | `SessionKeyAuthority` | employer bridge ECDSA key | as Partner; value only when a High signer granted a cap |
+| LowUntrusted | none | retired | nothing: no module of this tier can be installed |
+
+- **Permissions** (`Permission { targets[], selectors[], codeHashes[],
+  codeSelectors[], valueCap, expiry }`) are fixed when a Partner or Managed
+  authority is granted and stored on the account, so no Cofferdam key can
+  widen a user's grant. A `(codeHash, selector)` entry reaches every contract
+  with that runtime code, for contracts deployed per job (each
+  `CofferdamSpotEscrow` from the `EscrowFactory` gets a new address; the
+  escrow's own role checks still decide who acts on it). A grant never lists
+  the account itself or a token-moving selector (`transfer`, `approve`,
+  `transferFrom`, `permit`, `setApprovalForAll`, Permit2, …); at most 16
+  pairs. The expiry is returned as `validUntil`. A partner grant should never
+  list `awardWorker`, which picks who an escrow pays.
+- **Module registry.** Every module, at genesis or later, must be listed in
+  the `CofferdamModuleRegistry` the factory pins. Mainnet lists only the
+  `cofferdam.xyz`-pinned module for High; raw `PasskeyAuthority` is for test
+  networks.
+- **First High** on a Partner or Managed account takes three signatures in
+  one op (`enrollFirstHigh`): the Partner/Managed signer, the new passkey's
+  assertion over `firstHighChallenge(ceremonyNonce)`, and a Cofferdam ceremony
+  co-sign from `CofferdamCeremonyAttesterRegistry` over `ceremonyHash(...)`,
+  valid in `[notBefore, expiry]` (the plane sets `notBefore` 72 hours after a
+  recovery). Every co-sign is single-use (`ceremonyNonce`).
+- **Partner recovery before High** (`replacePartnerAuthority`): the userOp
+  uses authorityId `RECOVERY_AUTHORITY_ID` (`type(uint256).max`) and is signed
+  by the new partner passkey; validation checks the partner backend's EIP-191
+  vouch from the `partnerSigner` in the old config; execution checks the
+  Cofferdam co-sign. Same partner, RP and permission; only the key changes.
+- **After High exists** only High adds or revokes authorities, the two paths
+  above are closed, and the last active High can never be revoked.
+- A signature the module rejects returns `SIG_VALIDATION_FAILED`; every other
+  failure (unknown or inactive authority, a call the tier may not make)
+  reverts.
+
+The byte-level encoding is in `docs/ACCOUNT_ENCODING.md`.
 
 ## Key Addresses
 
@@ -321,7 +374,7 @@ B20 ships with a built-in compliance toolkit directly relevant to Cofferdam payr
    knowledge.
 
 5. **Existing Cofferdam users can bind their account.** A worker who already
-   has a Cofferdam account (tier 1 LowUntrusted or tier 3 High passkey) can link
+   has a Cofferdam account (Partner or High passkey) can link
    it to their enterprise identity via **Cofferdam Wallet Bind** — they prove
    ownership of `user@domain.com` via SSO login, and their existing wallet
    address is mapped to the company's Merkle leaf instead of provisioning a new
@@ -617,9 +670,12 @@ removes their Merkle leaf but doesn't pause the company.
 | `CofferdamAccount4337` | ✅ Built | ERC-4337 account with tiered authority |
 | `CofferdamAccountFactory4337` | ✅ Built | CREATE2 deterministic deployment |
 | `CofferdamPaymaster` | ✅ Stub | Dev/test only — production uses CDP. `postOp` uses the EntryPoint **v0.7** 4-arg signature (`mode, context, actualGasCost, actualUserOpFeePerGas`); the v0.6 3-arg shape reverts (`PostOpReverted`) under v0.7. `Ownable` (owner = deployer); `withdrawTo` is `onlyOwner` |
-| `PasskeyAuthority` | ✅ Built | P-256 via RIP-7212 precompile |
-| `WebAuthnPasskeyAuthority` | ✅ Built | Full WebAuthn assertion verification |
-| `SessionKeyAuthority` | ✅ Built | ECDSA session-signer bridge (legacy auth) |
+| `PasskeyAuthority` | ✅ Built | Raw P-256 via RIP-7212 precompile; no RP binding, test networks only |
+| `WebAuthnPasskeyAuthority` | ✅ Built | High: WebAuthn assertion, `rpIdHash == sha256("cofferdam.xyz")`, UV |
+| `PartnerPasskeyAuthority` | ✅ Built | Partner: passkey on the partner's RP, scoped by a `Permission` |
+| `SessionKeyAuthority` | ✅ Built | Managed: employer bridge ECDSA key, scoped by a `Permission` |
+| `CofferdamModuleRegistry` | ✅ Built | Module allowlist pinned by the factory |
+| `CofferdamCeremonyAttesterRegistry` | ✅ Built | Ceremony co-sign keys (first High, Partner recovery) |
 | `NullifierRegistry` | ✅ Built | Self.xyz passport nullifier → account binding |
 | `SelfAttesterRegistry` | ✅ Built | TEE attester allowlist |
 | `MockGroth16Verifier` | ✅ Built | Always-true verifier for mock testing |
@@ -904,8 +960,8 @@ universal passkey sign-on, one-tap USDC payments, and multi-chain support.
 See [What is a Base Account?](https://docs.base.org/base-account/overview/what-is-base-account).
 
 - **ERC-6492 counterfactual signatures**: `isValidSignature` supports ERC-6492 wrapped signatures for undeployed accounts. Viem's `verifyMessage` / `verifyTypedData` handle the wrapper automatically.
-- **ERC-1271 replay safety**: the authority signs `replaySafeHash(hash)` (EIP-712 `CofferdamAccountMessage(bytes32 hash)` under the account's own domain), not the verifier's hash, so a signature is valid on one account and chain only. Only High and LowManaged authorities can sign; see `docs/ACCOUNT_ENCODING.md` §5.5.
-- **Sub Account import**: `addOwnerAddress` / `addOwnerPublicKey` mirror the Coinbase Smart Wallet pattern, allowing Cofferdam accounts to be imported as Sub Accounts via `wallet_addSubAccount`.
+- **ERC-1271 replay safety**: the authority signs `replaySafeHash(hash)` (EIP-712 `CofferdamAccountMessage(bytes32 hash)` under the account's own domain), not the verifier's hash, so a signature is valid on one account and chain only. Only High authorities can sign (decision 0016); see `docs/ACCOUNT_ENCODING.md` §5.5.
+- **Sub Account import**: not supported. The former `addOwnerAddress` / `addOwnerPublicKey` shims did nothing and were removed; an owner is added with `addAuthority` by a High signer.
 - **CDP Paymaster**: Production gas sponsorship uses the Coinbase-hosted ERC-7677 paymaster via `paymasterService` capability in `wallet_sendCalls` — no onchain paymaster contract needed.
 - **Spend Permissions**: Base's native `SpendPermissionManager` supports recurring period-based token allowances (EIP-712 structured, ERC-6492 compatible). Relevant for future payroll escrow replacement. See [Spend Permissions](https://docs.base.org/base-account/reference/onchain-contracts/spend-permissions).
 - **Permit2**: Preinstalled at `0x000000000022D473030F116dDEE9F6B43aC78BA3` for token approvals.
@@ -913,8 +969,8 @@ See [What is a Base Account?](https://docs.base.org/base-account/overview/what-i
 - **"Login with Base" (passkey reuse)**: Users with an existing Base Account (e.g. Coinbase wallet) can onboard to Cofferdam without registering a new passkey. The flow:
   1. User authenticates via Base Account SDK (`createBaseAccountSDK` → `eth_requestAccounts`), which verifies their existing passkey.
   2. Cofferdam reads the user's passkey public key from their Base Account.
-  3. A new `CofferdamAccount4337` is deployed via `CofferdamAccountFactory4337` with `WebAuthnPasskeyAuthority` using that same passkey as the High-tier authority.
-  4. The Cofferdam account is independent — it has its own ratchet, authority model, and is not controlled by Coinbase. The Coinbase passkey simply becomes the Cofferdam passkey.
+  3. ~~A new `CofferdamAccount4337` is deployed with that same passkey as the High-tier authority.~~ Not possible since decision 0016: `WebAuthnPasskeyAuthority` accepts only `cofferdam.xyz` passkeys, and a Base Account passkey lives on Coinbase's RP. A Base Account passkey could at most be a Partner authority.
+  4. The Cofferdam account is independent: its own authority model, not controlled by Coinbase.
   5. No EIP-7702 delegation is used; the Cofferdam account is a standalone deployed smart account with no EOA backdoor.
   - **Status**: Not yet implemented. Requires Base Account SDK integration in the client app and a passkey-public-key extraction step. See [Base Account SDK](https://docs.base.org/base-account/reference/core/createBaseAccount).
 

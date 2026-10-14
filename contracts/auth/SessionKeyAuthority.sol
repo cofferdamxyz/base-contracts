@@ -4,38 +4,27 @@ pragma solidity 0.8.28;
 import {IAuthorityModule, Tier} from "../interfaces/IAuthorityModule.sol";
 
 /// @title SessionKeyAuthority
-/// @notice The legacy-auth bridge. This is the single module that lets any
-///         consumer app already running on a non-passkey auth method —
-///         local password, Google / Apple OAuth, or a Polis SSO JWT — bind a
-///         Base smart account today and migrate to a hardware passkey
-///         later, with no change to the on-chain account ABI.
+/// @notice The Managed-tier bridge: the employer IdP (e.g. Polis SSO) vouches
+///         for the worker with a server-held ECDSA key registered on the
+///         account. Always `Tier.LowManaged`.
 ///
 /// @dev    On-chain RS256/JWT verification is expensive and brittle, and the
-///         consumer's server ALREADY authenticates the user (it validated the
-///         password, the OAuth code exchange, or the OIDC ID-token). So instead
-///         of re-verifying the JWT on-chain, this module trusts a per-account
-///         **session signer**: a server-held ECDSA key the consumer registers as
-///         the account's authority `config`. After the server authenticates the
-///         user through the legacy flow, it signs the account's userOpHash with
-///         that key; this module recovers the signer and checks it matches.
+///         employer's bridge ALREADY authenticated the worker through the IdP.
+///         So instead of re-verifying the JWT on-chain, this module trusts a
+///         per-account **session signer**: the bridge key registered as the
+///         account's authority `config`. After the IdP login the bridge signs
+///         the account's userOpHash with that key; this module recovers the
+///         signer and checks it matches.
 ///
-///         The trust class is identical to the bind-attester already used by
-///         `NullifierRegistry` (`SelfAttesterRegistry`): a Cofferdam/consumer
-///         server vouches off-chain, the chain verifies the vouch cheaply. This
-///         is deliberately a **low tier**:
+///         What a Managed authority may call is the account's decision, not
+///         this module's: a `Permission` of allowlisted company calls, scoped
+///         like Partner (decision 0016). It coexists with a later High passkey
+///         (OR semantics, IDENTITY_LAYER_DESIGN.md §3.10). Revocation is SCIM
+///         on the IdP side plus `revokeAuthority` by High on-chain.
 ///
-///           - Deployed at `Tier.LowUntrusted` it models a leakable consumer
-///             credential. On `CofferdamAccount4337` it may ONLY authorise the
-///             first passkey enrolment (zero value), after which the one-way
-///             ratchet permanently locks it out (IDENTITY_LAYER_DESIGN.md §2.5.2).
-///           - Deployed at `Tier.LowManaged` it models the IdP-brokered Polis
-///             SSO authority: it is NOT ratchet-locked and coexists with a later
-///             passkey under OR semantics (§3.10). Central revocation is handled
-///             by the consumer rotating / zeroing the registered signer.
-///
-///         Two `kind()`s are exposed via the constructor so off-chain indexers
-///         can distinguish the consumer-session bridge from the managed Polis
-///         bridge even though they share this implementation.
+///         A consumer app's server key is never an account authority (decision
+///         0016): the former `Tier.LowUntrusted` deployment of this module is
+///         retired, and the account rejects that tier.
 ///
 ///         This contract is pure Solidity (no imports beyond the interface).
 contract SessionKeyAuthority is IAuthorityModule {
@@ -43,40 +32,16 @@ contract SessionKeyAuthority is IAuthorityModule {
     ///      to prevent signature malleability (EIP-2).
     uint256 private constant HALF_N = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0;
 
-    bytes32 public constant KIND_SESSION = keccak256("session");
     bytes32 public constant KIND_POLIS_SSO = keccak256("polis_sso");
 
-    Tier private immutable _tier;
-    bytes32 private immutable _kind;
-
-    /// @param tier_ Either `Tier.LowUntrusted` (consumer password/OAuth bridge)
-    ///              or `Tier.LowManaged` (Polis SSO). High/None are rejected —
-    ///              a server-held ECDSA key is by construction not a high-tier
-    ///              hardware authority.
-    constructor(Tier tier_) {
-        require(
-            tier_ == Tier.LowUntrusted || tier_ == Tier.LowManaged,
-            "SessionKeyAuthority: tier must be a low tier"
-        );
-        _tier = tier_;
-        _kind = tier_ == Tier.LowManaged ? KIND_POLIS_SSO : KIND_SESSION;
-    }
-
     /// @inheritdoc IAuthorityModule
-    function tier() external view returns (Tier) {
-        return _tier;
+    function tier() external pure returns (Tier) {
+        return Tier.LowManaged;
     }
 
     /// @inheritdoc IAuthorityModule
     function kind() external pure returns (bytes32) {
-        return KIND_SESSION;
-    }
-
-    /// @notice The deploy-time kind of THIS instance (session vs polis_sso).
-    /// @dev    Companion to the interface's `pure kind()`; off-chain code should
-    ///         prefer this for the managed/untrusted distinction.
-    function kindOf() external view returns (bytes32) {
-        return _kind;
+        return KIND_POLIS_SSO;
     }
 
     /// @inheritdoc IAuthorityModule
