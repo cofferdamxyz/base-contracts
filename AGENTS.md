@@ -6,8 +6,9 @@ Cofferdam's Base contracts: the ERC-4337 account layer (`contracts/account/`,
 `contracts/auth/`, `contracts/registry/`), the Self.xyz registries (`contracts/self/`) and the
 interfaces, all MIT, plus the proprietary enterprise module as the private git
 submodule `contracts/enterprise/` (`cofferdamxyz/enterprise-contracts`,
-`ADR-001-CORE-ENTERPRISE-SPLIT.md`). Hardhat with TypeScript tests;
-`docs/ACCOUNT_ENCODING.md` describes the account encoding.
+decision 0002). Hardhat with TypeScript tests. Design and the byte-level
+encoding live in the workspace: `docs/architecture/contracts.md` and
+`docs/architecture/account-encoding.md`.
 
 ## Rules
 
@@ -16,12 +17,17 @@ submodule `contracts/enterprise/` (`cofferdamxyz/enterprise-contracts`,
 - `typechain-types/` is tracked: regenerate it (compile) and commit it with
   any ABI change.
 - The enterprise submodule is private: cloud clones do not receive it and must
-  not try to fetch it; the public core compiles and tests without it.
+  not try to fetch it. The public core compiles without it, but
+  `test/spot-escrow-witness.test.ts` needs it (no guard yet), so `yarn test`
+  fails in a clone without the submodule.
 - Deployed addresses live in `deployments/baseSepolia.json` and are mirrored
-  in the SDK (`SEPOLIA_DEPLOYMENTS`) and the API. A change to a deployed
-  contract is a redeploy (`scripts/deploy-*.ts`), the SDK and API address
-  update and a workspace decision; never edit an address in one place.
-- Contract naming follows the `Cofferdam*` ladder in `rules/cofferdam-sdk.md`;
+  in the API (`cofferdam-api/src/chain/deployments.ts`), the attester's
+  registry pin, the app env and `docs/architecture/contracts.md`; the SDK
+  holds no address table. Accounts are immutable: a change to a deployed
+  contract is a redeploy (a new generation for the account layer, decision
+  0025), every mirror updated in the same pass, and a workspace decision.
+  Procedure: `docs/runbooks/sepolia-deploys.md`.
+- Contract naming follows `Cofferdam*` (`rules/cofferdam-sdk.md`);
   identity rules are `rules/cofferdam-identity.md`, both in the `cofferdam`
   repository (`../` on the Mac, `../cofferdam/` in a cloud session).
-- `README.md` and `docs/` describe behaviour; update them in the same commit.
+- `README.md` here and the workspace `docs/` describe behaviour; update them in the same pass.

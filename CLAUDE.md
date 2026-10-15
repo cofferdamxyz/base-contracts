@@ -13,8 +13,8 @@ present, and the `rules/<area>.md` for the area you touch.
 
 `yarn compile`, `yarn test`, `yarn typecheck`; commit the regenerated
 `typechain-types/`. The private `contracts/enterprise/` submodule is absent in
-cloud clones and must not be fetched there; the public core builds and tests
-without it.
+cloud clones and must not be fetched there; the public core builds without it,
+but the escrow witness test needs it.
 
 ## Delegated git (cloud session, Projects thread, Lockkeeper)
 
