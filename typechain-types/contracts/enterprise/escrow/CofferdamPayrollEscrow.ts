@@ -25,7 +25,9 @@ import type {
 
 export declare namespace CofferdamPayrollEscrow {
   export type PayrollEscrowPolicyStruct = {
+    worker: AddressLike;
     workerRole: BytesLike;
+    managerRole: BytesLike;
     payPeriodStart: BigNumberish;
     payPeriodEnd: BigNumberish;
     releaseDelay: BigNumberish;
@@ -34,14 +36,18 @@ export declare namespace CofferdamPayrollEscrow {
   };
 
   export type PayrollEscrowPolicyStructOutput = [
+    worker: string,
     workerRole: string,
+    managerRole: string,
     payPeriodStart: bigint,
     payPeriodEnd: bigint,
     releaseDelay: bigint,
     disputeWindow: bigint,
     managerApproval: boolean
   ] & {
+    worker: string;
     workerRole: string;
+    managerRole: string;
     payPeriodStart: bigint;
     payPeriodEnd: bigint;
     releaseDelay: bigint;
@@ -54,6 +60,7 @@ export interface CofferdamPayrollEscrowInterface extends Interface {
   getFunction(
     nameOrSignature:
       | "USDC"
+      | "approvedBy"
       | "claim"
       | "companyOrgRoot"
       | "dispute"
@@ -65,8 +72,8 @@ export interface CofferdamPayrollEscrowInterface extends Interface {
       | "managerApproved"
       | "policy"
       | "refund"
+      | "releaseAt"
       | "state"
-      | "worker"
   ): FunctionFragment;
 
   getEvent(
@@ -80,9 +87,10 @@ export interface CofferdamPayrollEscrowInterface extends Interface {
 
   encodeFunctionData(functionFragment: "USDC", values?: undefined): string;
   encodeFunctionData(
-    functionFragment: "claim",
-    values: [AddressLike, BytesLike[]]
+    functionFragment: "approvedBy",
+    values?: undefined
   ): string;
+  encodeFunctionData(functionFragment: "claim", values: [BytesLike[]]): string;
   encodeFunctionData(
     functionFragment: "companyOrgRoot",
     values?: undefined
@@ -97,7 +105,7 @@ export interface CofferdamPayrollEscrowInterface extends Interface {
   encodeFunctionData(functionFragment: "funder", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "managerApprove",
-    values?: undefined
+    values: [BytesLike[]]
   ): string;
   encodeFunctionData(
     functionFragment: "managerApproved",
@@ -105,10 +113,11 @@ export interface CofferdamPayrollEscrowInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "policy", values?: undefined): string;
   encodeFunctionData(functionFragment: "refund", values?: undefined): string;
+  encodeFunctionData(functionFragment: "releaseAt", values?: undefined): string;
   encodeFunctionData(functionFragment: "state", values?: undefined): string;
-  encodeFunctionData(functionFragment: "worker", values?: undefined): string;
 
   decodeFunctionResult(functionFragment: "USDC", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "approvedBy", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "claim", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "companyOrgRoot",
@@ -132,8 +141,8 @@ export interface CofferdamPayrollEscrowInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "policy", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "refund", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "releaseAt", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "state", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "worker", data: BytesLike): Result;
 }
 
 export namespace EscrowDisputedEvent {
@@ -288,11 +297,9 @@ export interface CofferdamPayrollEscrow extends BaseContract {
 
   USDC: TypedContractMethod<[], [string], "view">;
 
-  claim: TypedContractMethod<
-    [_worker: AddressLike, _merkleProof: BytesLike[]],
-    [void],
-    "nonpayable"
-  >;
+  approvedBy: TypedContractMethod<[], [string], "view">;
+
+  claim: TypedContractMethod<[_workerProof: BytesLike[]], [void], "nonpayable">;
 
   companyOrgRoot: TypedContractMethod<[], [string], "view">;
 
@@ -306,15 +313,21 @@ export interface CofferdamPayrollEscrow extends BaseContract {
 
   funder: TypedContractMethod<[], [string], "view">;
 
-  managerApprove: TypedContractMethod<[], [void], "nonpayable">;
+  managerApprove: TypedContractMethod<
+    [_managerProof: BytesLike[]],
+    [void],
+    "nonpayable"
+  >;
 
   managerApproved: TypedContractMethod<[], [boolean], "view">;
 
   policy: TypedContractMethod<
     [],
     [
-      [string, bigint, bigint, bigint, bigint, boolean] & {
+      [string, string, string, bigint, bigint, bigint, bigint, boolean] & {
+        worker: string;
         workerRole: string;
+        managerRole: string;
         payPeriodStart: bigint;
         payPeriodEnd: bigint;
         releaseDelay: bigint;
@@ -327,9 +340,9 @@ export interface CofferdamPayrollEscrow extends BaseContract {
 
   refund: TypedContractMethod<[], [void], "nonpayable">;
 
-  state: TypedContractMethod<[], [bigint], "view">;
+  releaseAt: TypedContractMethod<[], [bigint], "view">;
 
-  worker: TypedContractMethod<[], [string], "view">;
+  state: TypedContractMethod<[], [bigint], "view">;
 
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
@@ -339,12 +352,11 @@ export interface CofferdamPayrollEscrow extends BaseContract {
     nameOrSignature: "USDC"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "approvedBy"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "claim"
-  ): TypedContractMethod<
-    [_worker: AddressLike, _merkleProof: BytesLike[]],
-    [void],
-    "nonpayable"
-  >;
+  ): TypedContractMethod<[_workerProof: BytesLike[]], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "companyOrgRoot"
   ): TypedContractMethod<[], [string], "view">;
@@ -365,7 +377,7 @@ export interface CofferdamPayrollEscrow extends BaseContract {
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "managerApprove"
-  ): TypedContractMethod<[], [void], "nonpayable">;
+  ): TypedContractMethod<[_managerProof: BytesLike[]], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "managerApproved"
   ): TypedContractMethod<[], [boolean], "view">;
@@ -374,8 +386,10 @@ export interface CofferdamPayrollEscrow extends BaseContract {
   ): TypedContractMethod<
     [],
     [
-      [string, bigint, bigint, bigint, bigint, boolean] & {
+      [string, string, string, bigint, bigint, bigint, bigint, boolean] & {
+        worker: string;
         workerRole: string;
+        managerRole: string;
         payPeriodStart: bigint;
         payPeriodEnd: bigint;
         releaseDelay: bigint;
@@ -389,11 +403,11 @@ export interface CofferdamPayrollEscrow extends BaseContract {
     nameOrSignature: "refund"
   ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "state"
+    nameOrSignature: "releaseAt"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
-    nameOrSignature: "worker"
-  ): TypedContractMethod<[], [string], "view">;
+    nameOrSignature: "state"
+  ): TypedContractMethod<[], [bigint], "view">;
 
   getEvent(
     key: "EscrowDisputed"

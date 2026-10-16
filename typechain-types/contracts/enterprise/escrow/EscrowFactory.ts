@@ -25,7 +25,9 @@ import type {
 
 export declare namespace CofferdamPayrollEscrow {
   export type PayrollEscrowPolicyStruct = {
+    worker: AddressLike;
     workerRole: BytesLike;
+    managerRole: BytesLike;
     payPeriodStart: BigNumberish;
     payPeriodEnd: BigNumberish;
     releaseDelay: BigNumberish;
@@ -34,14 +36,18 @@ export declare namespace CofferdamPayrollEscrow {
   };
 
   export type PayrollEscrowPolicyStructOutput = [
+    worker: string,
     workerRole: string,
+    managerRole: string,
     payPeriodStart: bigint,
     payPeriodEnd: bigint,
     releaseDelay: bigint,
     disputeWindow: bigint,
     managerApproval: boolean
   ] & {
+    worker: string;
     workerRole: string;
+    managerRole: string;
     payPeriodStart: bigint;
     payPeriodEnd: bigint;
     releaseDelay: bigint;
