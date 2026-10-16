@@ -30,10 +30,10 @@
     "address": "0x8c05Df95F91De2D70e0436B774fc9D1f86FF1f51"
   },
   "EscrowFactory": {
-    "address": "0x37553ab271a0078F95032B35F5494Fbf25206Fd2"
+    "address": "0xaCC382bc76b67250367B13BbC35d1Bf380A9c2F6"
   },
   "CofferdamSpotEscrow": {
-    "address": "0xe6dCFc3Af1cB944b0Aa03f27325E7E47e390d9b1"
+    "address": "0x8A279aC2DbdFFAc33eb60db743c067927FE999C8"
   },
   "Verifier_vc_and_disclose": {
     "address": "0x26fBC868344AF4E99874edFd0E3756EcC2359bEb"
