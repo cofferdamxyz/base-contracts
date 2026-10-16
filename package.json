@@ -22,7 +22,6 @@
     "deploy:self:local": "hardhat run scripts/deploy-self.ts --network localhost",
     "deploy:self:sepolia": "hardhat run scripts/deploy-self.ts --network baseSepolia",
     "deploy:all:local": "hardhat run scripts/deploy-all.ts --network localhost",
-    "deploy:all:sepolia": "hardhat run scripts/deploy-all.ts --network baseSepolia",
     "deploy:escrow:local": "hardhat run scripts/deploy-escrow.ts --network localhost",
     "deploy:escrow:sepolia": "hardhat run scripts/deploy-escrow.ts --network baseSepolia",
     "paymaster:move:sepolia": "hardhat run scripts/move-paymaster-deposit.ts --network baseSepolia",
