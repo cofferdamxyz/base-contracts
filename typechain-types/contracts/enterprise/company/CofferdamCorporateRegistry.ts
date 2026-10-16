@@ -26,15 +26,20 @@ import type {
 export interface CofferdamCorporateRegistryInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "COMPANY_REGISTRY"
+      | "acceptOwnership"
       | "delegateWitness"
       | "delegatedWitnesses"
       | "getOrgRoot"
       | "isCompanyPaused"
       | "isWitnessDelegated"
       | "orgRoots"
+      | "owner"
       | "pauseCompany"
       | "pausedCompanies"
+      | "pendingOwner"
       | "revokeWitness"
+      | "transferOwnership"
       | "unpauseCompany"
       | "updateOrgRoot"
   ): FunctionFragment;
@@ -44,10 +49,20 @@ export interface CofferdamCorporateRegistryInterface extends Interface {
       | "CompanyPaused"
       | "CompanyUnpaused"
       | "OrgRootUpdated"
+      | "OwnershipTransferStarted"
+      | "OwnershipTransferred"
       | "WitnessDelegated"
       | "WitnessRevoked"
   ): EventFragment;
 
+  encodeFunctionData(
+    functionFragment: "COMPANY_REGISTRY",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "acceptOwnership",
+    values?: undefined
+  ): string;
   encodeFunctionData(
     functionFragment: "delegateWitness",
     values: [BytesLike, AddressLike]
@@ -69,6 +84,7 @@ export interface CofferdamCorporateRegistryInterface extends Interface {
     values: [BytesLike, AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "orgRoots", values: [BytesLike]): string;
+  encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "pauseCompany",
     values: [BytesLike]
@@ -78,8 +94,16 @@ export interface CofferdamCorporateRegistryInterface extends Interface {
     values: [BytesLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "pendingOwner",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "revokeWitness",
     values: [BytesLike, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "transferOwnership",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "unpauseCompany",
@@ -90,6 +114,14 @@ export interface CofferdamCorporateRegistryInterface extends Interface {
     values: [BytesLike, BytesLike]
   ): string;
 
+  decodeFunctionResult(
+    functionFragment: "COMPANY_REGISTRY",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "acceptOwnership",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "delegateWitness",
     data: BytesLike
@@ -108,6 +140,7 @@ export interface CofferdamCorporateRegistryInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "orgRoots", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "pauseCompany",
     data: BytesLike
@@ -117,7 +150,15 @@ export interface CofferdamCorporateRegistryInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "pendingOwner",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "revokeWitness",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "transferOwnership",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -174,6 +215,32 @@ export namespace OrgRootUpdatedEvent {
     newRoot: string;
     generation: bigint;
     updatedAt: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace OwnershipTransferStartedEvent {
+  export type InputTuple = [previousOwner: AddressLike, newOwner: AddressLike];
+  export type OutputTuple = [previousOwner: string, newOwner: string];
+  export interface OutputObject {
+    previousOwner: string;
+    newOwner: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace OwnershipTransferredEvent {
+  export type InputTuple = [previousOwner: AddressLike, newOwner: AddressLike];
+  export type OutputTuple = [previousOwner: string, newOwner: string];
+  export interface OutputObject {
+    previousOwner: string;
+    newOwner: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -250,6 +317,10 @@ export interface CofferdamCorporateRegistry extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  COMPANY_REGISTRY: TypedContractMethod<[], [string], "view">;
+
+  acceptOwnership: TypedContractMethod<[], [void], "nonpayable">;
+
   delegateWitness: TypedContractMethod<
     [_companyAnchor: BytesLike, _witness: AddressLike],
     [void],
@@ -298,6 +369,8 @@ export interface CofferdamCorporateRegistry extends BaseContract {
     "view"
   >;
 
+  owner: TypedContractMethod<[], [string], "view">;
+
   pauseCompany: TypedContractMethod<
     [_companyAnchor: BytesLike],
     [void],
@@ -306,8 +379,16 @@ export interface CofferdamCorporateRegistry extends BaseContract {
 
   pausedCompanies: TypedContractMethod<[arg0: BytesLike], [boolean], "view">;
 
+  pendingOwner: TypedContractMethod<[], [string], "view">;
+
   revokeWitness: TypedContractMethod<
     [_companyAnchor: BytesLike, _witness: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  transferOwnership: TypedContractMethod<
+    [newOwner: AddressLike],
     [void],
     "nonpayable"
   >;
@@ -328,6 +409,12 @@ export interface CofferdamCorporateRegistry extends BaseContract {
     key: string | FunctionFragment
   ): T;
 
+  getFunction(
+    nameOrSignature: "COMPANY_REGISTRY"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "acceptOwnership"
+  ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "delegateWitness"
   ): TypedContractMethod<
@@ -379,11 +466,17 @@ export interface CofferdamCorporateRegistry extends BaseContract {
     "view"
   >;
   getFunction(
+    nameOrSignature: "owner"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "pauseCompany"
   ): TypedContractMethod<[_companyAnchor: BytesLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "pausedCompanies"
   ): TypedContractMethod<[arg0: BytesLike], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "pendingOwner"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "revokeWitness"
   ): TypedContractMethod<
@@ -391,6 +484,9 @@ export interface CofferdamCorporateRegistry extends BaseContract {
     [void],
     "nonpayable"
   >;
+  getFunction(
+    nameOrSignature: "transferOwnership"
+  ): TypedContractMethod<[newOwner: AddressLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "unpauseCompany"
   ): TypedContractMethod<[_companyAnchor: BytesLike], [void], "nonpayable">;
@@ -422,6 +518,20 @@ export interface CofferdamCorporateRegistry extends BaseContract {
     OrgRootUpdatedEvent.InputTuple,
     OrgRootUpdatedEvent.OutputTuple,
     OrgRootUpdatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "OwnershipTransferStarted"
+  ): TypedContractEvent<
+    OwnershipTransferStartedEvent.InputTuple,
+    OwnershipTransferStartedEvent.OutputTuple,
+    OwnershipTransferStartedEvent.OutputObject
+  >;
+  getEvent(
+    key: "OwnershipTransferred"
+  ): TypedContractEvent<
+    OwnershipTransferredEvent.InputTuple,
+    OwnershipTransferredEvent.OutputTuple,
+    OwnershipTransferredEvent.OutputObject
   >;
   getEvent(
     key: "WitnessDelegated"
@@ -470,6 +580,28 @@ export interface CofferdamCorporateRegistry extends BaseContract {
       OrgRootUpdatedEvent.InputTuple,
       OrgRootUpdatedEvent.OutputTuple,
       OrgRootUpdatedEvent.OutputObject
+    >;
+
+    "OwnershipTransferStarted(address,address)": TypedContractEvent<
+      OwnershipTransferStartedEvent.InputTuple,
+      OwnershipTransferStartedEvent.OutputTuple,
+      OwnershipTransferStartedEvent.OutputObject
+    >;
+    OwnershipTransferStarted: TypedContractEvent<
+      OwnershipTransferStartedEvent.InputTuple,
+      OwnershipTransferStartedEvent.OutputTuple,
+      OwnershipTransferStartedEvent.OutputObject
+    >;
+
+    "OwnershipTransferred(address,address)": TypedContractEvent<
+      OwnershipTransferredEvent.InputTuple,
+      OwnershipTransferredEvent.OutputTuple,
+      OwnershipTransferredEvent.OutputObject
+    >;
+    OwnershipTransferred: TypedContractEvent<
+      OwnershipTransferredEvent.InputTuple,
+      OwnershipTransferredEvent.OutputTuple,
+      OwnershipTransferredEvent.OutputObject
     >;
 
     "WitnessDelegated(bytes32,address)": TypedContractEvent<
