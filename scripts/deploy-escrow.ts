@@ -1,6 +1,16 @@
 import { ethers, network } from 'hardhat';
 import { createHmac } from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 import { writeDeployments } from './lib/deployments';
+
+/** The MockUSDC already recorded for this network, if any. */
+function recordedMockUsdc(networkName: string): string | null {
+  const file = path.join(__dirname, '..', 'deployments', `${networkName}.json`);
+  if (!fs.existsSync(file)) return null;
+  const addr = JSON.parse(fs.readFileSync(file, 'utf8'))?.MockUSDC?.address;
+  return typeof addr === 'string' && /^0x[0-9a-fA-F]{40}$/.test(addr) ? addr : null;
+}
 
 // Mirror of LocalChainDemo's deriveDeterministicPk — same salt + algorithm
 // so the deployed escrow's policy matches the demo's wallets.
@@ -11,7 +21,7 @@ function deriveDeterministicPk(mockUserId: string): string {
 }
 
 async function main() {
-  console.log('=== Deploy MockUSDC + EscrowFactory + Sample SpotEscrow ===\n');
+  console.log('=== Deploy EscrowFactory + Sample SpotEscrow (MockUSDC reused unless NEW_MOCK_USDC=1) ===\n');
 
   const [deployer] = await ethers.getSigners();
   console.log('Network:', network.name);
@@ -36,12 +46,22 @@ async function main() {
   const witnessWallet = new ethers.Wallet(witnessPk, deployer.provider);
   console.log('Demo witness (HR) wallet:', witnessWallet.address);
 
-  // 1. MockUSDC
+  // 1. MockUSDC. Reuse the recorded token: a new one would strand every test
+  //    balance and break the app, the plane's activity routes and the CDP
+  //    webhook, which all pin this address (workspace decision 0032). Set
+  //    NEW_MOCK_USDC=1 only for a deliberate token reset.
   const USDC = await ethers.getContractFactory('USDC');
-  const usdc = await USDC.deploy('USD Coin', 'USDC');
-  await usdc.waitForDeployment();
+  const recorded = process.env.NEW_MOCK_USDC === '1' ? null : recordedMockUsdc(network.name);
+  let usdc;
+  if (recorded) {
+    usdc = USDC.attach(recorded) as Awaited<ReturnType<typeof USDC.deploy>>;
+    console.log('MockUSDC (reused):', recorded);
+  } else {
+    usdc = await USDC.deploy('USD Coin', 'USDC');
+    await usdc.waitForDeployment();
+    console.log('MockUSDC (new):', await usdc.getAddress());
+  }
   const usdcAddr = await usdc.getAddress();
-  console.log('MockUSDC:', usdcAddr);
 
   // 2. EscrowFactory
   const Factory = await ethers.getContractFactory('EscrowFactory');
@@ -70,7 +90,7 @@ async function main() {
   const policy = {
     funder: funderWallet.address,
     recruiter: witnessWallet.address,
-    workerNullifier: ethers.randomBytes(32),
+    workerNullifier: ethers.ZeroHash, // the field is unchecked and never a key; zero until it is removed (workspace TODO)
     checkInTimeout: 3600,
     checkOutTimeout: 120,
     witness: witnessWallet.address,
