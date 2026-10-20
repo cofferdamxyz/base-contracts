@@ -20,7 +20,9 @@ but the escrow witness test needs it.
 
 Never commit on `main`. Commit on the session branch with `git commit -s` and
 a `Co-Authored-By: Claude <model> <noreply@anthropic.com>` trailer naming the
-model that wrote the change, push that branch at every stopping point, and do
-not merge or open a pull request unless the task says so. The founder lands
-branches locally (workspace decision 0013). Interactive sessions on the Mac
-commit on `main` and never push unless asked.
+model that wrote the change, push that branch at every stopping point, and
+open a draft pull request against `main` at the first push (`gh api` REST or
+the session's Create PR control; `gh pr` is blocked in the cloud). Never mark
+it ready, never merge, never enable auto-merge. The founder lands branches
+locally and closes the pull request (workspace decision 0013). Interactive
+sessions on the Mac commit on `main` and never push unless asked.
