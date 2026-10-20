@@ -1,0 +1,98 @@
+name: CI
+
+# Checks on every push to main and on every pull request, drafts included:
+# delegated sessions open a draft PR at their first push (workspace decision
+# 0013, amended 2026-10-20), so a branch is checked before the founder lands
+# it. Deploys run only from the founder's Mac with the workspace .envrc
+# (workspace docs/runbooks/cloudflare-deploys.md); CI never deploys and holds
+# no Cloudflare token.
+#
+# The enterprise module is the private submodule contracts/enterprise
+# (cofferdamxyz/enterprise-contracts, over SSH). CI never initialises it: the
+# checkout leaves the directory empty, the public core compiles on its own,
+# and the test step runs every test file except the four that deploy
+# enterprise contracts (enterprise-registries, payroll-escrow,
+# spot-escrow-settlement, spot-escrow-witness). Those four run on the Mac
+# with `yarn test`.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+      - id: install
+        run: yarn install --frozen-lockfile
+      - id: compile
+        run: yarn compile
+      - name: Public core tests (no enterprise submodule)
+        id: test
+        run: |
+          set -euo pipefail
+          files=()
+          for f in test/*.test.ts; do
+            case "$(basename "$f")" in
+              enterprise-*|payroll-escrow*|spot-escrow*) echo "skip $f (needs contracts/enterprise)";;
+              *) files+=("$f");;
+            esac
+          done
+          yarn test "${files[@]}"
+
+      # On a pull request, one comment with the result of every step and the
+      # run URL, updated in place on every run. The Cofferdam Development
+      # Tracker in Cofferdam OS reads pull request comments and cannot read
+      # check runs, so this comment is how CI results reach it. Needs only
+      # pull-requests: write on the GITHUB_TOKEN; no other secret.
+      - name: Report the result on the pull request
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          STEPS: ${{ toJSON(steps) }}
+          STEP_LABELS: |
+            install=yarn install --frozen-lockfile
+            compile=yarn compile
+            test=yarn test (public core only)
+        with:
+          script: |
+            const marker = `<!-- cofferdam-ci:${context.job} -->`;
+            const steps = JSON.parse(process.env.STEPS);
+            const words = { success: '✅ pass', failure: '❌ fail', cancelled: '🚫 cancelled', skipped: '⏭️ skipped' };
+            const rows = process.env.STEP_LABELS.trim().split('\n').map((line) => {
+              const [id, ...label] = line.split('=');
+              return { label: label.join('='), outcome: steps[id]?.outcome ?? 'skipped' };
+            });
+            const failed = rows.some((row) => row.outcome === 'failure' || row.outcome === 'cancelled');
+            const sha = context.payload.pull_request.head.sha;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              marker,
+              `### CI ${failed ? '❌ failed' : '✅ passed'} · \`${context.job}\` on ${sha.slice(0, 7)}`,
+              '',
+              '| Step | Result |',
+              '| --- | --- |',
+              ...rows.map((row) => `| \`${row.label}\` | ${words[row.outcome] ?? row.outcome} |`),
+              '',
+              `[Run ${context.runId}, attempt ${process.env.GITHUB_RUN_ATTEMPT}](${runUrl})`,
+            ].join('\n');
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number, per_page: 100 });
+            const existing = comments.find((comment) => comment.user?.type === 'Bot' && comment.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number, body });
+            }
