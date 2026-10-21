@@ -35,3 +35,7 @@ encoding live in the workspace: `docs/architecture/contracts.md` and
   identity rules are `rules/cofferdam-identity.md`, both in the `cofferdam`
   repository (`../` on the Mac, `../cofferdam/` in a cloud session).
 - `README.md` here and the workspace `docs/` describe behaviour; update them in the same pass.
+
+## Review
+
+`REVIEW.md` says what failure looks like here and how a reviewer reports it: any review (`/code-review`, a hosted reviewer) reads it with this file. Before the last push a delegated session reviews its own diff against it and answers every finding (workspace decision 0051, `docs/runbooks/code-review.md`).
