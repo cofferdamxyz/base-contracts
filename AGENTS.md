@@ -38,4 +38,4 @@ encoding live in the workspace: `docs/architecture/contracts.md` and
 
 ## Review
 
-`REVIEW.md` says what failure looks like here and how a reviewer reports it: any review (`/code-review`, a hosted reviewer) reads it with this file. Before the last push a delegated session reviews its own diff against it and answers every finding (workspace decision 0051, `docs/runbooks/code-review.md`).
+`REVIEW.md` says what failure looks like here and how a reviewer reports it: any review (`/code-review`, a hosted reviewer) reads it with this file. Before the last push a delegated session reviews its own diff against it and answers every finding (workspace decision 0052, `docs/runbooks/code-review.md`).
