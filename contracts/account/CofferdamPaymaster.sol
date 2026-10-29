@@ -134,7 +134,9 @@ contract CofferdamPaymaster is IPaymaster, Ownable {
         // solhint-disable-next-line avoid-tx-origin
         if (tx.origin != relayer) revert NotRelayer(tx.origin);
         if (!isCofferdamAccount(userOp.sender)) revert NotCofferdamAccount(userOp.sender);
-        return (abi.encode(userOp.sender), 0);
+        // Empty context: the EntryPoint skips `postOp` (nothing to reconcile)
+        // and charges no unused-postOp-gas penalty.
+        return ("", 0);
     }
 
     /// @notice Whether `account` runs this paymaster's factory account code.
@@ -144,7 +146,8 @@ contract CofferdamPaymaster is IPaymaster, Ownable {
         uint256 packed = MASK_OFFSETS;
         for (uint256 i = 0; i < MASK_COUNT; i++) {
             uint256 offset = (packed >> (16 * i)) & 0xffff;
-            assembly {
+            // Inside `code`: the constructor checked offset + 32 <= size.
+            assembly ("memory-safe") {
                 mstore(add(add(code, 0x20), offset), 0)
             }
         }
@@ -153,6 +156,6 @@ contract CofferdamPaymaster is IPaymaster, Ownable {
 
     function postOp(uint8, bytes calldata, uint256, uint256) external view {
         if (msg.sender != address(ENTRY_POINT)) revert NotEntryPoint();
-        // No-op: nothing to reconcile after the op.
+        // Never called: validation returns an empty context.
     }
 }

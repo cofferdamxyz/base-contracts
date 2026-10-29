@@ -48,7 +48,10 @@ export async function accountCodeFingerprint(factoryAddr: string, highModule: st
 
   const differs = (start: number, length: number) => a.slice(start, start + length).some((x, i) => x !== b[start + i]);
   const maskOffsets = words.filter((w) => differs(w.start, w.length)).map((w) => w.start).sort((x, y) => x - y);
-  if (maskOffsets.length === 0 || maskOffsets.length > 16) throw new Error(`Unexpected per-account words: ${maskOffsets.length}`);
+  // Exactly EIP712's `_cachedThis` and `_cachedDomainSeparator`. Another
+  // immutable that tracks the deployer would be masked silently, so a new
+  // count means the account changed and this derivation needs a look.
+  if (maskOffsets.length !== 2) throw new Error(`Expected 2 per-account words, found ${maskOffsets.length}`);
   if (words.some((w) => maskOffsets.includes(w.start) && w.length !== 32)) throw new Error('Per-account immutable is not a 32-byte word');
 
   const mask = (code: Uint8Array) => {
@@ -64,7 +67,11 @@ export async function accountCodeFingerprint(factoryAddr: string, highModule: st
   return { codeHash: ethers.keccak256(maskedA), codeSize: a.length, maskOffsets };
 }
 
-/** The relayer the paymaster sponsors: `RELAYER_ADDRESS`, required off the local networks. */
+/**
+ * The relayer the paymaster sponsors: `RELAYER_ADDRESS`, required off the
+ * local networks, where it defaults to the deployer. A local test that
+ * self-bundles `handleOps` from another key sets `RELAYER_ADDRESS` to it.
+ */
 export function paymasterRelayer(deployer: string): string {
   const raw = process.env.RELAYER_ADDRESS?.trim();
   if (raw) return ethers.getAddress(raw);
@@ -72,9 +79,14 @@ export function paymasterRelayer(deployer: string): string {
   throw new Error("RELAYER_ADDRESS (the plane's RELAYER_PRIVATE_KEY address) is required");
 }
 
+/** Base mainnet by name or by chain id. */
+export function isBaseMainnet(): boolean {
+  return network.name === 'base' || network.config.chainId === 8453;
+}
+
 /** The paymaster is a testnet contract: mainnet gas goes through the CDP Paymaster (decision 0017). */
 export function refuseMainnetPaymaster(): void {
-  if (network.name === 'base' || network.config.chainId === 8453) {
+  if (isBaseMainnet()) {
     throw new Error('CofferdamPaymaster is testnet only: mainnet gas goes through the CDP Paymaster (decision 0017)');
   }
 }
