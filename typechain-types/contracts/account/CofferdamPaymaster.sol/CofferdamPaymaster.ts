@@ -62,29 +62,63 @@ export declare namespace IEntryPoint {
 export interface CofferdamPaymasterInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "ACCOUNT_CODE_HASH"
+      | "ACCOUNT_CODE_SIZE"
       | "ENTRY_POINT"
+      | "MASK_COUNT"
+      | "MASK_OFFSETS"
+      | "isCofferdamAccount"
       | "owner"
       | "postOp"
+      | "relayer"
       | "renounceOwnership"
+      | "setRelayer"
       | "transferOwnership"
       | "validatePaymasterUserOp"
       | "withdrawTo"
   ): FunctionFragment;
 
-  getEvent(nameOrSignatureOrTopic: "OwnershipTransferred"): EventFragment;
+  getEvent(
+    nameOrSignatureOrTopic: "OwnershipTransferred" | "RelayerChanged"
+  ): EventFragment;
 
+  encodeFunctionData(
+    functionFragment: "ACCOUNT_CODE_HASH",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "ACCOUNT_CODE_SIZE",
+    values?: undefined
+  ): string;
   encodeFunctionData(
     functionFragment: "ENTRY_POINT",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "MASK_COUNT",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "MASK_OFFSETS",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "isCofferdamAccount",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "postOp",
     values: [BigNumberish, BytesLike, BigNumberish, BigNumberish]
   ): string;
+  encodeFunctionData(functionFragment: "relayer", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "renounceOwnership",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setRelayer",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "transferOwnership",
@@ -100,15 +134,34 @@ export interface CofferdamPaymasterInterface extends Interface {
   ): string;
 
   decodeFunctionResult(
+    functionFragment: "ACCOUNT_CODE_HASH",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "ACCOUNT_CODE_SIZE",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "ENTRY_POINT",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "MASK_COUNT", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "MASK_OFFSETS",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "isCofferdamAccount",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "postOp", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "relayer", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "renounceOwnership",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "setRelayer", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "transferOwnership",
     data: BytesLike
@@ -126,6 +179,22 @@ export namespace OwnershipTransferredEvent {
   export interface OutputObject {
     previousOwner: string;
     newOwner: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RelayerChangedEvent {
+  export type InputTuple = [
+    previousRelayer: AddressLike,
+    newRelayer: AddressLike
+  ];
+  export type OutputTuple = [previousRelayer: string, newRelayer: string];
+  export interface OutputObject {
+    previousRelayer: string;
+    newRelayer: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -176,22 +245,44 @@ export interface CofferdamPaymaster extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  ACCOUNT_CODE_HASH: TypedContractMethod<[], [string], "view">;
+
+  ACCOUNT_CODE_SIZE: TypedContractMethod<[], [bigint], "view">;
+
   ENTRY_POINT: TypedContractMethod<[], [string], "view">;
+
+  MASK_COUNT: TypedContractMethod<[], [bigint], "view">;
+
+  MASK_OFFSETS: TypedContractMethod<[], [bigint], "view">;
+
+  isCofferdamAccount: TypedContractMethod<
+    [account: AddressLike],
+    [boolean],
+    "view"
+  >;
 
   owner: TypedContractMethod<[], [string], "view">;
 
   postOp: TypedContractMethod<
     [
-      mode: BigNumberish,
-      context: BytesLike,
-      actualGasCost: BigNumberish,
-      actualUserOpFeePerGas: BigNumberish
+      arg0: BigNumberish,
+      arg1: BytesLike,
+      arg2: BigNumberish,
+      arg3: BigNumberish
     ],
     [void],
     "view"
   >;
 
+  relayer: TypedContractMethod<[], [string], "view">;
+
   renounceOwnership: TypedContractMethod<[], [void], "nonpayable">;
+
+  setRelayer: TypedContractMethod<
+    [newRelayer: AddressLike],
+    [void],
+    "nonpayable"
+  >;
 
   transferOwnership: TypedContractMethod<
     [newOwner: AddressLike],
@@ -202,8 +293,8 @@ export interface CofferdamPaymaster extends BaseContract {
   validatePaymasterUserOp: TypedContractMethod<
     [
       userOp: IEntryPoint.PackedUserOperationStruct,
-      userOpHash: BytesLike,
-      maxCost: BigNumberish
+      arg1: BytesLike,
+      arg2: BigNumberish
     ],
     [[string, bigint] & { context: string; validationData: bigint }],
     "view"
@@ -220,8 +311,23 @@ export interface CofferdamPaymaster extends BaseContract {
   ): T;
 
   getFunction(
+    nameOrSignature: "ACCOUNT_CODE_HASH"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "ACCOUNT_CODE_SIZE"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "ENTRY_POINT"
   ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "MASK_COUNT"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "MASK_OFFSETS"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "isCofferdamAccount"
+  ): TypedContractMethod<[account: AddressLike], [boolean], "view">;
   getFunction(
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
@@ -229,17 +335,23 @@ export interface CofferdamPaymaster extends BaseContract {
     nameOrSignature: "postOp"
   ): TypedContractMethod<
     [
-      mode: BigNumberish,
-      context: BytesLike,
-      actualGasCost: BigNumberish,
-      actualUserOpFeePerGas: BigNumberish
+      arg0: BigNumberish,
+      arg1: BytesLike,
+      arg2: BigNumberish,
+      arg3: BigNumberish
     ],
     [void],
     "view"
   >;
   getFunction(
+    nameOrSignature: "relayer"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "renounceOwnership"
   ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "setRelayer"
+  ): TypedContractMethod<[newRelayer: AddressLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "transferOwnership"
   ): TypedContractMethod<[newOwner: AddressLike], [void], "nonpayable">;
@@ -248,8 +360,8 @@ export interface CofferdamPaymaster extends BaseContract {
   ): TypedContractMethod<
     [
       userOp: IEntryPoint.PackedUserOperationStruct,
-      userOpHash: BytesLike,
-      maxCost: BigNumberish
+      arg1: BytesLike,
+      arg2: BigNumberish
     ],
     [[string, bigint] & { context: string; validationData: bigint }],
     "view"
@@ -269,6 +381,13 @@ export interface CofferdamPaymaster extends BaseContract {
     OwnershipTransferredEvent.OutputTuple,
     OwnershipTransferredEvent.OutputObject
   >;
+  getEvent(
+    key: "RelayerChanged"
+  ): TypedContractEvent<
+    RelayerChangedEvent.InputTuple,
+    RelayerChangedEvent.OutputTuple,
+    RelayerChangedEvent.OutputObject
+  >;
 
   filters: {
     "OwnershipTransferred(address,address)": TypedContractEvent<
@@ -280,6 +399,17 @@ export interface CofferdamPaymaster extends BaseContract {
       OwnershipTransferredEvent.InputTuple,
       OwnershipTransferredEvent.OutputTuple,
       OwnershipTransferredEvent.OutputObject
+    >;
+
+    "RelayerChanged(address,address)": TypedContractEvent<
+      RelayerChangedEvent.InputTuple,
+      RelayerChangedEvent.OutputTuple,
+      RelayerChangedEvent.OutputObject
+    >;
+    RelayerChanged: TypedContractEvent<
+      RelayerChangedEvent.InputTuple,
+      RelayerChangedEvent.OutputTuple,
+      RelayerChangedEvent.OutputObject
     >;
   };
 }

@@ -21,9 +21,49 @@ import type {
   TypedContractMethod,
 } from "../../common";
 
+export declare namespace IEntryPoint {
+  export type PackedUserOperationStruct = {
+    sender: AddressLike;
+    nonce: BigNumberish;
+    initCode: BytesLike;
+    callData: BytesLike;
+    accountGasLimits: BytesLike;
+    preVerificationGas: BigNumberish;
+    gasFees: BytesLike;
+    paymasterAndData: BytesLike;
+    signature: BytesLike;
+  };
+
+  export type PackedUserOperationStructOutput = [
+    sender: string,
+    nonce: bigint,
+    initCode: string,
+    callData: string,
+    accountGasLimits: string,
+    preVerificationGas: bigint,
+    gasFees: string,
+    paymasterAndData: string,
+    signature: string
+  ] & {
+    sender: string;
+    nonce: bigint;
+    initCode: string;
+    callData: string;
+    accountGasLimits: string;
+    preVerificationGas: bigint;
+    gasFees: string;
+    paymasterAndData: string;
+    signature: string;
+  };
+}
+
 export interface MockEntryPointInterface extends Interface {
   getFunction(
-    nameOrSignature: "balanceOf" | "depositTo" | "withdrawTo"
+    nameOrSignature:
+      | "balanceOf"
+      | "depositTo"
+      | "validatePaymaster"
+      | "withdrawTo"
   ): FunctionFragment;
 
   encodeFunctionData(
@@ -35,12 +75,20 @@ export interface MockEntryPointInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "validatePaymaster",
+    values: [AddressLike, IEntryPoint.PackedUserOperationStruct]
+  ): string;
+  encodeFunctionData(
     functionFragment: "withdrawTo",
     values: [AddressLike, BigNumberish]
   ): string;
 
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "depositTo", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "validatePaymaster",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "withdrawTo", data: BytesLike): Result;
 }
 
@@ -91,6 +139,12 @@ export interface MockEntryPoint extends BaseContract {
 
   depositTo: TypedContractMethod<[account: AddressLike], [void], "payable">;
 
+  validatePaymaster: TypedContractMethod<
+    [paymaster: AddressLike, userOp: IEntryPoint.PackedUserOperationStruct],
+    [[string, bigint] & { context: string; validationData: bigint }],
+    "view"
+  >;
+
   withdrawTo: TypedContractMethod<
     [withdrawAddress: AddressLike, withdrawAmount: BigNumberish],
     [void],
@@ -107,6 +161,13 @@ export interface MockEntryPoint extends BaseContract {
   getFunction(
     nameOrSignature: "depositTo"
   ): TypedContractMethod<[account: AddressLike], [void], "payable">;
+  getFunction(
+    nameOrSignature: "validatePaymaster"
+  ): TypedContractMethod<
+    [paymaster: AddressLike, userOp: IEntryPoint.PackedUserOperationStruct],
+    [[string, bigint] & { context: string; validationData: bigint }],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "withdrawTo"
   ): TypedContractMethod<
