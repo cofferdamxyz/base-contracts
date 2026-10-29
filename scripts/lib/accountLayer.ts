@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ethers, network } from 'hardhat';
-import { accountCodeFingerprint, paymasterRelayer } from './paymaster';
+import { accountCodeFingerprint, isBaseMainnet, paymasterRelayer } from './paymaster';
 
 // ERC-4337 EntryPoint v0.7 — preinstalled on Base
 export const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
@@ -34,7 +34,9 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
   const isMainnet = network.name === 'base';
   const owner = process.env.REGISTRY_OWNER || (isMainnet ? '' : deployer.address);
   if (!owner) throw new Error('REGISTRY_OWNER (the Cofferdam Safe) is required on mainnet');
-  const relayer = isMainnet ? '' : paymasterRelayer(deployer.address);
+  // The paymaster is testnet only: skipped on mainnet by name or chain id.
+  const skipPaymaster = isMainnet || isBaseMainnet();
+  const relayer = skipPaymaster ? '' : paymasterRelayer(deployer.address);
   const attesters = (process.env.CEREMONY_ATTESTERS || '')
     .split(',')
     .map((a) => a.trim())
@@ -91,7 +93,7 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
     recoveryDelay,
     probationPeriod,
   ]);
-  if (isMainnet) {
+  if (skipPaymaster) {
     console.log('No CofferdamPaymaster on mainnet: gas goes through the CDP Paymaster (decision 0017).');
   } else {
     const fp = await accountCodeFingerprint(out.CofferdamAccountFactory4337, out.WebAuthnPasskeyAuthority);

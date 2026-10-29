@@ -74,7 +74,7 @@ describe('CofferdamPaymaster', function () {
       for (const sender of [a, b]) {
         const [context, validationData] = await (entryPoint.connect(relayer) as any).validatePaymaster(paymaster, op(sender));
         expect(validationData).to.equal(0n);
-        expect(context).to.equal(ethers.AbiCoder.defaultAbiCoder().encode(['address'], [sender]));
+        expect(context).to.equal('0x'); // no postOp
         expect(await paymaster.isCofferdamAccount(sender)).to.equal(true);
       }
       // The masked hash stays a small part of validation gas.

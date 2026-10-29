@@ -1,11 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ethers, network } from 'hardhat';
+import { ENTRYPOINT_V07 } from './lib/accountLayer';
 import { writeDeployments } from './lib/deployments';
 import { accountCodeFingerprint, paymasterRelayer, refuseMainnetPaymaster } from './lib/paymaster';
-
-// ERC-4337 EntryPoint v0.7 — preinstalled on Base
-const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
 
 // Redeploys ONLY the CofferdamPaymaster for the recorded factory. The factory
 // and the authority modules stay at their addresses. Testnet only.
