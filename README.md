@@ -28,7 +28,7 @@ cli/            interactive CLI for a local node
 | `CofferdamAccount4337` | the account: authorities by tier, `Permission`-scoped Partner and Managed calls, `enrollFirstHigh`, `replacePartnerAuthority`, probation, `recoverHigh` / `finalizeRecovery` / `cancelRecovery`; ERC-1271 for High only |
 | `AuthorityManagerBase` | authority registry, permissions, at most 3 passkeys, the last High unrevokable |
 | `CofferdamAccountFactory4337` | CREATE2 factory; pins the EntryPoint, both registries, the `NullifierRegistry`, `RECOVERY_DELAY` and `PROBATION_PERIOD` |
-| `CofferdamPaymaster` | Sepolia stub that sponsors every op; owner-only withdrawals; production uses the CDP paymaster |
+| `CofferdamPaymaster` | Sepolia only: sponsors an op only when `tx.origin` is the plane's relayer and the sender runs the factory's account code (workspace decision 0071); owner-only withdrawals and relayer change; no script deploys it on mainnet, where the CDP paymaster sponsors |
 | `WebAuthnPasskeyAuthority` | High: WebAuthn assertion, `rpIdHash` pinned to `cofferdam.xyz`, user verification required |
 | `PasskeyAuthority` | raw P-256 signatures; test networks only |
 | `PartnerPasskeyAuthority` | Partner: the user's passkey on a partner app's RP, zero value, within its `Permission` |
