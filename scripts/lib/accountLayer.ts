@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ethers, network } from 'hardhat';
+import { accountCodeFingerprint, isBaseMainnet, paymasterRelayer } from './paymaster';
 
 // ERC-4337 EntryPoint v0.7 — preinstalled on Base
 export const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
@@ -24,12 +25,18 @@ export const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
  *   account: 72 hours on mainnet, 0 elsewhere by default.
  * - `PROBATION_PERIOD_SECONDS` is the probation of a High added by a High:
  *   72 hours on mainnet, 600 seconds elsewhere by default.
+ * - `RELAYER_ADDRESS` is the plane's relayer EOA, the only `tx.origin` the
+ *   paymaster sponsors; required off the local networks. The paymaster is
+ *   testnet only: mainnet deploys none (the CDP Paymaster, decision 0017).
  */
 export async function deployAccountLayer(nullifierRegistry?: string): Promise<Record<string, string>> {
   const [deployer] = await ethers.getSigners();
   const isMainnet = network.name === 'base';
   const owner = process.env.REGISTRY_OWNER || (isMainnet ? '' : deployer.address);
   if (!owner) throw new Error('REGISTRY_OWNER (the Cofferdam Safe) is required on mainnet');
+  // The paymaster is testnet only: skipped on mainnet by name or chain id.
+  const skipPaymaster = isMainnet || isBaseMainnet();
+  const relayer = skipPaymaster ? '' : paymasterRelayer(deployer.address);
   const attesters = (process.env.CEREMONY_ATTESTERS || '')
     .split(',')
     .map((a) => a.trim())
@@ -86,7 +93,13 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
     recoveryDelay,
     probationPeriod,
   ]);
-  out.CofferdamPaymaster = await deploy('CofferdamPaymaster', [ENTRYPOINT_V07]);
+  if (skipPaymaster) {
+    console.log('No CofferdamPaymaster on mainnet: gas goes through the CDP Paymaster (decision 0017).');
+  } else {
+    const fp = await accountCodeFingerprint(out.CofferdamAccountFactory4337, out.WebAuthnPasskeyAuthority);
+    console.log('Paymaster relayer:', relayer, '| account code hash:', fp.codeHash, `(${fp.codeSize} bytes, ${fp.maskOffsets.length} masked words)`);
+    out.CofferdamPaymaster = await deploy('CofferdamPaymaster', [ENTRYPOINT_V07, relayer, fp.codeHash, fp.codeSize, fp.maskOffsets]);
+  }
   if (attesters.length === 0) console.log('No CEREMONY_ATTESTERS: first-High upgrades are paused until one is added.');
   return out;
 }
