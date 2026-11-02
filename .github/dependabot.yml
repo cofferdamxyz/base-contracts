@@ -1,0 +1,47 @@
+# Dependabot for base-contracts (joint 2 of the agentic loop; workspace
+# docs/runbooks/agentic-loop-completion.md §7). Layer 0 of the security lane: GitHub opens the
+# pull requests it can, CI runs on each, Lockkeeper indexes them, the founder lands them. Security
+# updates are switched on per repository in Settings; this file groups them and adds weekly,
+# grouped version updates after a seven-day cooldown, so a release has a week in the open before
+# it is proposed here. A Dependabot commit carries no sign-off: the founder lands it with
+# `git cherry-pick -s`, not by fast-forward.
+version: 2
+# The private enterprise submodule (contracts/enterprise) is pinned by hand; no gitsubmodule
+# ecosystem here.
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
+      hardhat:
+        applies-to: version-updates
+        patterns: ["hardhat", "hardhat-*", "@nomicfoundation/*", "@typechain/*", "typechain"]
+      minor-and-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: deps
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
