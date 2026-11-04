@@ -1,0 +1,72 @@
+name: Slither
+
+# Slither, the Solidity analyser CodeQL does not cover, over the public core
+# (workspace docs/runbooks/agentic-loop-completion.md, the security lane). The
+# private submodule contracts/enterprise is never initialised here, as in CI;
+# run Slither over it on the Mac. Results go to code scanning, where the
+# Security bot reads them with the other alerts; a finding never fails the job,
+# triage decides. Informational and optimisation checks are left out (naming,
+# assembly use), so code scanning holds what a reviewer should read.
+#
+# Slither compiles nothing itself: `yarn compile` builds the artifacts and
+# `--hardhat-ignore-compile` reads them, so it never cleans or force-builds
+# (which deletes tracked TypeChain output). CI never deploys
+# (cloudflare-deploys.md).
+on:
+  push:
+    branches: [main]
+    paths:
+      - contracts/**
+      - hardhat.config.ts
+      - package.json
+      - yarn.lock
+      - .github/workflows/slither.yml
+  pull_request:
+    paths:
+      - contracts/**
+      - hardhat.config.ts
+      - package.json
+      - yarn.lock
+      - .github/workflows/slither.yml
+  schedule:
+    - cron: "41 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  slither:
+    name: slither (public core)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: yarn compile
+
+      - name: Install Slither 0.11.6
+        run: python3 -m pip install --user slither-analyzer==0.11.6 crytic-compile==0.4.2
+
+      - name: Run Slither
+        run: |
+          python3 -m slither . --hardhat-ignore-compile \
+            --filter-paths "node_modules|contracts/enterprise|contracts/test" \
+            --exclude-dependencies --exclude-informational --exclude-optimization \
+            --sarif slither.sarif --fail-none
+
+      # Code scanning keeps main's results; a pull request shows the log above.
+      - name: Upload the findings
+        if: github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: slither.sarif
+          category: slither
