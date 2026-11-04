@@ -19,6 +19,21 @@ updates:
     open-pull-requests-limit: 5
     cooldown:
       default-days: 7
+    # Majors that are migrations, not bumps, and would reopen every week: Hardhat 3 is ESM-only
+    # (compile fails without "type": "module" and every plugin moves with it); TypeScript 7 breaks
+    # ts-node 10, which Hardhat 2 loads for the config and the tests; @noble/curves 2 changes the
+    # signing API and every Cofferdam repository is on 1.x. Each is a session's own change, with
+    # a workspace decision for Hardhat. Security updates still open for them (ignore applies to
+    # version updates only when update-types is set).
+    ignore:
+      - dependency-name: "hardhat"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@nomicfoundation/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@noble/curves"
+        update-types: ["version-update:semver-major"]
     groups:
       security:
         applies-to: security-updates
