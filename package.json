@@ -34,8 +34,8 @@
     "typecheck:enterprise": "tsc --noEmit --project tsconfig.enterprise.json"
   },
   "devDependencies": {
-    "@inquirer/prompts": "^8.5.2",
-    "@noble/curves": "~1.4.0",
+    "@inquirer/prompts": "^8.7.5",
+    "@noble/curves": "~1.9.7",
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
     "@nomicfoundation/hardhat-ethers": "^3.0.0",
     "@nomicfoundation/hardhat-ignition-ethers": "^0.15.0",
@@ -48,7 +48,7 @@
     "@typechain/hardhat": "^9.0.0",
     "@types/chai": "^4.2.0",
     "@types/mocha": "^9.1.0",
-    "@types/node": "^26.0.0",
+    "@types/node": "^26.6.5",
     "chai": "^4.2.0",
     "dotenv": "^17.4.2",
     "ethers": "^6.17.0",
@@ -59,6 +59,6 @@
     "ts-node": "^10.9.2",
     "typechain": "^8.3.0",
     "typescript": "^5.5.0",
-    "viem": "^2.21.0"
+    "viem": "^2.57.13"
   }
 }
