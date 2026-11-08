@@ -27,6 +27,7 @@ export interface CofferdamIdentityRegistryInterface extends Interface {
   getFunction(
     nameOrSignature:
       | "ADAPTER_DELAY"
+      | "ADAPTER_GRACE"
       | "BASE_MAINNET_CHAIN_ID"
       | "BIND"
       | "IDENTIFIER_KIND"
@@ -89,6 +90,10 @@ export interface CofferdamIdentityRegistryInterface extends Interface {
 
   encodeFunctionData(
     functionFragment: "ADAPTER_DELAY",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "ADAPTER_GRACE",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -223,6 +228,10 @@ export interface CofferdamIdentityRegistryInterface extends Interface {
 
   decodeFunctionResult(
     functionFragment: "ADAPTER_DELAY",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "ADAPTER_GRACE",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -632,6 +641,8 @@ export interface CofferdamIdentityRegistry extends BaseContract {
 
   ADAPTER_DELAY: TypedContractMethod<[], [bigint], "view">;
 
+  ADAPTER_GRACE: TypedContractMethod<[], [bigint], "view">;
+
   BASE_MAINNET_CHAIN_ID: TypedContractMethod<[], [bigint], "view">;
 
   BIND: TypedContractMethod<[], [string], "view">;
@@ -740,10 +751,11 @@ export interface CofferdamIdentityRegistry extends BaseContract {
   pendingRebind: TypedContractMethod<
     [arg0: BytesLike],
     [
-      [string, string, bigint] & {
+      [string, string, bigint, string] & {
         oldAccount: string;
         newAccount: string;
         readyAt: bigint;
+        adapter: string;
       }
     ],
     "view"
@@ -799,6 +811,9 @@ export interface CofferdamIdentityRegistry extends BaseContract {
 
   getFunction(
     nameOrSignature: "ADAPTER_DELAY"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "ADAPTER_GRACE"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "BASE_MAINNET_CHAIN_ID"
@@ -912,10 +927,11 @@ export interface CofferdamIdentityRegistry extends BaseContract {
   ): TypedContractMethod<
     [arg0: BytesLike],
     [
-      [string, string, bigint] & {
+      [string, string, bigint, string] & {
         oldAccount: string;
         newAccount: string;
         readyAt: bigint;
+        adapter: string;
       }
     ],
     "view"

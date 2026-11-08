@@ -19,10 +19,18 @@ import {IZKPassportHelper, IZKPassportRootVerifier} from "./IZKPassportRootVerif
 ///         - The proof's bound data must name the account (`user_address`),
 ///           this chain (`chain`) and the registry's action digest
 ///           (`custom_data`, as the lowercase `0x`-prefixed hex string of the
-///           32 bytes, 66 characters), decoded by the version's helper.
-///         - The proof must prove the pinned minimum age and disclose neither
-///           document bytes nor a nationality or issuing-country inclusion,
-///           because calldata is public.
+///           32 bytes, 66 characters), decoded by the version's helper. The
+///           helper is pinned at deployment: if ZKPassport's admin swaps it,
+///           every proof fails until a new adapter passes the registry's
+///           timelock. Their sub-verifier cannot be pinned this way.
+///         - Exactly one bind section, so the helper cannot pick among several.
+///         - The proof must prove the pinned minimum age, and a document expiry
+///           at least `EXPIRY_MARGIN` after the bind (decision 0080, 5: an
+///           expired document cannot open an account next to its renewal);
+///           neither is stored. It must disclose nothing, because calldata is
+///           public: no document bytes, no nationality or issuing-country
+///           inclusion, no birth-date range, and no upper bound on age or
+///           expiry (a range that closes reveals the value).
 /// @dev    `evidence` is `abi.encode(bytes32 vkeyHash, bytes proof,
 ///         bytes32[] publicInputs, bytes committedInputs)`, the fields of
 ///         SDK 0.19.3's `getSolidityVerifierParameters` that come from the
@@ -49,10 +57,17 @@ contract ZKPassportEvidenceAdapter is IIdentityEvidenceAdapter {
     /// @notice Committed-input section types this adapter refuses: they put
     ///         document bytes, a nationality or an issuing country in calldata.
     uint8 private constant DISCLOSE = 0;
+    uint8 private constant AGE = 1;
+    uint8 private constant BIRTHDATE = 2;
+    uint8 private constant EXPIRY_DATE = 3;
+    uint8 private constant BIND = 8;
     uint8 private constant NATIONALITY_INCLUSION = 4;
     uint8 private constant ISSUING_COUNTRY_INCLUSION = 6;
 
     IZKPassportRootVerifier public immutable ROOT_VERIFIER;
+    /// @notice The version's helper when this adapter was deployed; it decides
+    ///         the bound account, chain and digest, so it is pinned.
+    IZKPassportHelper public immutable HELPER;
     /// @notice Circuits version as ZKPassport encodes it: three big-endian
     ///         uint16 parts, then zeros (0.21.1 is `0x000000150001` padded).
     bytes32 public immutable VERSION;
@@ -60,8 +75,15 @@ contract ZKPassportEvidenceAdapter is IIdentityEvidenceAdapter {
     uint8 public immutable IDENTIFIER_TYPE;
     /// @notice The OPRF key hash salted identifiers must carry; 0 for non-salted.
     bytes32 public immutable OPRF_KEY_HASH;
-    /// @notice Minimum age the proof must prove; 0 checks none.
+    /// @notice Minimum age the proof must prove; 0 checks none. The proof's
+    ///         lower bound must be exactly this (the helper's comparison).
     uint8 public immutable MIN_AGE;
+    /// @notice Seconds the document must stay valid after the bind; 0 checks
+    ///         none. The proof's committed lower bound on the expiry date must
+    ///         be at least `block.timestamp + EXPIRY_MARGIN`, with no upper bound.
+    uint256 public immutable EXPIRY_MARGIN;
+    /// @notice Ceiling on `EXPIRY_MARGIN`.
+    uint256 public constant MAX_EXPIRY_MARGIN = 5 * 365 days;
 
     bytes32 private immutable _identifierKind;
     bytes32 private immutable _scopeId;
@@ -85,42 +107,55 @@ contract ZKPassportEvidenceAdapter is IIdentityEvidenceAdapter {
     error WrongBoundChain(uint256 expected, uint256 got);
     error WrongBoundDigest();
     error AgeNotProven(uint8 minAge);
+    error BadExpiryMargin(uint256 margin);
+    error ExpiryNotProven(uint256 earliest);
     error DisclosureRefused(uint8 sectionType);
     error MalformedCommittedInputs();
+    error BindSectionCount(uint256 count);
 
     /// @param rootVerifier ZKPassport's `RootVerifier`; must be canonical on Base mainnet.
+    /// @param helper The helper `rootVerifier` names for `version` now; checked here.
     /// @param version The circuits version the proofs must be made with.
     /// @param scope_ The ZKPassport scope, for example `cofferdam-zkp-test-1` (T1).
     /// @param validity Seconds a proof stays usable after its date, at most `MAX_VALIDITY`.
     /// @param identifierType `NON_SALTED` or `SALTED`.
     /// @param oprfKeyHash Required for salted identifiers, 0 otherwise.
     /// @param minAge The age the proof must prove (18 for Cofferdam); 0 checks none.
+    /// @param expiryMargin Seconds the document must stay valid after the bind; 0 checks none.
     constructor(
         address rootVerifier,
+        address helper,
         bytes32 version,
         string memory scope_,
         uint256 validity,
         uint8 identifierType,
         bytes32 oprfKeyHash,
-        uint8 minAge
+        uint8 minAge,
+        uint256 expiryMargin
     ) {
         if (rootVerifier == address(0)) revert ZeroAddress();
         if (block.chainid == BASE_MAINNET_CHAIN_ID && rootVerifier != CANONICAL_ROOT_VERIFIER) {
             revert NotCanonicalVerifier(rootVerifier);
         }
         if (version == bytes32(0)) revert ZeroVersion();
+        if (helper == address(0) || IZKPassportRootVerifier(rootVerifier).getHelper(version) != helper) {
+            revert HelperMismatch(IZKPassportRootVerifier(rootVerifier).getHelper(version), helper);
+        }
         if (bytes(scope_).length == 0) revert EmptyScope();
         if (validity == 0 || validity > MAX_VALIDITY) revert BadValidity(validity);
         if (identifierType != NON_SALTED && identifierType != SALTED) revert BadIdentifierType(identifierType);
         if ((identifierType == SALTED) != (oprfKeyHash != bytes32(0))) revert BadOprfKeyHash();
         if (minAge > 100) revert BadMinAge(minAge);
+        if (expiryMargin > MAX_EXPIRY_MARGIN) revert BadExpiryMargin(expiryMargin);
 
         ROOT_VERIFIER = IZKPassportRootVerifier(rootVerifier);
+        HELPER = IZKPassportHelper(helper);
         VERSION = version;
         VALIDITY = validity;
         IDENTIFIER_TYPE = identifierType;
         OPRF_KEY_HASH = oprfKeyHash;
         MIN_AGE = minAge;
+        EXPIRY_MARGIN = expiryMargin;
         _scope = scope_;
         _identifierKind = keccak256(abi.encode("zkpassport-identifier-v1", identifierType, oprfKeyHash));
         _scopeId = keccak256(abi.encode(DOMAIN, scope_));
@@ -181,35 +216,79 @@ contract ZKPassportEvidenceAdapter is IIdentityEvidenceAdapter {
         if (!valid) revert ProofInvalid();
         if (uniqueIdentifier != publicInputs[n - 2]) revert IdentifierMismatch(uniqueIdentifier, publicInputs[n - 2]);
 
-        address versionHelper = ROOT_VERIFIER.getHelper(VERSION);
-        if (versionHelper == address(0) || helper != versionHelper) revert HelperMismatch(versionHelper, helper);
+        // Fail closed when ZKPassport swaps the helper of this version.
+        if (helper != address(HELPER) || ROOT_VERIFIER.getHelper(VERSION) != address(HELPER)) {
+            revert HelperMismatch(address(HELPER), helper);
+        }
+        _screenSections(committedInputs);
 
-        IZKPassportHelper.BoundData memory bound = IZKPassportHelper(versionHelper).getBoundData(committedInputs);
+        IZKPassportHelper.BoundData memory bound = HELPER.getBoundData(committedInputs);
         if (bound.senderAddress != account) revert WrongBoundAccount(account, bound.senderAddress);
         if (bound.chainId != block.chainid) revert WrongBoundChain(block.chainid, bound.chainId);
         if (keccak256(bytes(bound.customData)) != keccak256(bytes(customData(digest)))) revert WrongBoundDigest();
 
-        if (MIN_AGE != 0 && !IZKPassportHelper(versionHelper).isAgeAboveOrEqual(MIN_AGE, committedInputs)) {
-            revert AgeNotProven(MIN_AGE);
-        }
-        _refuseDisclosure(committedInputs);
+        if (MIN_AGE != 0 && !HELPER.isAgeAboveOrEqual(MIN_AGE, committedInputs)) revert AgeNotProven(MIN_AGE);
+        if (EXPIRY_MARGIN != 0) _checkExpiry(committedInputs);
         return uniqueIdentifier;
     }
 
+    /// @dev The expiry section is `[3][0x0010][minDate:8][maxDate:8]`, dates in
+    ///      seconds. The helper only answers for the exact committed bound, so
+    ///      the bound is read here and the helper confirms it.
+    function _checkExpiry(bytes memory ci) private view {
+        uint256 earliest = block.timestamp + EXPIRY_MARGIN;
+        (bool found, uint256 start, uint256 len) = _section(ci, EXPIRY_DATE);
+        if (!found || len != 16) revert ExpiryNotProven(earliest);
+        uint256 minDate;
+        uint256 maxDate;
+        for (uint256 j = 0; j < 8; j++) {
+            minDate = (minDate << 8) | uint8(ci[start + j]);
+            maxDate = (maxDate << 8) | uint8(ci[start + 8 + j]);
+        }
+        if (maxDate != 0 || minDate < earliest || !HELPER.isExpiryDateAfterOrEqual(minDate, ci)) {
+            revert ExpiryNotProven(earliest);
+        }
+    }
+
+    /// @dev The first section of `wanted` type: its data offset and length.
+    function _section(bytes memory ci, uint8 wanted) private pure returns (bool, uint256, uint256) {
+        uint256 i = 0;
+        while (i + 3 <= ci.length) {
+            uint256 len = (uint256(uint8(ci[i + 1])) << 8) | uint256(uint8(ci[i + 2]));
+            if (uint8(ci[i]) == wanted) {
+                if (i + 3 + len > ci.length) revert MalformedCommittedInputs();
+                return (true, i + 3, len);
+            }
+            i += 3 + len;
+        }
+        return (false, 0, 0);
+    }
+
     /// @dev Walk the committed inputs, `[type:1][length:2][data:length]` per
-    ///      section, and refuse the sections that disclose.
-    function _refuseDisclosure(bytes memory ci) private pure {
+    ///      section: exactly one bind section, and nothing that discloses.
+    function _screenSections(bytes memory ci) private pure {
+        uint256 binds = 0;
         uint256 i = 0;
         while (i < ci.length) {
             if (i + 3 > ci.length) revert MalformedCommittedInputs();
             uint8 sectionType = uint8(ci[i]);
             uint256 len = (uint256(uint8(ci[i + 1])) << 8) | uint256(uint8(ci[i + 2]));
+            if (i + 3 + len > ci.length) revert MalformedCommittedInputs();
             if (
-                sectionType == DISCLOSE || sectionType == NATIONALITY_INCLUSION
+                sectionType == DISCLOSE || sectionType == BIRTHDATE || sectionType == NATIONALITY_INCLUSION
                     || sectionType == ISSUING_COUNTRY_INCLUSION
             ) revert DisclosureRefused(sectionType);
+            // An upper bound turns a predicate into a range that can close on the value.
+            if (sectionType == AGE && (len != 2 || uint8(ci[i + 4]) != 0)) revert DisclosureRefused(sectionType);
+            if (sectionType == EXPIRY_DATE) {
+                if (len != 16) revert MalformedCommittedInputs();
+                for (uint256 j = 0; j < 8; j++) {
+                    if (uint8(ci[i + 11 + j]) != 0) revert DisclosureRefused(sectionType);
+                }
+            }
+            if (sectionType == BIND) binds++;
             i += 3 + len;
         }
-        if (i != ci.length) revert MalformedCommittedInputs();
+        if (binds != 1) revert BindSectionCount(binds);
     }
 }

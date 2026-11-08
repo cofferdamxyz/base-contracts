@@ -69,6 +69,30 @@ const _abi = [
     stateMutability: "view",
     type: "function",
   },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "date",
+        type: "uint256",
+      },
+      {
+        internalType: "bytes",
+        name: "committedInputs",
+        type: "bytes",
+      },
+    ],
+    name: "isExpiryDateAfterOrEqual",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
 ] as const;
 
 export class IZKPassportHelper__factory {

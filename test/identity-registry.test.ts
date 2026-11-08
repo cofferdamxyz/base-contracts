@@ -10,6 +10,7 @@ import type {
 } from '../typechain-types';
 
 import fixture from './fixtures/identity-digest.json';
+import { NO_PERMISSION, webauthnKey } from './helpers/keys';
 import {
   IDENTITY_ACTIONS,
   IdentityAction,
@@ -20,6 +21,7 @@ import {
   zkpBindSection,
   zkpCircuitsVersion,
   zkpCustomData,
+  zkpExpirySection,
   zkpIdentifierKind,
   zkpScopeId,
   zkpSection,
@@ -39,6 +41,7 @@ const ID_A = ethers.id('passport-a');
 const ID_B = ethers.id('passport-b');
 const OPRF = ethers.id('oprf-key-1');
 const DAY = 24 * 3600;
+const EXPIRY_MARGIN = 30 * DAY;
 
 type EvidenceOptions = {
   account?: string;
@@ -49,6 +52,8 @@ type EvidenceOptions = {
   oprf?: string;
   chainId?: bigint;
   age?: number;
+  /** The proof's lower bound on the document's expiry; default bind time + 1 year. null: no expiry section. */
+  expiry?: bigint | null;
   extra?: Uint8Array[];
   date?: number;
   proof?: Uint8Array;
@@ -76,15 +81,23 @@ describe('CofferdamIdentityRegistry + ZKPassportEvidenceAdapter', () => {
     return { helper, root };
   }
 
-  async function deployAdapter(root: string, o: { type?: number; oprf?: string; scope?: string; minAge?: number } = {}) {
+  async function deployAdapter(
+    root: string,
+    o: { type?: number; oprf?: string; scope?: string; minAge?: number; expiryMargin?: number } = {},
+  ) {
+    const helper = await (
+      (await ethers.getContractAt('MockZKPassportRootVerifier', root)) as unknown as MockZKPassportRootVerifier
+    ).getHelper(VERSION);
     return (await (await ethers.getContractFactory('ZKPassportEvidenceAdapter')).deploy(
       root,
+      helper,
       VERSION,
       o.scope ?? SCOPE,
       VALIDITY,
       o.type ?? ZKP_IDENTIFIER_TYPE.nonSalted,
       o.oprf ?? ZERO32,
       o.minAge ?? MIN_AGE,
+      o.expiryMargin ?? EXPIRY_MARGIN,
     )) as unknown as ZKPassportEvidenceAdapter;
   }
 
@@ -110,12 +123,15 @@ describe('CofferdamIdentityRegistry + ZKPassportEvidenceAdapter', () => {
   async function evidence(d: Deployed, o: EvidenceOptions = {}): Promise<string> {
     const account = o.account ?? alice.address;
     const digest = o.digest ?? (await d.registry.digest(IDENTITY_ACTIONS[o.action ?? 'bind'], account));
+    const now = await time.latest();
+    const expiry = o.expiry === undefined ? BigInt(now + 365 * DAY) : o.expiry;
     const sections: Uint8Array[] = [zkpSection(1, [o.age ?? 18, 0]), ...(o.extra ?? [])];
+    if (expiry !== null) sections.push(zkpExpirySection(expiry));
     if (!o.noBind) {
       sections.push(zkpBindSection({ userAddress: account, chainId: o.chainId ?? chainId, customData: zkpCustomData(digest) }));
     }
     const ci = ethers.concat(sections);
-    const date = o.date ?? (await time.latest());
+    const date = o.date ?? now;
     const publicInputs = [
       ethers.id('certificate-root'),
       ethers.id('circuit-root'),
@@ -212,14 +228,26 @@ describe('CofferdamIdentityRegistry + ZKPassportEvidenceAdapter', () => {
       const d = await deploy();
       const ev = await evidence(d);
       await d.registry.connect(alice).bind(d.adapter, ev);
-      await expect(d.registry.connect(alice).relink(d.adapter, ev)).to.be.revertedWithCustomError(d.adapter, 'WrongBoundDigest');
+      // Free Alice again (her identifier moves to Bob), then replay her bind proof.
+      await d.registry.connect(bob).requestRebind(d.adapter, await evidence(d, { account: bob.address, action: 'rebind' }));
+      expect(await d.registry.isAccountBound(alice.address)).to.equal(false);
+      await expect(d.registry.connect(alice).bind(d.adapter, ev)).to.be.revertedWithCustomError(d.adapter, 'WrongBoundDigest');
     });
 
     it('refuses a proof without bound data', async () => {
       const d = await deploy();
-      await expect(d.registry.connect(alice).bind(d.adapter, await evidence(d, { noBind: true }))).to.be.revertedWith(
-        'Bind data proof inputs not found',
-      );
+      await expect(d.registry.connect(alice).bind(d.adapter, await evidence(d, { noBind: true })))
+        .to.be.revertedWithCustomError(d.adapter, 'BindSectionCount')
+        .withArgs(0);
+    });
+
+    it('refuses a second bind section', async () => {
+      const d = await deploy();
+      const digest = await d.registry.digest(IDENTITY_ACTIONS.bind, alice.address);
+      const decoy = zkpBindSection({ userAddress: alice.address, chainId, customData: zkpCustomData(digest) });
+      await expect(d.registry.connect(alice).bind(d.adapter, await evidence(d, { extra: [decoy] })))
+        .to.be.revertedWithCustomError(d.adapter, 'BindSectionCount')
+        .withArgs(2);
     });
 
     it('one identifier per account and one account per identifier', async () => {
@@ -256,16 +284,26 @@ describe('CofferdamIdentityRegistry + ZKPassportEvidenceAdapter', () => {
       const { root } = await deployMocks();
       const F = await ethers.getContractFactory('ZKPassportEvidenceAdapter');
       const rootAddr = await root.getAddress();
+      const H = await root.getHelper(VERSION);
+      const M = EXPIRY_MARGIN;
+      await expect(F.deploy(rootAddr, alice.address, VERSION, SCOPE, VALIDITY, 0, ZERO32, 18, M)).to.be.revertedWithCustomError(
+        F,
+        'HelperMismatch',
+      );
       for (const t of [2, 3, 4]) {
-        await expect(F.deploy(rootAddr, VERSION, SCOPE, VALIDITY, t, ZERO32, 18)).to.be.revertedWithCustomError(F, 'BadIdentifierType');
+        await expect(F.deploy(rootAddr, H, VERSION, SCOPE, VALIDITY, t, ZERO32, 18, M)).to.be.revertedWithCustomError(F, 'BadIdentifierType');
       }
-      await expect(F.deploy(rootAddr, VERSION, SCOPE, VALIDITY, 1, ZERO32, 18)).to.be.revertedWithCustomError(F, 'BadOprfKeyHash');
-      await expect(F.deploy(rootAddr, VERSION, SCOPE, VALIDITY, 0, OPRF, 18)).to.be.revertedWithCustomError(F, 'BadOprfKeyHash');
-      await expect(F.deploy(rootAddr, VERSION, SCOPE, 0, 0, ZERO32, 18)).to.be.revertedWithCustomError(F, 'BadValidity');
-      await expect(F.deploy(rootAddr, VERSION, SCOPE, DAY + 1, 0, ZERO32, 18)).to.be.revertedWithCustomError(F, 'BadValidity');
-      await expect(F.deploy(rootAddr, ZERO32, SCOPE, VALIDITY, 0, ZERO32, 18)).to.be.revertedWithCustomError(F, 'ZeroVersion');
-      await expect(F.deploy(rootAddr, VERSION, '', VALIDITY, 0, ZERO32, 18)).to.be.revertedWithCustomError(F, 'EmptyScope');
-      await expect(F.deploy(ethers.ZeroAddress, VERSION, SCOPE, VALIDITY, 0, ZERO32, 18)).to.be.revertedWithCustomError(F, 'ZeroAddress');
+      await expect(F.deploy(rootAddr, H, VERSION, SCOPE, VALIDITY, 1, ZERO32, 18, M)).to.be.revertedWithCustomError(F, 'BadOprfKeyHash');
+      await expect(F.deploy(rootAddr, H, VERSION, SCOPE, VALIDITY, 0, OPRF, 18, M)).to.be.revertedWithCustomError(F, 'BadOprfKeyHash');
+      await expect(F.deploy(rootAddr, H, VERSION, SCOPE, 0, 0, ZERO32, 18, M)).to.be.revertedWithCustomError(F, 'BadValidity');
+      await expect(F.deploy(rootAddr, H, VERSION, SCOPE, DAY + 1, 0, ZERO32, 18, M)).to.be.revertedWithCustomError(F, 'BadValidity');
+      await expect(F.deploy(rootAddr, H, ZERO32, SCOPE, VALIDITY, 0, ZERO32, 18, M)).to.be.revertedWithCustomError(F, 'ZeroVersion');
+      await expect(F.deploy(rootAddr, H, VERSION, '', VALIDITY, 0, ZERO32, 18, M)).to.be.revertedWithCustomError(F, 'EmptyScope');
+      await expect(F.deploy(ethers.ZeroAddress, H, VERSION, SCOPE, VALIDITY, 0, ZERO32, 18, M)).to.be.revertedWithCustomError(F, 'ZeroAddress');
+      await expect(F.deploy(rootAddr, H, VERSION, SCOPE, VALIDITY, 0, ZERO32, 18, 5 * 365 * DAY + 1)).to.be.revertedWithCustomError(
+        F,
+        'BadExpiryMargin',
+      );
     });
 
     it('a salted adapter pins its OPRF key, which is part of its kind', async () => {
@@ -311,26 +349,78 @@ describe('CofferdamIdentityRegistry + ZKPassportEvidenceAdapter', () => {
         .to.be.revertedWithCustomError(d.adapter, 'ProofInvalid');
     });
 
-    it('uses the version helper the verifier names', async () => {
+    it('only the deployer configures the mock verifier', async () => {
       const d = await deploy();
+      await expect(d.root.connect(alice).setHelper(VERSION, alice.address)).to.be.revertedWith('owner');
+      await expect(d.root.connect(alice).setExpected(VERSION, VALIDITY, ZKP_DOMAIN, SCOPE, true)).to.be.revertedWith('owner');
+    });
+
+    it('pins the helper: a helper swapped by the verifier fails closed', async () => {
+      const d = await deploy();
+      const pinned = await d.helper.getAddress();
+      expect(await d.adapter.HELPER()).to.equal(pinned);
       const other = (await (await ethers.getContractFactory('MockZKPassportHelper')).deploy()) as unknown as MockZKPassportHelper;
       const ev = await evidence(d);
+      await d.root.setHelper(VERSION, await other.getAddress());
+      await expect(d.registry.connect(alice).bind(d.adapter, ev)).to.be.revertedWithCustomError(d.adapter, 'HelperMismatch');
       await d.root.setHelper(VERSION, ethers.ZeroAddress);
       await expect(d.registry.connect(alice).bind(d.adapter, ev)).to.be.revertedWithCustomError(d.adapter, 'HelperMismatch');
-      await d.root.setHelper(VERSION, await other.getAddress());
+      await d.root.setHelper(VERSION, pinned);
       await expect(d.registry.connect(alice).bind(d.adapter, ev)).to.emit(d.registry, 'Bound');
     });
 
-    it('requires the minimum age', async () => {
+    it('requires the minimum age, as the exact bound the proof commits to', async () => {
       const d = await deploy();
-      await expect(d.registry.connect(alice).bind(d.adapter, await evidence(d, { age: 17 })))
-        .to.be.revertedWithCustomError(d.adapter, 'AgeNotProven')
-        .withArgs(18);
+      for (const age of [17, 19]) {
+        await expect(d.registry.connect(alice).bind(d.adapter, await evidence(d, { age })))
+          .to.be.revertedWithCustomError(d.adapter, 'AgeNotProven')
+          .withArgs(18);
+      }
     });
 
-    it('refuses disclosure sections: document bytes, nationality or issuing-country inclusion', async () => {
+    it('requires the document to stay valid for the expiry margin after the bind', async () => {
       const d = await deploy();
-      for (const t of [0, 4, 6]) {
+      const soon = BigInt((await time.latest()) + EXPIRY_MARGIN - 60);
+      await expect(d.registry.connect(alice).bind(d.adapter, await evidence(d, { expiry: soon }))).to.be.revertedWithCustomError(
+        d.adapter,
+        'ExpiryNotProven',
+      );
+      await expect(d.registry.connect(alice).bind(d.adapter, await evidence(d, { expiry: null }))).to.be.revertedWithCustomError(
+        d.adapter,
+        'ExpiryNotProven',
+      );
+      // An upper bound on the expiry would let a range close on the date: refused as disclosure.
+      const bounded = await evidence(d, { expiry: null, extra: [zkpExpirySection(BigInt((await time.latest()) + 365 * DAY), 1n)] });
+      await expect(d.registry.connect(alice).bind(d.adapter, bounded))
+        .to.be.revertedWithCustomError(d.adapter, 'DisclosureRefused')
+        .withArgs(3);
+      const enough = BigInt((await time.latest()) + EXPIRY_MARGIN + 3600);
+      await expect(d.registry.connect(alice).bind(d.adapter, await evidence(d, { expiry: enough }))).to.emit(d.registry, 'Bound');
+    });
+
+    it('an adapter with no expiry margin checks none', async () => {
+      const { root } = await deployMocks();
+      const adapter = await deployAdapter(await root.getAddress(), { expiryMargin: 0 });
+      const registry = (await (await ethers.getContractFactory('CofferdamIdentityRegistry')).deploy(
+        owner.address,
+        zkpIdentifierKind(0),
+        zkpScopeId(SCOPE),
+        0,
+        0,
+        [await adapter.getAddress()],
+        false,
+        [],
+      )) as unknown as CofferdamIdentityRegistry;
+      const d = { registry, adapter } as unknown as Deployed;
+      await expect(registry.connect(alice).bind(adapter, await evidence(d, { expiry: null }))).to.emit(registry, 'Bound');
+    });
+
+    it('refuses disclosure: document bytes, birth-date range, nationality or issuing-country inclusion, bounded age', async () => {
+      const d = await deploy();
+      await expect(d.registry.connect(alice).bind(d.adapter, await evidence(d, { extra: [zkpSection(1, [18, 18])] })))
+        .to.be.revertedWithCustomError(d.adapter, 'DisclosureRefused')
+        .withArgs(1);
+      for (const t of [0, 2, 4, 6]) {
         await expect(d.registry.connect(alice).bind(d.adapter, await evidence(d, { extra: [zkpSection(t, [1, 2, 3])] })))
           .to.be.revertedWithCustomError(d.adapter, 'DisclosureRefused')
           .withArgs(t);
@@ -385,7 +475,9 @@ describe('CofferdamIdentityRegistry + ZKPassportEvidenceAdapter', () => {
       const d = await deploy({ rebindDelay: 3 * DAY });
       await d.registry.connect(alice).bind(d.adapter, await evidence(d));
       await d.registry.connect(bob).requestRebind(d.adapter, await evidence(d, { account: bob.address, action: 'rebind' }));
-      await d.registry.connect(alice).relink(d.adapter, await evidence(d, { action: 'relink', identifier: ID_B }));
+      await expect(d.registry.connect(alice).relink(d.adapter, await evidence(d, { action: 'relink', identifier: ID_B })))
+        .to.emit(d.registry, 'RebindCancelled')
+        .withArgs(alice.address, ID_A, bob.address);
       await time.increase(3 * DAY);
       await expect(d.registry.finalizeRebind(ID_A)).to.be.revertedWithCustomError(d.registry, 'NoPendingRebind');
     });
@@ -426,6 +518,24 @@ describe('CofferdamIdentityRegistry + ZKPassportEvidenceAdapter', () => {
       await expect(d.registry.connect(carol).finalizeRebind(ID_A)).to.emit(d.registry, 'Rebound').withArgs(alice.address, bob.address, ID_A);
       expect(await d.registry.accountToIdentifier(bob.address)).to.equal(ID_A);
       expect(await d.registry.isAccountBound(alice.address)).to.equal(false);
+    });
+
+    it('removing the adapter voids the rebinds it authorised', async () => {
+      const d = await deploy({ rebindDelay: 3 * DAY });
+      await d.registry.connect(alice).bind(d.adapter, await evidence(d));
+      await d.registry.connect(bob).requestRebind(d.adapter, await evidence(d, { account: bob.address, action: 'rebind' }));
+      await d.registry.connect(owner).removeAdapter(d.adapter);
+      await time.increase(3 * DAY);
+      await expect(d.registry.finalizeRebind(ID_A)).to.be.revertedWithCustomError(d.registry, 'AdapterNotActive');
+    });
+
+    it('a new account taken off the test allowlist cannot finalize', async () => {
+      const d = await deploy({ rebindDelay: 3 * DAY, allowlistOnly: true, testAccounts: [alice.address, bob.address] });
+      await d.registry.connect(alice).bind(d.adapter, await evidence(d));
+      await d.registry.connect(bob).requestRebind(d.adapter, await evidence(d, { account: bob.address, action: 'rebind' }));
+      await d.registry.connect(owner).setTestAccount(bob.address, false);
+      await time.increase(3 * DAY);
+      await expect(d.registry.finalizeRebind(ID_A)).to.be.revertedWithCustomError(d.registry, 'NotTestAccount');
     });
 
     it('fails at finalize if the new account bound meanwhile', async () => {
@@ -513,6 +623,17 @@ describe('CofferdamIdentityRegistry + ZKPassportEvidenceAdapter', () => {
       await expect(d.registry.connect(alice).bind(second, await evidence(d))).to.emit(d.registry, 'Bound');
     });
 
+    it('a proposal left past its grace window must be made again', async () => {
+      const d = await deploy({ adapterDelay: DAY });
+      const second = await deployAdapter(await d.root.getAddress());
+      await d.registry.connect(owner).proposeAdapter(second);
+      await time.increase(DAY + 7 * DAY + 1);
+      await expect(d.registry.connect(owner).activateAdapter(second)).to.be.revertedWithCustomError(d.registry, 'AdapterProposalExpired');
+      await d.registry.connect(owner).proposeAdapter(second);
+      await time.increase(DAY);
+      await expect(d.registry.connect(owner).activateAdapter(second)).to.emit(d.registry, 'AdapterActivated');
+    });
+
     it('a cancelled proposal never activates', async () => {
       const d = await deploy({ adapterDelay: DAY });
       const second = await deployAdapter(await d.root.getAddress());
@@ -558,6 +679,50 @@ describe('CofferdamIdentityRegistry + ZKPassportEvidenceAdapter', () => {
       await d.registry.connect(bob).acceptOwnership();
       expect(await d.registry.owner()).to.equal(bob.address);
       await expect(d.registry.connect(owner).setPaused(true)).to.be.revertedWithCustomError(d.registry, 'NotOwner');
+    });
+  });
+  describe('through a CofferdamAccount4337 (today\'s account code, as in the test generation)', () => {
+    async function accountOn(registry: string, ep: HardhatEthersSigner) {
+      const highModule = await (await ethers.getContractFactory('WebAuthnPasskeyAuthority')).deploy();
+      const modules = await (await ethers.getContractFactory('CofferdamModuleRegistry')).deploy(owner.address, [await highModule.getAddress()]);
+      const ceremony = await (await ethers.getContractFactory('CofferdamCeremonyAttesterRegistry')).deploy(owner.address, []);
+      const high = webauthnKey();
+      const account: any = await (await ethers.getContractFactory('CofferdamAccount4337')).deploy(
+        ep.address, modules, ceremony, registry, 0n, 600n, highModule, high.config, NO_PERMISSION,
+      );
+      return { account, highModule };
+    }
+
+    it('the account binds, vetoes a rebind and is bound, by its own execute calls', async () => {
+      const [, , , , ep] = await ethers.getSigners();
+      const d = await deploy({ rebindDelay: 3 * DAY });
+      const { account } = await accountOn(await d.registry.getAddress(), ep);
+      const addr = await account.getAddress();
+      const call = (fn: string, args: unknown[]) =>
+        account.connect(ep).execute(d.registry, 0, d.registry.interface.encodeFunctionData(fn as any, args as any));
+
+      await expect(call('bind', [await d.adapter.getAddress(), await evidence(d, { account: addr })]))
+        .to.emit(d.registry, 'Bound')
+        .withArgs(addr, ID_A, await d.adapter.getAddress(), 0n);
+      expect(await d.registry.isAccountBound(addr)).to.equal(true);
+      // Someone else cannot bind for the account: the proof names it, msg.sender does not.
+      await expect(d.registry.connect(bob).bind(d.adapter, await evidence(d, { account: addr, identifier: ID_B })))
+        .to.be.revertedWithCustomError(d.adapter, 'WrongBoundAccount');
+
+      await d.registry.connect(bob).requestRebind(d.adapter, await evidence(d, { account: bob.address, action: 'rebind' }));
+      await expect(call('cancelRebind', [ID_A])).to.emit(d.registry, 'RebindCancelled').withArgs(addr, ID_A, bob.address);
+    });
+
+    it("the account's recoverHigh reverts: it calls Self's provenNullifier, which this registry lacks", async () => {
+      const [, , , , ep] = await ethers.getSigners();
+      const d = await deploy();
+      const { account, highModule } = await accountOn(await d.registry.getAddress(), ep);
+      const newKey = webauthnKey();
+      const assertion = newKey.sign(await account.recoveryChallenge(await account.ceremonyNonce()));
+      const zero = { a: [0n, 0n], b: [[0n, 0n], [0n, 0n]], c: [0n, 0n], pubSignals: new Array(21).fill(0n), userContextData: '0x' };
+      await expect(
+        account.recoverHigh(highModule, newKey.config, assertion, zero, '0x', { notBefore: 0n, expiry: 0n, signature: '0x' }),
+      ).to.be.revertedWithoutReason();
     });
   });
 });

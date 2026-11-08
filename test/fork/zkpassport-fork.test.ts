@@ -12,6 +12,7 @@ import {
   ZKP_ROOT_VERIFIER,
   encodeZkpEvidence,
   zkpCircuitsVersion,
+  zkpExpirySection,
   zkpIdentifierKind,
   zkpScopeId,
 } from '../../scripts/lib/identity';
@@ -53,6 +54,11 @@ describe('ZKPassport on a fork of Base mainnet (chain 8453)', function () {
     await network.provider.send('hardhat_mine', ['0x1']);
   });
 
+  /** The revert came from the adapter's section screening, which runs only after the verifier accepted the proof. */
+  function screened(adapter: { interface: { getError(name: string): { selector: string } | null } }, reason: string): boolean {
+    return ['DisclosureRefused', 'BindSectionCount'].some((e) => reason.includes(e) || reason.includes(adapter.interface.getError(e)!.selector));
+  }
+
   async function rejection(p: Promise<unknown>): Promise<string> {
     try {
       await p;
@@ -62,15 +68,21 @@ describe('ZKPassport on a fork of Base mainnet (chain 8453)', function () {
     return '';
   }
 
-  async function deployAdapter(o: { root?: string; version?: string; scope?: string; type?: number; minAge?: number } = {}) {
+  async function deployAdapter(
+    o: { root?: string; version?: string; scope?: string; type?: number; minAge?: number; expiryMargin?: number } = {},
+  ) {
+    const version = o.version ?? VERSION_0_21_1;
+    const live = (await ethers.getContractAt('IZKPassportRootVerifier', ZKP_ROOT_VERIFIER)) as unknown as IZKPassportRootVerifier;
     return (await ethers.getContractFactory('ZKPassportEvidenceAdapter')).deploy(
       o.root ?? ZKP_ROOT_VERIFIER,
-      o.version ?? VERSION_0_21_1,
+      await live.getHelper(version),
+      version,
       o.scope ?? 'cofferdam-zkp-test-1',
       3600,
       o.type ?? ZKP_IDENTIFIER_TYPE.nonSalted,
       ethers.ZeroHash,
       o.minAge ?? 18,
+      o.expiryMargin ?? 30 * DAY,
     );
   }
 
@@ -94,8 +106,13 @@ describe('ZKPassport on a fork of Base mainnet (chain 8453)', function () {
     const root = (await ethers.getContractAt('IZKPassportRootVerifier', ZKP_ROOT_VERIFIER)) as unknown as IZKPassportRootVerifier;
     const helper = await root.getHelper(VERSION_0_21_1);
     expect(helper).to.not.equal(ethers.ZeroAddress);
+    // The deployed helper answers only for the exact committed bound.
     const h = await ethers.getContractAt('IZKPassportHelper', helper);
     expect(await h.isAgeAboveOrEqual(18, '0x0100021200')).to.equal(true);
+    expect(await h.isAgeAboveOrEqual(18, '0x0100021300')).to.equal(false);
+    const expiry = (t: bigint) => ethers.hexlify(zkpExpirySection(t));
+    expect(await h.isExpiryDateAfterOrEqual(1_900_000_000n, expiry(1_900_000_000n))).to.equal(true);
+    expect(await h.isExpiryDateAfterOrEqual(1_900_000_000n, expiry(1_900_000_001n))).to.equal(false);
   });
 
   it('the registry refuses delays under 72 hours on chain 8453', async () => {
@@ -194,21 +211,23 @@ describe('ZKPassport on a fork of Base mainnet (chain 8453)', function () {
       expect(valid).to.equal(false);
     });
 
-    it('through the adapter it passes the verifier and stops at the bound data it lacks', async () => {
-      // The founder's proof of 2026-11-07 has no bind section, so it can
-      // never bind: reaching the helper's bind-data error means the
-      // verifier, the identifier type and the helper checks all passed.
+    it('through the adapter it passes the verifier and stops at the screening after it', async () => {
+      // The founder's proof of 2026-11-07 discloses nationality and has no
+      // bind section, so it can never bind: reaching the section screening
+      // (which runs after RootVerifier.verify and the pinned-helper check)
+      // means the verifier, the identifier type and the helper checks passed.
       const pi = params.proofVerificationData.publicInputs;
       const adapter = await deployAdapter({
         version: params.version,
         scope: params.serviceConfig.scope,
         type: Number(BigInt(pi[pi.length - 3])),
         minAge: 0,
+        expiryMargin: 0,
       });
       const [, account] = await ethers.getSigners();
       const digest = ethers.id('any digest');
-      await expect(adapter.verify(account.address, digest, evidenceOf(params))).to.be.revertedWith('Bind data proof inputs not found');
-      console.log(`      adapter.verify gas to the bind-data check: ${await adapter.verify.estimateGas(account.address, digest, evidenceOf(params)).catch(() => 'n/a (reverts)')}`);
+      const reason = await rejection(adapter.verify(account.address, digest, evidenceOf(params)));
+      expect(screened(adapter, reason)).to.equal(true);
     });
 
     it('a tampered committed input fails the verifier', async () => {
@@ -218,13 +237,14 @@ describe('ZKPassport on a fork of Base mainnet (chain 8453)', function () {
         scope: params.serviceConfig.scope,
         type: Number(BigInt(pi[pi.length - 3])),
         minAge: 0,
+        expiryMargin: 0,
       });
       const ci = ethers.getBytes(params.committedInputs);
       ci[ci.length - 1] ^= 0x01;
       const [, account] = await ethers.getSigners();
       const reason = await rejection(adapter.verify(account.address, ethers.ZeroHash, evidenceOf(params, ethers.hexlify(ci))));
       expect(reason).to.not.equal('');
-      expect(reason).to.not.contain('Bind data proof inputs not found');
+      expect(screened(adapter, reason)).to.equal(false);
     });
 
     it('the registry refuses it: unbound proofs never bind', async () => {
@@ -234,12 +254,12 @@ describe('ZKPassport on a fork of Base mainnet (chain 8453)', function () {
         scope: params.serviceConfig.scope,
         type: Number(BigInt(pi[pi.length - 3])),
         minAge: 0,
+        expiryMargin: 0,
       });
       const registry = await deployRegistry(await adapter.getAddress(), params.serviceConfig.scope);
       const [, account] = await ethers.getSigners();
-      await expect(registry.check(IDENTITY_ACTIONS.bind, account.address, adapter, evidenceOf(params))).to.be.revertedWith(
-        'Bind data proof inputs not found',
-      );
+      const reason = await rejection(registry.check(IDENTITY_ACTIONS.bind, account.address, adapter, evidenceOf(params)));
+      expect(screened(adapter, reason)).to.equal(true);
     });
   });
 });

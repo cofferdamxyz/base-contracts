@@ -19,15 +19,22 @@ export async function isBaseMainnetChain(): Promise<boolean> {
 }
 
 /**
- * The node is a local fork, not Base mainnet itself: the in-process Hardhat
- * network or a node on this machine. Nothing it signs reaches a public chain.
+ * The node is a development node (the in-process Hardhat network, anvil or a
+ * Hardhat node), so nothing it signs reaches a public chain. Asked of the node
+ * itself, never read from the URL: a real Base node or an RPC tunnel can
+ * listen on 127.0.0.1 too.
  */
-export function isLocalNode(): boolean {
+export async function isLocalFork(): Promise<boolean> {
   if (network.name === 'hardhat') return true;
-  const url = (network.config as { url?: string }).url;
-  if (!url) return false;
-  const host = new URL(url).hostname;
-  return host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === '[::1]';
+  for (const method of ['anvil_nodeInfo', 'hardhat_metadata']) {
+    try {
+      await ethers.provider.send(method, []);
+      return true;
+    } catch {
+      // not a development node, or not this kind
+    }
+  }
+  return false;
 }
 
 /** Throw on Base mainnet (or a fork of it): for scripts whose contracts never go there. */
@@ -46,7 +53,7 @@ export async function refuseMainnet(what: string): Promise<void> {
  */
 export async function assertMainnetSigner(signer: string): Promise<void> {
   if (!(await isBaseMainnetChain())) return;
-  if (isLocalNode()) {
+  if (await isLocalFork()) {
     console.log(`DRY RUN: chain 8453 on a local fork (${network.name}); nothing reaches Base mainnet.`);
     return;
   }
@@ -71,7 +78,7 @@ export async function getDeployer() {
   const listed = ((network.config as { ledgerAccounts?: string[] }).ledgerAccounts ?? []).map((a) => a.toLowerCase());
   if (ledger && listed.includes(ledger.toLowerCase())) {
     const signer = await ethers.getSigner(ledger);
-    if (isLocalNode() && (await ethers.provider.getBalance(ledger)) < ethers.parseEther('1')) {
+    if ((await isLocalFork()) && (await ethers.provider.getBalance(ledger)) < ethers.parseEther('1')) {
       await ethers.provider.send('hardhat_setBalance', [ledger, ethers.toBeHex(ethers.parseEther('10'))]);
     }
     return signer;

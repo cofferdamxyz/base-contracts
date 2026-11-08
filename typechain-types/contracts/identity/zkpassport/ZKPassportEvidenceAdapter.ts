@@ -27,7 +27,10 @@ export interface ZKPassportEvidenceAdapterInterface extends Interface {
       | "CANONICAL_ROOT_VERIFIER"
       | "DEV_MODE"
       | "DOMAIN"
+      | "EXPIRY_MARGIN"
+      | "HELPER"
       | "IDENTIFIER_TYPE"
+      | "MAX_EXPIRY_MARGIN"
       | "MAX_VALIDITY"
       | "MIN_AGE"
       | "NON_SALTED"
@@ -54,7 +57,16 @@ export interface ZKPassportEvidenceAdapterInterface extends Interface {
   encodeFunctionData(functionFragment: "DEV_MODE", values?: undefined): string;
   encodeFunctionData(functionFragment: "DOMAIN", values?: undefined): string;
   encodeFunctionData(
+    functionFragment: "EXPIRY_MARGIN",
+    values?: undefined
+  ): string;
+  encodeFunctionData(functionFragment: "HELPER", values?: undefined): string;
+  encodeFunctionData(
     functionFragment: "IDENTIFIER_TYPE",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "MAX_EXPIRY_MARGIN",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -103,7 +115,16 @@ export interface ZKPassportEvidenceAdapterInterface extends Interface {
   decodeFunctionResult(functionFragment: "DEV_MODE", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "DOMAIN", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "EXPIRY_MARGIN",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "HELPER", data: BytesLike): Result;
+  decodeFunctionResult(
     functionFragment: "IDENTIFIER_TYPE",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "MAX_EXPIRY_MARGIN",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -184,7 +205,13 @@ export interface ZKPassportEvidenceAdapter extends BaseContract {
 
   DOMAIN: TypedContractMethod<[], [string], "view">;
 
+  EXPIRY_MARGIN: TypedContractMethod<[], [bigint], "view">;
+
+  HELPER: TypedContractMethod<[], [string], "view">;
+
   IDENTIFIER_TYPE: TypedContractMethod<[], [bigint], "view">;
+
+  MAX_EXPIRY_MARGIN: TypedContractMethod<[], [bigint], "view">;
 
   MAX_VALIDITY: TypedContractMethod<[], [bigint], "view">;
 
@@ -233,7 +260,16 @@ export interface ZKPassportEvidenceAdapter extends BaseContract {
     nameOrSignature: "DOMAIN"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "EXPIRY_MARGIN"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "HELPER"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "IDENTIFIER_TYPE"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "MAX_EXPIRY_MARGIN"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "MAX_VALIDITY"

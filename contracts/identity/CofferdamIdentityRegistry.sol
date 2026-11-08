@@ -40,6 +40,9 @@ contract CofferdamIdentityRegistry {
     /// @notice Bound on both delays, so a typo cannot freeze rebinds or
     ///         adapter changes for years.
     uint256 public constant MAX_DELAY = 30 days;
+    /// @notice How long a proposed adapter stays activatable after its delay;
+    ///         an older proposal must be made again, with fresh notice.
+    uint256 public constant ADAPTER_GRACE = 7 days;
 
     /// @notice Action tags folded into the digest a proof must carry, one per
     ///         action, so a proof made for one action never serves another.
@@ -91,6 +94,9 @@ contract CofferdamIdentityRegistry {
         address oldAccount;
         address newAccount;
         uint48 readyAt;
+        /// @dev The adapter whose evidence authorised it; removing the adapter
+        ///      voids the rebinds it authorised.
+        address adapter;
     }
 
     /// @notice The rebind of an identifier waiting for `REBIND_DELAY`, if any.
@@ -134,6 +140,7 @@ contract CofferdamIdentityRegistry {
     error AdapterAlreadyActive(address adapter);
     error AdapterNotProposed(address adapter);
     error AdapterNotReady(uint256 readyAt);
+    error AdapterProposalExpired(uint256 expiredAt);
     error WrongIdentifierKind(bytes32 expected, bytes32 got);
     error WrongScope(bytes32 expected, bytes32 got);
     error ZeroIdentifier();
@@ -216,6 +223,11 @@ contract CofferdamIdentityRegistry {
     ///         old document can never open a second account. The proof must be
     ///         bound to `digest(RELINK, msg.sender)`. A pending rebind of the
     ///         old identifier is dropped with it.
+    /// @dev    It applies at once on the account's own call. Whoever controls
+    ///         the account's High can therefore retire the owner's identifier
+    ///         and so close passport rebind for that person. Decision 0080 (7)
+    ///         puts the recovery key's signature on relink in the production
+    ///         generation; this generation is for the throwaway test.
     function relink(address adapter, bytes calldata evidence) external {
         address account = msg.sender;
         (bytes32 newIdentifier,) = _check(RELINK, account, adapter, evidence);
@@ -223,7 +235,11 @@ contract CofferdamIdentityRegistry {
         uint256 nonce = nonces[account]++;
         isRetired[oldIdentifier] = true;
         delete identifierToAccount[oldIdentifier];
-        delete pendingRebind[oldIdentifier];
+        address dropped = pendingRebind[oldIdentifier].newAccount;
+        if (dropped != address(0)) {
+            delete pendingRebind[oldIdentifier];
+            emit RebindCancelled(account, oldIdentifier, dropped);
+        }
         identifierToAccount[newIdentifier] = account;
         accountToIdentifier[account] = newIdentifier;
         emit IdentifierRetired(oldIdentifier);
@@ -247,18 +263,23 @@ contract CofferdamIdentityRegistry {
             return;
         }
         uint48 readyAt = uint48(block.timestamp + REBIND_DELAY);
-        pendingRebind[identifier] = PendingRebind({oldAccount: oldAccount, newAccount: newAccount, readyAt: readyAt});
+        pendingRebind[identifier] =
+            PendingRebind({oldAccount: oldAccount, newAccount: newAccount, readyAt: readyAt, adapter: adapter});
         emit RebindRequested(oldAccount, newAccount, identifier, nonce, readyAt);
     }
 
     /// @notice Apply a pending rebind once `REBIND_DELAY` has passed. Anyone may
     ///         call it; the authorisation happened in `requestRebind`. Fails if
-    ///         the identifier or either account changed meanwhile.
+    ///         the identifier or either account changed meanwhile, if the
+    ///         adapter that checked the evidence was removed since, or if the
+    ///         new account left the test allowlist while it is on.
     function finalizeRebind(bytes32 identifier) external {
         if (paused) revert Paused();
         PendingRebind memory p = pendingRebind[identifier];
         if (p.newAccount == address(0)) revert NoPendingRebind(identifier);
         if (block.timestamp < p.readyAt) revert RebindNotReady(p.readyAt);
+        if (!isAdapter[p.adapter]) revert AdapterNotActive(p.adapter);
+        if (allowlistOnly && !isTestAccount[p.newAccount]) revert NotTestAccount(p.newAccount);
         if (identifierToAccount[identifier] != p.oldAccount) revert RebindStale(identifier);
         bytes32 existing = accountToIdentifier[p.newAccount];
         if (existing != bytes32(0)) revert AccountAlreadyBound(p.newAccount, existing);
@@ -343,6 +364,11 @@ contract CofferdamIdentityRegistry {
 
     /// @notice Start the timelock for a new adapter. Its kind and scope must be
     ///         this registry's. Re-proposing restarts the clock.
+    /// @dev    The kind names the identifier derivation, not the circuits
+    ///         version: an adapter for a new version keeps the kind. The delay
+    ///         is the window to confirm that the provider did not change how
+    ///         identifiers are derived; if it did, the adapter belongs in a new
+    ///         registry, or one person could bind twice.
     function proposeAdapter(address adapter) external onlyOwner {
         _checkAdapterShape(adapter);
         if (isAdapter[adapter]) revert AdapterAlreadyActive(adapter);
@@ -361,13 +387,16 @@ contract CofferdamIdentityRegistry {
         uint256 readyAt = adapterReadyAt[adapter];
         if (readyAt == 0) revert AdapterNotProposed(adapter);
         if (block.timestamp < readyAt) revert AdapterNotReady(readyAt);
+        if (block.timestamp > readyAt + ADAPTER_GRACE) revert AdapterProposalExpired(readyAt + ADAPTER_GRACE);
         delete adapterReadyAt[adapter];
         isAdapter[adapter] = true;
         emit AdapterActivated(adapter);
     }
 
     /// @notice Stop accepting an adapter's evidence at once: a removal only
-    ///         narrows what binds, so it needs no timelock. Bindings it made stay.
+    ///         narrows what binds, so it needs no timelock. Bindings it made
+    ///         stay; rebinds it authorised that are still pending can no longer
+    ///         be finalized.
     function removeAdapter(address adapter) external onlyOwner {
         if (!isAdapter[adapter]) revert AdapterNotActive(adapter);
         isAdapter[adapter] = false;
@@ -388,8 +417,8 @@ contract CofferdamIdentityRegistry {
         if (account == address(0)) revert ZeroAddress();
         if (allowlistOnly && !isTestAccount[account]) revert NotTestAccount(account);
         if (action != BIND && action != REBIND && action != RELINK) revert UnknownAction(action);
+        // Adapters are immutable; kind and scope were checked when it was added.
         if (!isAdapter[adapter]) revert AdapterNotActive(adapter);
-        _checkAdapterShape(adapter);
 
         identifier = IIdentityEvidenceAdapter(adapter).verify(account, digest(action, account), evidence);
         if (identifier == bytes32(0)) revert ZeroIdentifier();

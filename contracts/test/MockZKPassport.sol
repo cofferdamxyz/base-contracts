@@ -13,16 +13,19 @@ import {IZKPassportHelper, IZKPassportRootVerifier} from "../identity/zkpassport
 contract MockZKPassportRootVerifier is IZKPassportRootVerifier {
     bytes32 public constant MOCK_PROOF = keccak256("mock-zkpassport-proof");
 
+    address public immutable owner = msg.sender;
     mapping(bytes32 => address) public helpers;
     bytes32 public expectedConfig;
 
     function setHelper(bytes32 version, address helper) external {
+        require(msg.sender == owner, "owner");
         helpers[version] = helper;
     }
 
     function setExpected(bytes32 version, uint256 validity, string calldata domain, string calldata scope, bool devMode)
         external
     {
+        require(msg.sender == owner, "owner");
         expectedConfig = keccak256(abi.encode(version, validity, domain, scope, devMode));
     }
 
@@ -46,9 +49,11 @@ contract MockZKPassportRootVerifier is IZKPassportRootVerifier {
     }
 }
 
-/// @notice Test double of ZKPassport's helper: parses the bind (type 8) and
-///         age (type 1) sections of the committed inputs in the layout the
-///         SDK writes, `[type:1][length:2][data:length]`. Bound data is
+/// @notice Test double of ZKPassport's helper: parses the bind (type 8), age
+///         (type 1) and expiry (type 3) sections of the committed inputs in the
+///         layout the SDK writes, `[type:1][length:2][data:length]`. Like the
+///         deployed 0.21.1 helper, the age and expiry answers are true only for
+///         the exact committed lower bound, and revert on an upper bound. Bound data is
 ///         `[1][len:2][address]`, `[2][0][len][chain id, big-endian]`,
 ///         `[3][len:2][utf-8]`, zero-padded.
 contract MockZKPassportHelper is IZKPassportHelper {
@@ -70,7 +75,16 @@ contract MockZKPassportHelper is IZKPassportHelper {
 
     function isAgeAboveOrEqual(uint8 minAge, bytes calldata ci) external pure returns (bool) {
         (bool found, uint256 start,) = _section(ci, 1);
-        return found && uint8(ci[start]) >= minAge;
+        require(found, "Compare age proof inputs not found");
+        require(uint8(ci[start + 1]) == 0, "The proof upper bound must be 0, please use isAgeBetween instead");
+        return uint8(ci[start]) == minAge;
+    }
+
+    function isExpiryDateAfterOrEqual(uint256 date, bytes calldata ci) external pure returns (bool) {
+        (bool found, uint256 start,) = _section(ci, 3);
+        require(found, "Compare expiry date proof inputs not found");
+        require(_uint(ci[start + 8:start + 16]) == 0, "The proof upper bound must be 0");
+        return _uint(ci[start:start + 8]) == date;
     }
 
     function _section(bytes calldata ci, uint8 wanted) private pure returns (bool, uint256, uint256) {

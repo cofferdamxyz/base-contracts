@@ -89,13 +89,11 @@ function decodeConfig(module: string, config: string): string | null {
   return null;
 }
 
-/** The recorded addresses, for naming modules; `{}` when there are none (on Base mainnet without GENERATION). */
+/** The recorded addresses, for naming modules; `{}` on Base mainnet without GENERATION. */
 async function loadDeployments(networkName: string): Promise<Record<string, { address: string }>> {
-  try {
-    return readDeployments(networkName, (await ethers.provider.getNetwork()).chainId);
-  } catch {
-    return {};
-  }
+  const chainId = (await ethers.provider.getNetwork()).chainId;
+  if (chainId === 8453n && !process.env.GENERATION?.trim()) return {};
+  return readDeployments(networkName, chainId);
 }
 
 function resolveKnownModule(

@@ -23,7 +23,11 @@ import {
 //   ZKP_VALIDITY_SECONDS    default 3600, at most 86400
 //   ZKP_IDENTIFIER_TYPE     non-salted (default) or salted
 //   ZKP_OPRF_KEY_HASH       required for salted
-//   ZKP_MIN_AGE             default 18; mainnet refuses less
+//   ZKP_MIN_AGE             default 18; mainnet refuses less. The proof's age
+//                           bound must be exactly this
+//   ZKP_EXPIRY_MARGIN_SECONDS  how long the document must stay valid after the
+//                           bind: default 30 days on mainnet (which refuses 0),
+//                           0 (no check) elsewhere
 //   REBIND_DELAY_SECONDS    default 72 h on mainnet (the least), 0 elsewhere
 //   ADAPTER_DELAY_SECONDS   default 72 h on mainnet (the least), 0 elsewhere
 //   IDENTITY_ALLOWLIST_ONLY default 1 on mainnet, 0 elsewhere
@@ -54,6 +58,8 @@ async function main() {
   const oprfKeyHash = process.env.ZKP_OPRF_KEY_HASH?.trim() || ethers.ZeroHash;
   const minAge = Number(process.env.ZKP_MIN_AGE?.trim() || '18');
   if (mainnet && minAge < 18) throw new Error('ZKP_MIN_AGE must be at least 18 on Base mainnet (decision 0080, 6)');
+  const expiryMargin = BigInt(process.env.ZKP_EXPIRY_MARGIN_SECONDS?.trim() || (mainnet ? '2592000' : '0'));
+  if (mainnet && expiryMargin === 0n) throw new Error('ZKP_EXPIRY_MARGIN_SECONDS must be set on Base mainnet (decision 0080, 5)');
   const rebindDelay = await mainnetDelay('REBIND_DELAY_SECONDS', 0n);
   const adapterDelay = await mainnetDelay('ADAPTER_DELAY_SECONDS', 0n);
   const allowlistOnly = (process.env.IDENTITY_ALLOWLIST_ONLY?.trim() || (mainnet ? '1' : '0')) === '1';
@@ -64,6 +70,7 @@ async function main() {
     .map((a) => ethers.getAddress(a));
 
   let rootVerifier = process.env.ZKP_ROOT_VERIFIER?.trim();
+  let helper = '';
   const out: Record<string, string> = {};
   if (mainnet) {
     if (rootVerifier && rootVerifier.toLowerCase() !== ZKP_ROOT_VERIFIER.toLowerCase()) {
@@ -73,21 +80,25 @@ async function main() {
     // Pre-flight against ZKPassport's live contracts before spending gas.
     const root = await ethers.getContractAt('IZKPassportRootVerifier', rootVerifier);
     if ((await ethers.provider.getCode(rootVerifier)) === '0x') throw new Error('No RootVerifier on this chain');
-    const helper = await root.getHelper(version);
+    helper = await root.getHelper(version);
     if (helper === ethers.ZeroAddress) throw new Error(`RootVerifier has no helper for circuits ${versionLabel}`);
     console.log(`RootVerifier ${rootVerifier}, helper for ${versionLabel}: ${helper}`);
   } else if (!rootVerifier) {
     console.log('No ZKP_ROOT_VERIFIER: deploying the mock RootVerifier and helper (testnets only).');
-    const helper = await (await ethers.getContractFactory('MockZKPassportHelper')).deploy();
-    await helper.waitForDeployment();
+    const mockHelper = await (await ethers.getContractFactory('MockZKPassportHelper')).deploy();
+    await mockHelper.waitForDeployment();
     const root = await (await ethers.getContractFactory('MockZKPassportRootVerifier')).deploy();
     await root.waitForDeployment();
-    await (await root.setHelper(version, await helper.getAddress())).wait();
+    helper = await mockHelper.getAddress();
+    await (await root.setHelper(version, helper)).wait();
     await (await root.setExpected(version, validity, ZKP_DOMAIN, scope, false)).wait();
     rootVerifier = await root.getAddress();
     out.MockZKPassportRootVerifier = rootVerifier;
-    out.MockZKPassportHelper = await helper.getAddress();
+    out.MockZKPassportHelper = helper;
+  } else {
+    helper = await (await ethers.getContractAt('IZKPassportRootVerifier', rootVerifier)).getHelper(version);
   }
+  console.log('Helper (pinned):', helper);
 
   console.log({
     owner,
@@ -97,6 +108,7 @@ async function main() {
     identifierType: typeName,
     oprfKeyHash,
     minAge,
+    expiryMargin: expiryMargin.toString(),
     rebindDelay: rebindDelay.toString(),
     adapterDelay: adapterDelay.toString(),
     allowlistOnly,
@@ -104,7 +116,7 @@ async function main() {
   });
 
   const Adapter = await ethers.getContractFactory('ZKPassportEvidenceAdapter');
-  const adapter = await Adapter.deploy(rootVerifier, version, scope, validity, identifierType, oprfKeyHash, minAge);
+  const adapter = await Adapter.deploy(rootVerifier, helper, version, scope, validity, identifierType, oprfKeyHash, minAge, expiryMargin);
   await adapter.waitForDeployment();
   out.ZKPassportEvidenceAdapter = await adapter.getAddress();
   console.log('ZKPassportEvidenceAdapter:', out.ZKPassportEvidenceAdapter);

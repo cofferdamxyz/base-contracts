@@ -60,7 +60,14 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
     if (nullifierRegistry || process.env.NULLIFIER_REGISTRY?.trim()) {
       throw new Error("Self's NullifierRegistry never goes to Base mainnet (decision 0080): set IDENTITY_REGISTRY");
     }
-    pinned = process.env.IDENTITY_REGISTRY?.trim() || recorded.CofferdamIdentityRegistry?.address;
+    // The generation's file is the record: an env value may only repeat it,
+    // and the factory's registry is written to the same file below.
+    const fromEnv = process.env.IDENTITY_REGISTRY?.trim();
+    const fromFile = recorded.CofferdamIdentityRegistry?.address;
+    if (fromEnv && fromFile && fromEnv.toLowerCase() !== fromFile.toLowerCase()) {
+      throw new Error(`IDENTITY_REGISTRY ${fromEnv} differs from the generation's CofferdamIdentityRegistry ${fromFile}`);
+    }
+    pinned = fromEnv || fromFile;
     if (!pinned || !ethers.isAddress(pinned)) {
       throw new Error('No CofferdamIdentityRegistry: deploy it first (deploy-identity.ts) or set IDENTITY_REGISTRY');
     }
@@ -91,6 +98,8 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
   }
 
   const out: Record<string, string> = { EntryPoint: ENTRYPOINT_V07 };
+  // On mainnet the generation's file records the registry its factory pins.
+  if (isMainnet) out.CofferdamIdentityRegistry = nullifier;
   if (!isMainnet) out.PasskeyAuthority = await deploy('PasskeyAuthority');
   out.WebAuthnPasskeyAuthority = await deploy('WebAuthnPasskeyAuthority');
   out.PartnerPasskeyAuthority = await deploy('PartnerPasskeyAuthority');

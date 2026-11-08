@@ -63,6 +63,15 @@ export function zkpScopeId(scope: string): string {
   return keccak256(abi.encode(['string', 'string'], [ZKP_DOMAIN, scope]));
 }
 
+/** The expiry section (type 3): the proof's bounds on the document's expiry date, in seconds; no upper bound is 0. */
+export function zkpExpirySection(minDate: bigint, maxDate = 0n): Uint8Array {
+  return zkpSection(3, [...getBytes(toBeHex8(minDate)), ...getBytes(toBeHex8(maxDate))]);
+}
+
+function toBeHex8(n: bigint): string {
+  return '0x' + n.toString(16).padStart(16, '0');
+}
+
 /** One committed-input section: `[type:1][length:2][data]`. */
 export function zkpSection(type: number, data: Uint8Array | number[]): Uint8Array {
   const bytes = Uint8Array.from(data);

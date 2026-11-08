@@ -80,6 +80,7 @@ export interface MockZKPassportRootVerifierInterface extends Interface {
       | "expectedConfig"
       | "getHelper"
       | "helpers"
+      | "owner"
       | "setExpected"
       | "setHelper"
       | "verify"
@@ -98,6 +99,7 @@ export interface MockZKPassportRootVerifierInterface extends Interface {
     values: [BytesLike]
   ): string;
   encodeFunctionData(functionFragment: "helpers", values: [BytesLike]): string;
+  encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "setExpected",
     values: [BytesLike, BigNumberish, string, string, boolean]
@@ -118,6 +120,7 @@ export interface MockZKPassportRootVerifierInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "getHelper", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "helpers", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "setExpected",
     data: BytesLike
@@ -177,6 +180,8 @@ export interface MockZKPassportRootVerifier extends BaseContract {
 
   helpers: TypedContractMethod<[arg0: BytesLike], [string], "view">;
 
+  owner: TypedContractMethod<[], [string], "view">;
+
   setExpected: TypedContractMethod<
     [
       version: BytesLike,
@@ -223,6 +228,9 @@ export interface MockZKPassportRootVerifier extends BaseContract {
   getFunction(
     nameOrSignature: "helpers"
   ): TypedContractMethod<[arg0: BytesLike], [string], "view">;
+  getFunction(
+    nameOrSignature: "owner"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "setExpected"
   ): TypedContractMethod<

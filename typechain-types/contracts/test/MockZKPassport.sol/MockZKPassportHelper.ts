@@ -37,7 +37,10 @@ export declare namespace IZKPassportHelper {
 
 export interface MockZKPassportHelperInterface extends Interface {
   getFunction(
-    nameOrSignature: "getBoundData" | "isAgeAboveOrEqual"
+    nameOrSignature:
+      | "getBoundData"
+      | "isAgeAboveOrEqual"
+      | "isExpiryDateAfterOrEqual"
   ): FunctionFragment;
 
   encodeFunctionData(
@@ -48,6 +51,10 @@ export interface MockZKPassportHelperInterface extends Interface {
     functionFragment: "isAgeAboveOrEqual",
     values: [BigNumberish, BytesLike]
   ): string;
+  encodeFunctionData(
+    functionFragment: "isExpiryDateAfterOrEqual",
+    values: [BigNumberish, BytesLike]
+  ): string;
 
   decodeFunctionResult(
     functionFragment: "getBoundData",
@@ -55,6 +62,10 @@ export interface MockZKPassportHelperInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "isAgeAboveOrEqual",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "isExpiryDateAfterOrEqual",
     data: BytesLike
   ): Result;
 }
@@ -114,6 +125,12 @@ export interface MockZKPassportHelper extends BaseContract {
     "view"
   >;
 
+  isExpiryDateAfterOrEqual: TypedContractMethod<
+    [date: BigNumberish, ci: BytesLike],
+    [boolean],
+    "view"
+  >;
+
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
@@ -129,6 +146,13 @@ export interface MockZKPassportHelper extends BaseContract {
     nameOrSignature: "isAgeAboveOrEqual"
   ): TypedContractMethod<
     [minAge: BigNumberish, ci: BytesLike],
+    [boolean],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "isExpiryDateAfterOrEqual"
+  ): TypedContractMethod<
+    [date: BigNumberish, ci: BytesLike],
     [boolean],
     "view"
   >;

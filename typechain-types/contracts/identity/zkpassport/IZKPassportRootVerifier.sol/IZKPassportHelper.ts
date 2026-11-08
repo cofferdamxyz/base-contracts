@@ -37,7 +37,10 @@ export declare namespace IZKPassportHelper {
 
 export interface IZKPassportHelperInterface extends Interface {
   getFunction(
-    nameOrSignature: "getBoundData" | "isAgeAboveOrEqual"
+    nameOrSignature:
+      | "getBoundData"
+      | "isAgeAboveOrEqual"
+      | "isExpiryDateAfterOrEqual"
   ): FunctionFragment;
 
   encodeFunctionData(
@@ -48,6 +51,10 @@ export interface IZKPassportHelperInterface extends Interface {
     functionFragment: "isAgeAboveOrEqual",
     values: [BigNumberish, BytesLike]
   ): string;
+  encodeFunctionData(
+    functionFragment: "isExpiryDateAfterOrEqual",
+    values: [BigNumberish, BytesLike]
+  ): string;
 
   decodeFunctionResult(
     functionFragment: "getBoundData",
@@ -55,6 +62,10 @@ export interface IZKPassportHelperInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "isAgeAboveOrEqual",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "isExpiryDateAfterOrEqual",
     data: BytesLike
   ): Result;
 }
@@ -114,6 +125,12 @@ export interface IZKPassportHelper extends BaseContract {
     "view"
   >;
 
+  isExpiryDateAfterOrEqual: TypedContractMethod<
+    [date: BigNumberish, committedInputs: BytesLike],
+    [boolean],
+    "view"
+  >;
+
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
@@ -129,6 +146,13 @@ export interface IZKPassportHelper extends BaseContract {
     nameOrSignature: "isAgeAboveOrEqual"
   ): TypedContractMethod<
     [minAge: BigNumberish, committedInputs: BytesLike],
+    [boolean],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "isExpiryDateAfterOrEqual"
+  ): TypedContractMethod<
+    [date: BigNumberish, committedInputs: BytesLike],
     [boolean],
     "view"
   >;

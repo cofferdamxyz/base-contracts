@@ -55,5 +55,11 @@ interface IZKPassportHelper {
 
     function getBoundData(bytes calldata committedInputs) external view returns (BoundData memory);
 
+    /// @dev True only when the proof's committed lower bound equals `minAge`
+    ///      and it has no upper bound (reverts then), as deployed for 0.21.1.
     function isAgeAboveOrEqual(uint8 minAge, bytes calldata committedInputs) external view returns (bool);
+
+    /// @dev True only when the proof's committed lower bound on the expiry
+    ///      date equals `date` (seconds) and it has no upper bound.
+    function isExpiryDateAfterOrEqual(uint256 date, bytes calldata committedInputs) external view returns (bool);
 }
