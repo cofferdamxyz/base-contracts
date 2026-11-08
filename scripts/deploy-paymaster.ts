@@ -1,8 +1,7 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import { ethers, network } from 'hardhat';
 import { ENTRYPOINT_V07 } from './lib/accountLayer';
-import { writeDeployments } from './lib/deployments';
+import { readDeployments, writeDeployments } from './lib/deployments';
+import { chainId } from './lib/chain';
 import { accountCodeFingerprint, paymasterRelayer, refuseMainnetPaymaster } from './lib/paymaster';
 
 // Redeploys ONLY the CofferdamPaymaster for the recorded factory. The factory
@@ -13,12 +12,11 @@ import { accountCodeFingerprint, paymasterRelayer, refuseMainnetPaymaster } from
 // Then move the deposit from the old paymaster (`yarn paymaster:move:sepolia`
 // with OLD_PAYMASTER) and update the pins (API relay policy, app env).
 async function main() {
-  refuseMainnetPaymaster();
+  await refuseMainnetPaymaster();
   const [deployer] = await ethers.getSigners();
   console.log('Deploying CofferdamPaymaster from:', deployer.address);
 
-  const file = path.join(__dirname, '..', 'deployments', `${network.name}.json`);
-  const recorded = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
+  const recorded = readDeployments(network.name, await chainId());
   const factory = process.env.FACTORY?.trim() || recorded.CofferdamAccountFactory4337?.address;
   const highModule = process.env.HIGH_MODULE?.trim() || recorded.WebAuthnPasskeyAuthority?.address;
   if (!factory || !highModule) throw new Error('No factory or WebAuthn module recorded: set FACTORY and HIGH_MODULE');
@@ -37,7 +35,7 @@ async function main() {
 
   // Merge the new paymaster address into deployments/<network>.json, leaving
   // every other entry untouched.
-  const registryPath = writeDeployments(network.name, { CofferdamPaymaster: addr });
+  const registryPath = writeDeployments(network.name, await chainId(), { CofferdamPaymaster: addr });
   console.log('Wrote', registryPath);
 }
 

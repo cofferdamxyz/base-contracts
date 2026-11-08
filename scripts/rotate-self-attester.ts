@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ethers, network } from 'hardhat';
+import { refuseMainnet } from './lib/chain';
 
 /**
  * Rotate the Self attester key on an already-deployed SelfAttesterRegistry.
@@ -76,6 +77,8 @@ function readRegistryAddress(networkName: string): string {
 }
 
 async function main() {
+  // Self never reaches Base mainnet (decision 0080).
+  await refuseMainnet('rotate-self-attester.ts (Self)');
   const next = requireAddress('ATTESTER_ADDRESS', process.env.ATTESTER_ADDRESS);
   const retireRaw = process.env.RETIRE_ATTESTER_ADDRESS;
   const retire =

@@ -1,6 +1,5 @@
 import { ethers, network } from 'hardhat';
-import * as fs from 'fs';
-import * as path from 'path';
+import { readDeployments } from './lib/deployments';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Account Inspector — reads on-chain state of a deployed CofferdamAccount4337
@@ -90,12 +89,13 @@ function decodeConfig(module: string, config: string): string | null {
   return null;
 }
 
-function loadDeployments(networkName: string): Record<string, { address: string }> {
-  const depPath = path.join(__dirname, '..', 'deployments', `${networkName}.json`);
-  if (fs.existsSync(depPath)) {
-    return JSON.parse(fs.readFileSync(depPath, 'utf8'));
+/** The recorded addresses, for naming modules; `{}` when there are none (on Base mainnet without GENERATION). */
+async function loadDeployments(networkName: string): Promise<Record<string, { address: string }>> {
+  try {
+    return readDeployments(networkName, (await ethers.provider.getNetwork()).chainId);
+  } catch {
+    return {};
   }
-  return {};
 }
 
 function resolveKnownModule(
@@ -111,7 +111,7 @@ function resolveKnownModule(
 
 async function inspectAccount(accountAddress: string, txHash?: string) {
   const provider = ethers.provider;
-  const deployments = loadDeployments(network.name);
+  const deployments = await loadDeployments(network.name);
 
   console.log('═'.repeat(72));
   console.log('  Cofferdam Account Inspector');

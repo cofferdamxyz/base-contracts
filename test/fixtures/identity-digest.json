@@ -1,0 +1,37 @@
+{
+  "_comment": "Known answers for CofferdamIdentityRegistry.digest and the ZKPassport custom_data (decision 0080). @cofferdam/sdk copies this file and must produce the same values; test/identity-registry.test.ts checks scripts/lib/identity.ts and the contract against it.",
+  "tags": {
+    "bind": "cofferdam-identity-bind-v1",
+    "rebind": "cofferdam-identity-rebind-v1",
+    "relink": "cofferdam-identity-relink-v1"
+  },
+  "vectors": [
+    {
+      "action": "bind",
+      "chainId": "8453",
+      "registry": "0x00000000000000000000000000000000000c0ffe",
+      "account": "0x1111111111111111111111111111111111111111",
+      "nonce": "0",
+      "digest": "0x91c5086a7a6c4f5cf58ed95e4c80aaa71bda46e5ef56d8c74a3bc81dcf837e0f",
+      "customData": "0x91c5086a7a6c4f5cf58ed95e4c80aaa71bda46e5ef56d8c74a3bc81dcf837e0f"
+    },
+    {
+      "action": "rebind",
+      "chainId": "8453",
+      "registry": "0x00000000000000000000000000000000000c0ffe",
+      "account": "0x2222222222222222222222222222222222222222",
+      "nonce": "3",
+      "digest": "0xc0cf7df6332f06394d699c74be44b22acd0cbc57349db25a2ae712af81804dfb",
+      "customData": "0xc0cf7df6332f06394d699c74be44b22acd0cbc57349db25a2ae712af81804dfb"
+    },
+    {
+      "action": "relink",
+      "chainId": "84532",
+      "registry": "0x00000000000000000000000000000000000c0ffe",
+      "account": "0x1111111111111111111111111111111111111111",
+      "nonce": "1",
+      "digest": "0x4cf7b228cce14a18f77e9b72f540333127c8135cf4f73356518d368ea783ade3",
+      "customData": "0x4cf7b228cce14a18f77e9b72f540333127c8135cf4f73356518d368ea783ade3"
+    }
+  ]
+}

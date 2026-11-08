@@ -7,6 +7,8 @@ import type * as auth from "./auth";
 export type { auth };
 import type * as enterprise from "./enterprise";
 export type { enterprise };
+import type * as identity from "./identity";
+export type { identity };
 import type * as interfaces from "./interfaces";
 export type { interfaces };
 import type * as registry from "./registry";

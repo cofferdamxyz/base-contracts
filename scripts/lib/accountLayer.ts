@@ -1,7 +1,7 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import { ethers, network } from 'hardhat';
-import { accountCodeFingerprint, isBaseMainnet, paymasterRelayer } from './paymaster';
+import { assertMainnetSigner, chainId as nodeChainId, getDeployer, mainnetDelay } from './chain';
+import { readDeployments, refuseRecordedGeneration } from './deployments';
+import { accountCodeFingerprint, paymasterRelayer } from './paymaster';
 
 // ERC-4337 EntryPoint v0.7 — preinstalled on Base
 export const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
@@ -19,8 +19,15 @@ export const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
  * - The raw P-256 `PasskeyAuthority` has no RP binding: it is deployed and
  *   listed only off mainnet.
  * - `nullifierRegistry` (or `NULLIFIER_REGISTRY`, else the `NullifierRegistry`
- *   entry in deployments/<network>.json) is pinned into every account for
- *   hard recovery; deploy it first (`deploy-self.ts`).
+ *   entry in the deployments file) is pinned into every account for hard
+ *   recovery; deploy it first (`deploy-self.ts`).
+ * - On Base mainnet (chain 8453, a fork included) Self's registry never goes:
+ *   the factory pins the generation's `CofferdamIdentityRegistry`
+ *   (`IDENTITY_REGISTRY`, else the generation file's entry; `deploy-identity.ts`
+ *   first). That is decision 0080's test generation: binds and rebinds work,
+ *   `recoverHigh` reverts, since today's account calls Self's `provenNullifier`.
+ *   The deployer must be the Ledger, and the generation's file must not
+ *   already hold an account layer.
  * - `RECOVERY_DELAY_SECONDS` is the hard-recovery delay pinned into every
  *   account: 72 hours on mainnet, 0 elsewhere by default.
  * - `PROBATION_PERIOD_SECONDS` is the probation of a High added by a High:
@@ -30,12 +37,15 @@ export const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
  *   testnet only: mainnet deploys none (the CDP Paymaster, decision 0017).
  */
 export async function deployAccountLayer(nullifierRegistry?: string): Promise<Record<string, string>> {
-  const [deployer] = await ethers.getSigners();
-  const isMainnet = network.name === 'base';
+  const deployer = await getDeployer();
+  const chainId = await nodeChainId();
+  // By the chain id the node reports, so a fork of mainnet takes this path too.
+  const isMainnet = chainId === 8453n;
+  await assertMainnetSigner(deployer.address);
   const owner = process.env.REGISTRY_OWNER || (isMainnet ? '' : deployer.address);
-  if (!owner) throw new Error('REGISTRY_OWNER (the Cofferdam Safe) is required on mainnet');
-  // The paymaster is testnet only: skipped on mainnet by name or chain id.
-  const skipPaymaster = isMainnet || isBaseMainnet();
+  if (!owner) throw new Error('REGISTRY_OWNER (the Cofferdam Safe; the Ledger for the test generation) is required on mainnet');
+  // The paymaster is testnet only.
+  const skipPaymaster = isMainnet;
   const relayer = skipPaymaster ? '' : paymasterRelayer(deployer.address);
   const attesters = (process.env.CEREMONY_ATTESTERS || '')
     .split(',')
@@ -43,23 +53,32 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
     .filter(Boolean)
     .map((a) => ethers.getAddress(a));
 
-  const deploymentsFile = path.join(__dirname, '..', '..', 'deployments', `${network.name}.json`);
-  const recorded = fs.existsSync(deploymentsFile)
-    ? JSON.parse(fs.readFileSync(deploymentsFile, 'utf8')).NullifierRegistry?.address
-    : undefined;
-  const nullifier = nullifierRegistry || process.env.NULLIFIER_REGISTRY?.trim() || recorded;
-  if (!nullifier || !ethers.isAddress(nullifier)) {
-    throw new Error('No NullifierRegistry: deploy it first (deploy-self.ts) or set NULLIFIER_REGISTRY');
+  const recorded = readDeployments(network.name, chainId);
+  let pinned: string | undefined;
+  if (isMainnet) {
+    refuseRecordedGeneration(network.name, chainId, ['CofferdamAccountFactory4337', 'CofferdamModuleRegistry']);
+    if (nullifierRegistry || process.env.NULLIFIER_REGISTRY?.trim()) {
+      throw new Error("Self's NullifierRegistry never goes to Base mainnet (decision 0080): set IDENTITY_REGISTRY");
+    }
+    pinned = process.env.IDENTITY_REGISTRY?.trim() || recorded.CofferdamIdentityRegistry?.address;
+    if (!pinned || !ethers.isAddress(pinned)) {
+      throw new Error('No CofferdamIdentityRegistry: deploy it first (deploy-identity.ts) or set IDENTITY_REGISTRY');
+    }
+    const registry = await ethers.getContractAt('CofferdamIdentityRegistry', pinned);
+    if ((await ethers.provider.getCode(pinned)) === '0x') throw new Error(`No contract at IDENTITY_REGISTRY ${pinned}`);
+    if ((await registry.REBIND_DELAY()) < 259_200n) throw new Error('The identity registry rebinds in less than 72 hours');
+  } else {
+    pinned = nullifierRegistry || process.env.NULLIFIER_REGISTRY?.trim() || recorded.NullifierRegistry?.address;
+    if (!pinned || !ethers.isAddress(pinned)) {
+      throw new Error('No NullifierRegistry: deploy it first (deploy-self.ts) or set NULLIFIER_REGISTRY');
+    }
+    if ((await ethers.provider.getCode(pinned)) === '0x') throw new Error(`No contract at NULLIFIER_REGISTRY ${pinned}`);
   }
-  if ((await ethers.provider.getCode(nullifier)) === '0x') throw new Error(`No contract at NULLIFIER_REGISTRY ${nullifier}`);
-  const delayRaw = process.env.RECOVERY_DELAY_SECONDS?.trim();
-  const recoveryDelay = delayRaw ? BigInt(delayRaw) : isMainnet ? 259_200n : 0n;
-  if (isMainnet && recoveryDelay < 259_200n) throw new Error('RECOVERY_DELAY_SECONDS must be at least 72 hours on mainnet');
-  console.log('NullifierRegistry (pinned):', nullifier);
+  const nullifier = pinned;
+  const recoveryDelay = await mainnetDelay('RECOVERY_DELAY_SECONDS', 0n);
+  console.log(isMainnet ? 'CofferdamIdentityRegistry (pinned):' : 'NullifierRegistry (pinned):', nullifier);
   console.log('recoveryDelay:', recoveryDelay.toString(), 'seconds');
-  const probationRaw = process.env.PROBATION_PERIOD_SECONDS?.trim();
-  const probationPeriod = probationRaw ? BigInt(probationRaw) : isMainnet ? 259_200n : 600n;
-  if (isMainnet && probationPeriod < 259_200n) throw new Error('PROBATION_PERIOD_SECONDS must be at least 72 hours on mainnet');
+  const probationPeriod = await mainnetDelay('PROBATION_PERIOD_SECONDS', 600n);
   if (probationPeriod >= 2n ** 48n) throw new Error('PROBATION_PERIOD_SECONDS does not fit uint48');
   console.log('probationPeriod:', probationPeriod.toString(), 'seconds');
 

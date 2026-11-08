@@ -154,6 +154,26 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.CofferdamWalletBind__factory>;
     getContractFactory(
+      name: "CofferdamIdentityRegistry",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.CofferdamIdentityRegistry__factory>;
+    getContractFactory(
+      name: "IIdentityEvidenceAdapter",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IIdentityEvidenceAdapter__factory>;
+    getContractFactory(
+      name: "IZKPassportHelper",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IZKPassportHelper__factory>;
+    getContractFactory(
+      name: "IZKPassportRootVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IZKPassportRootVerifier__factory>;
+    getContractFactory(
+      name: "ZKPassportEvidenceAdapter",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ZKPassportEvidenceAdapter__factory>;
+    getContractFactory(
       name: "IAuthorityModule",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IAuthorityModule__factory>;
@@ -221,6 +241,14 @@ declare module "hardhat/types/runtime" {
       name: "USDC",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.USDC__factory>;
+    getContractFactory(
+      name: "MockZKPassportHelper",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockZKPassportHelper__factory>;
+    getContractFactory(
+      name: "MockZKPassportRootVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockZKPassportRootVerifier__factory>;
 
     getContractAt(
       name: "Ownable",
@@ -398,6 +426,31 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.CofferdamWalletBind>;
     getContractAt(
+      name: "CofferdamIdentityRegistry",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.CofferdamIdentityRegistry>;
+    getContractAt(
+      name: "IIdentityEvidenceAdapter",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IIdentityEvidenceAdapter>;
+    getContractAt(
+      name: "IZKPassportHelper",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IZKPassportHelper>;
+    getContractAt(
+      name: "IZKPassportRootVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IZKPassportRootVerifier>;
+    getContractAt(
+      name: "ZKPassportEvidenceAdapter",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ZKPassportEvidenceAdapter>;
+    getContractAt(
       name: "IAuthorityModule",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -482,6 +535,16 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.USDC>;
+    getContractAt(
+      name: "MockZKPassportHelper",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockZKPassportHelper>;
+    getContractAt(
+      name: "MockZKPassportRootVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockZKPassportRootVerifier>;
 
     deployContract(
       name: "Ownable",
@@ -624,6 +687,26 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.CofferdamWalletBind>;
     deployContract(
+      name: "CofferdamIdentityRegistry",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.CofferdamIdentityRegistry>;
+    deployContract(
+      name: "IIdentityEvidenceAdapter",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IIdentityEvidenceAdapter>;
+    deployContract(
+      name: "IZKPassportHelper",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IZKPassportHelper>;
+    deployContract(
+      name: "IZKPassportRootVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IZKPassportRootVerifier>;
+    deployContract(
+      name: "ZKPassportEvidenceAdapter",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ZKPassportEvidenceAdapter>;
+    deployContract(
       name: "IAuthorityModule",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IAuthorityModule>;
@@ -691,6 +774,14 @@ declare module "hardhat/types/runtime" {
       name: "USDC",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.USDC>;
+    deployContract(
+      name: "MockZKPassportHelper",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockZKPassportHelper>;
+    deployContract(
+      name: "MockZKPassportRootVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockZKPassportRootVerifier>;
 
     deployContract(
       name: "Ownable",
@@ -868,6 +959,31 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.CofferdamWalletBind>;
     deployContract(
+      name: "CofferdamIdentityRegistry",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.CofferdamIdentityRegistry>;
+    deployContract(
+      name: "IIdentityEvidenceAdapter",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IIdentityEvidenceAdapter>;
+    deployContract(
+      name: "IZKPassportHelper",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IZKPassportHelper>;
+    deployContract(
+      name: "IZKPassportRootVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IZKPassportRootVerifier>;
+    deployContract(
+      name: "ZKPassportEvidenceAdapter",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ZKPassportEvidenceAdapter>;
+    deployContract(
       name: "IAuthorityModule",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -952,6 +1068,16 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.USDC>;
+    deployContract(
+      name: "MockZKPassportHelper",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockZKPassportHelper>;
+    deployContract(
+      name: "MockZKPassportRootVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockZKPassportRootVerifier>;
 
     // default types
     getContractFactory(

@@ -1,4 +1,5 @@
 import { network } from 'hardhat';
+import { chainId } from './lib/chain';
 import { writeDeployments } from './lib/deployments';
 import { deployAccountLayer } from './lib/accountLayer';
 
@@ -7,7 +8,7 @@ async function main() {
   const addresses = await deployAccountLayer();
 
   // Persist to deployments/<network>.json (merge with existing entries).
-  const registryPath = writeDeployments(network.name, addresses);
+  const registryPath = writeDeployments(network.name, await chainId(), addresses);
   console.log('\n--- Deployment complete ---');
   console.log('Wrote', registryPath);
 }

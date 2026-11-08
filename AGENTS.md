@@ -3,7 +3,8 @@
 ## Scope
 
 Cofferdam's Base contracts: the ERC-4337 account layer (`contracts/account/`,
-`contracts/auth/`, `contracts/registry/`), the Self.xyz registries (`contracts/self/`) and the
+`contracts/auth/`, `contracts/registry/`), the Self.xyz registries (`contracts/self/`), the
+identity registry and its ZKPassport adapter (`contracts/identity/`, decision 0080) and the
 interfaces, all MIT, plus the proprietary enterprise module as the private git
 submodule `contracts/enterprise/` (`cofferdamxyz/enterprise-contracts`,
 decision 0002). Hardhat with TypeScript tests. Design and the byte-level
@@ -30,7 +31,9 @@ encoding live in the workspace: `docs/architecture/contracts.md` and
   holds no address table. Accounts are immutable: a change to a deployed
   contract is a redeploy (a new generation for the account layer, decision
   0025), every mirror updated in the same pass, and a workspace decision.
-  Procedure: `docs/runbooks/sepolia-deploys.md`.
+  Procedure: `docs/runbooks/sepolia-deploys.md`; Base mainnet:
+  `docs/runbooks/mainnet-deploys.md` (the Ledger only, chain-id guards, one
+  deployments file per generation; decision 0080).
 - Contract naming follows `Cofferdam*` (`rules/cofferdam-sdk.md`);
   identity rules are `rules/cofferdam-identity.md`, both in the `cofferdam`
   repository (`../` on the Mac, `../cofferdam/` in a cloud session).

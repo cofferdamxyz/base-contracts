@@ -2,8 +2,11 @@ import { ethers, network } from 'hardhat';
 import { writeDeployments } from './lib/deployments';
 import { COFFERDAM_SELF_DEST_CHAIN_ID } from './lib/selfUserContext';
 import { deployAccountLayer } from './lib/accountLayer';
+import { chainId, refuseMainnet } from './lib/chain';
 
 async function main() {
+  // Self and its mock verifier: local and test networks only (decision 0080).
+  await refuseMainnet('deploy-all.ts (Self and a mock verifier)');
   console.log('=== Cofferdam Base Contracts — Full Deployment ===\n');
 
   // 1. Self.xyz contracts (the account factory pins the nullifier registry)
@@ -51,7 +54,7 @@ async function main() {
 
   // 4. Persist addresses to deployments/<network>.json so the SDK + demo can
   //    read them (deploy-escrow.ts merges into the same file).
-  const registryPath = writeDeployments(network.name, {
+  const registryPath = writeDeployments(network.name, await chainId(), {
     ...accountLayer,
     SelfAttesterRegistry: await attesterReg.getAddress(),
     ...(process.env.SELF_VERIFIER_ADDRESS ? {} : { MockGroth16Verifier: verifierAddress }),
