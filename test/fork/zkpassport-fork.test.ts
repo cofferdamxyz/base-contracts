@@ -10,8 +10,10 @@ import {
   IDENTITY_ACTIONS,
   ZKP_IDENTIFIER_TYPE,
   ZKP_ROOT_VERIFIER,
+  ZkpSolidityParams,
   encodeZkpEvidence,
   zkpCircuitsVersion,
+  zkpEvidenceFromParams,
   zkpExpirySection,
   zkpIdentifierKind,
   zkpScopeId,
@@ -33,16 +35,7 @@ const VERSION_0_21_1 = zkpCircuitsVersion('0.21.1');
 const DAY = 24 * 3600;
 const RPC = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
 
-type SolidityParams = {
-  version: string;
-  proofVerificationData: { vkeyHash: string; proof: string; publicInputs: string[] };
-  committedInputs: string;
-  serviceConfig: { validityPeriodInSeconds: number; domain: string; scope: string; devMode: boolean };
-};
-
-function evidenceOf(p: SolidityParams, committedInputs = p.committedInputs): string {
-  return encodeZkpEvidence({ ...p.proofVerificationData, committedInputs });
-}
+const evidenceOf = zkpEvidenceFromParams;
 
 describe('ZKPassport on a fork of Base mainnet (chain 8453)', function () {
   this.timeout(600_000);
@@ -163,7 +156,7 @@ describe('ZKPassport on a fork of Base mainnet (chain 8453)', function () {
   });
 
   describe("a real proof from ZKPassport's app (ZKP_PARAMS_FILE)", function () {
-    let params: SolidityParams;
+    let params: ZkpSolidityParams;
 
     before(async function () {
       const file = process.env.ZKP_PARAMS_FILE;

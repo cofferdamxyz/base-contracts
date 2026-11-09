@@ -25,6 +25,7 @@
     "deploy:identity:local": "hardhat run scripts/deploy-identity.ts --network localhost",
     "deploy:identity:fork": "hardhat run scripts/deploy-identity.ts --network baseFork",
     "deploy:identity:base": "hardhat run scripts/deploy-identity.ts --network base",
+    "identity:bind:fork": "hardhat run scripts/identity-bind.ts --network baseFork",
     "deploy:self:local": "hardhat run scripts/deploy-self.ts --network localhost",
     "deploy:self:sepolia": "hardhat run scripts/deploy-self.ts --network baseSepolia",
     "deploy:all:local": "hardhat run scripts/deploy-all.ts --network localhost",

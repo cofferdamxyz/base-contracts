@@ -98,6 +98,19 @@ export function zkpBindSection(bound: { userAddress?: string; chainId?: bigint; 
   return zkpSection(8, out);
 }
 
+/** A compressed-EVM proof as SDK 0.19.3's `getSolidityVerifierParameters` returns it. */
+export type ZkpSolidityParams = {
+  version: string;
+  proofVerificationData: { vkeyHash: string; proof: string; publicInputs: string[] };
+  committedInputs: string;
+  serviceConfig: { validityPeriodInSeconds: number; domain: string; scope: string; devMode: boolean };
+};
+
+/** The adapter's evidence from SDK parameters: only the proof's own fields; version and configuration stay pinned. */
+export function zkpEvidenceFromParams(p: ZkpSolidityParams, committedInputs = p.committedInputs): string {
+  return encodeZkpEvidence({ ...p.proofVerificationData, committedInputs });
+}
+
 /** `ZKPassportEvidenceAdapter` evidence: `abi.encode(vkeyHash, proof, publicInputs, committedInputs)`. */
 export function encodeZkpEvidence(p: {
   vkeyHash: string;
