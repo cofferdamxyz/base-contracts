@@ -1,6 +1,7 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import { ethers, network } from 'hardhat';
+import { chainId } from './lib/chain';
+import { readDeployments } from './lib/deployments';
+import { refuseMainnetPaymaster } from './lib/paymaster';
 
 /**
  * Move the EntryPoint deposit from a retired `CofferdamPaymaster` to the one
@@ -15,9 +16,9 @@ import { ethers, network } from 'hardhat';
  *   DRY_RUN=1       print balances and the plan, send nothing
  */
 async function main() {
+  await refuseMainnetPaymaster();
   const [signer] = await ethers.getSigners();
-  const file = path.join(__dirname, '..', 'deployments', `${network.name}.json`);
-  const recorded = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
+  const recorded = readDeployments(network.name, await chainId());
   const oldAddr = process.env.OLD_PAYMASTER?.trim();
   const newAddr = process.env.NEW_PAYMASTER?.trim() || recorded.CofferdamPaymaster?.address;
   if (!oldAddr || !ethers.isAddress(oldAddr)) throw new Error('OLD_PAYMASTER (the retired paymaster) is required');

@@ -5,6 +5,8 @@ import type * as mockGroth16VerifierSol from "./MockGroth16Verifier.sol";
 export type { mockGroth16VerifierSol };
 import type * as mockUsdcSol from "./MockUSDC.sol";
 export type { mockUsdcSol };
+import type * as mockZkPassportSol from "./MockZKPassport.sol";
+export type { mockZkPassportSol };
 export type { MockCounter } from "./MockCounter";
 export type { MockEntryPoint } from "./MockEntryPoint";
 export type { MockTierModule } from "./MockTierModule";

@@ -1,4 +1,5 @@
 import { ethers, network } from 'hardhat';
+import { chainId, refuseMainnet } from './lib/chain';
 import { writeDeployments } from './lib/deployments';
 import {
   COFFERDAM_BIND_V1_SCOPE,
@@ -9,6 +10,9 @@ import {
 import { COFFERDAM_SELF_DEST_CHAIN_ID } from './lib/selfUserContext';
 
 async function main() {
+  // Self stays on Base Sepolia until the cut-over and never reaches mainnet
+  // (decision 0080, 1).
+  await refuseMainnet('deploy-self.ts (Self)');
   const [deployer] = await ethers.getSigners();
   console.log('Deploying Self.xyz contracts from:', deployer.address);
 
@@ -151,10 +155,9 @@ async function main() {
   }
   console.log('selfDestChainId:', selfDestChainId, '(Self SelfApp.chainID, not the host chain)');
 
-  // Rebind delay (decision 0022): 0 applies a rebind at once (testnets);
-  // mainnet waits 72 hours so the bound account can cancel a takeover.
+  // Rebind delay (decision 0022): 0 applies a rebind at once (testnets).
   const rebindDelayRaw = process.env.REBIND_DELAY_SECONDS?.trim();
-  const rebindDelay = rebindDelayRaw ? BigInt(rebindDelayRaw) : network.name === 'base' ? 259_200n : 0n;
+  const rebindDelay = rebindDelayRaw ? BigInt(rebindDelayRaw) : 0n;
   console.log('rebindDelay:', rebindDelay.toString(), 'seconds');
 
   const NullifierRegistry = await ethers.getContractFactory('NullifierRegistry');
@@ -169,7 +172,7 @@ async function main() {
   console.log('NullifierRegistry:', await nullifierRegistry.getAddress());
 
   // Merge into deployments/<network>.json (preserve auth + escrow entries).
-  const registryPath = writeDeployments(network.name, {
+  const registryPath = writeDeployments(network.name, await chainId(), {
     Verifier_vc_and_disclose: verifierAddress,
     SelfAttesterRegistry: await attesterRegistry.getAddress(),
     NullifierRegistry: await nullifierRegistry.getAddress(),

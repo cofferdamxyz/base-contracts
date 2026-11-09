@@ -6,3 +6,7 @@ dist/
 coverage/
 *.log
 .cofferdam-cli.json
+
+# Fork dry runs of Base mainnet write their own deployments files (scripts/lib/deployments.ts)
+deployments/baseFork.*.json
+deployments/hardhat.*.json

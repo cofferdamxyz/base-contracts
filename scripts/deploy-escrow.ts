@@ -1,14 +1,11 @@
 import { ethers, network } from 'hardhat';
 import { createHmac } from 'crypto';
-import * as fs from 'fs';
-import * as path from 'path';
-import { writeDeployments } from './lib/deployments';
+import { chainId, refuseMainnet } from './lib/chain';
+import { readDeployments, writeDeployments } from './lib/deployments';
 
 /** The MockUSDC already recorded for this network, if any. */
-function recordedMockUsdc(networkName: string): string | null {
-  const file = path.join(__dirname, '..', 'deployments', `${networkName}.json`);
-  if (!fs.existsSync(file)) return null;
-  const addr = JSON.parse(fs.readFileSync(file, 'utf8'))?.MockUSDC?.address;
+async function recordedMockUsdc(networkName: string): Promise<string | null> {
+  const addr = readDeployments(networkName, await chainId()).MockUSDC?.address;
   return typeof addr === 'string' && /^0x[0-9a-fA-F]{40}$/.test(addr) ? addr : null;
 }
 
@@ -21,6 +18,9 @@ function deriveDeterministicPk(mockUserId: string): string {
 }
 
 async function main() {
+  // A mintable mock token and demo keys derived from public strings: never on
+  // Base mainnet, a fork of it included (decision 0080).
+  await refuseMainnet('deploy-escrow.ts (MockUSDC and demo wallets)');
   console.log('=== Deploy EscrowFactory + Sample SpotEscrow (MockUSDC reused unless NEW_MOCK_USDC=1) ===\n');
 
   const [deployer] = await ethers.getSigners();
@@ -51,7 +51,7 @@ async function main() {
   //    webhook, which all pin this address (workspace decision 0032). Set
   //    NEW_MOCK_USDC=1 only for a deliberate token reset.
   const USDC = await ethers.getContractFactory('USDC');
-  const recorded = process.env.NEW_MOCK_USDC === '1' ? null : recordedMockUsdc(network.name);
+  const recorded = process.env.NEW_MOCK_USDC === '1' ? null : await recordedMockUsdc(network.name);
   let usdc;
   if (recorded) {
     usdc = USDC.attach(recorded) as Awaited<ReturnType<typeof USDC.deploy>>;
@@ -133,7 +133,7 @@ async function main() {
 
   // 5. Persist addresses to deployments/<network>.json (merge with any
   //    existing entries written by deploy-all.ts / deploy-self.ts).
-  const registryPath = writeDeployments(network.name, {
+  const registryPath = writeDeployments(network.name, await chainId(), {
     MockUSDC: usdcAddr,
     EscrowFactory: factoryAddr,
     CofferdamSpotEscrow: escrowAddr,

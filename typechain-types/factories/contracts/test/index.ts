@@ -3,6 +3,7 @@
 /* eslint-disable */
 export * as mockGroth16VerifierSol from "./MockGroth16Verifier.sol";
 export * as mockUsdcSol from "./MockUSDC.sol";
+export * as mockZkPassportSol from "./MockZKPassport.sol";
 export { MockCounter__factory } from "./MockCounter__factory";
 export { MockEntryPoint__factory } from "./MockEntryPoint__factory";
 export { MockTierModule__factory } from "./MockTierModule__factory";

@@ -1,4 +1,5 @@
 import { artifacts, ethers, network } from 'hardhat';
+import { refuseMainnet } from './chain';
 
 const ACCOUNT = 'contracts/account/CofferdamAccount4337.sol:CofferdamAccount4337';
 const NO_PERMISSION = { targets: [], selectors: [], codeHashes: [], codeSelectors: [], valueCap: 0n, expiry: 0n };
@@ -79,14 +80,7 @@ export function paymasterRelayer(deployer: string): string {
   throw new Error("RELAYER_ADDRESS (the plane's RELAYER_PRIVATE_KEY address) is required");
 }
 
-/** Base mainnet by name or by chain id. */
-export function isBaseMainnet(): boolean {
-  return network.name === 'base' || network.config.chainId === 8453;
-}
-
 /** The paymaster is a testnet contract: mainnet gas goes through the CDP Paymaster (decision 0017). */
-export function refuseMainnetPaymaster(): void {
-  if (isBaseMainnet()) {
-    throw new Error('CofferdamPaymaster is testnet only: mainnet gas goes through the CDP Paymaster (decision 0017)');
-  }
+export async function refuseMainnetPaymaster(): Promise<void> {
+  await refuseMainnet('CofferdamPaymaster (testnet only: mainnet gas goes through the CDP Paymaster, decision 0017)');
 }
