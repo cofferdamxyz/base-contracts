@@ -56,6 +56,9 @@ async function main() {
   }
 
   const params = JSON.parse(fs.readFileSync(file, 'utf8')) as ZkpSolidityParams;
+  // anvil mines only on transactions, so its latest block can predate the
+  // proof, which the verifier refuses as outside its validity: mine one now.
+  await ethers.provider.send('evm_mine', []);
   const evidence = zkpEvidenceFromParams(params);
   try {
     await registry.check(IDENTITY_ACTIONS.bind, account, adapterAddr, evidence);
