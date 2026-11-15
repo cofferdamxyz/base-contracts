@@ -1,5 +1,5 @@
 import { ethers, network } from 'hardhat';
-import { assertMainnetSigner, chainId as nodeChainId, getDeployer, isBaseMainnetChain, mainnetDelay } from './lib/chain';
+import { assertMainnetOwner, assertMainnetSigner, chainId as nodeChainId, getDeployer, isBaseMainnetChain, mainnetDelay } from './lib/chain';
 import { refuseRecordedGeneration, writeDeployments } from './lib/deployments';
 import { mainnetRegistryOwner } from './lib/devKeyException';
 import {
@@ -22,8 +22,9 @@ import {
 //                           Ledger (scripts/lib/devKeyException.ts)
 //   REGISTRY_OWNER          owner of the registry; required on mainnet (the
 //                           founder's Ledger for the test generation, T3; the
-//                           Safe for production; the CofferdamDev wallet, and
-//                           its default, under the dev-key exception)
+//                           Safe for production). Under the dev-key exception
+//                           the CofferdamDev wallet by default, or a Safe v1.4.1
+//                           it signs for (create-safe.ts), checked on chain
 //   ZKP_SCOPE               required; T1's test scope is cofferdam-zkp-test-1
 //   ZKP_CIRCUITS_VERSION    default 0.21.1
 //   ZKP_VALIDITY_SECONDS    default 3600, at most 86400
@@ -52,6 +53,7 @@ async function main() {
 
   const owner = mainnet ? mainnetRegistryOwner() : process.env.REGISTRY_OWNER?.trim() || deployer.address;
   if (!ethers.isAddress(owner)) throw new Error(`REGISTRY_OWNER ${owner} is not an address`);
+  await assertMainnetOwner(owner);
 
   const scope = process.env.ZKP_SCOPE?.trim();
   if (!scope) throw new Error('ZKP_SCOPE is required (T1: cofferdam-zkp-test-1 for the test generation, never reused)');

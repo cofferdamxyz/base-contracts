@@ -1,5 +1,12 @@
 import { ethers, network } from 'hardhat';
-import { DEV_KEY_EXCEPTION, devKeyExceptionRefusal, devKeyExceptionRequested, mainnetSignerRefusal } from './devKeyException';
+import {
+  DEV_KEY_EXCEPTION,
+  SafeFacts,
+  devKeyExceptionRefusal,
+  devKeyExceptionRequested,
+  exceptionOwnerRefusal,
+  mainnetSignerRefusal,
+} from './devKeyException';
 
 // Guards for deploy scripts (decision 0080, 9). They read the chain id from
 // the node, never the network's name, so a dry run on a fork of Base mainnet
@@ -75,7 +82,7 @@ export async function assertMainnetSigner(signer: string): Promise<void> {
   if (refusal) throw new Error(refusal);
   if (devKeyExceptionRequested()) {
     console.log(
-      `M2 DEV-KEY EXCEPTION: ${DEV_KEY_EXCEPTION.generation} deployed and owned by the CofferdamDev wallet ${DEV_KEY_EXCEPTION.signer}, not the Ledger. MVP only, never production.`,
+      `M2 DEV-KEY EXCEPTION: ${DEV_KEY_EXCEPTION.generation} deployed by the CofferdamDev wallet ${DEV_KEY_EXCEPTION.signer}, not the Ledger. MVP only, never production.`,
     );
   }
   if (fork) console.log(`DRY RUN: chain 8453 on a local fork (${network.name}); nothing reaches Base mainnet.`);
@@ -131,6 +138,37 @@ export async function getDeployer() {
     throw new Error(`No signer on ${network.name}: Base mainnet signs with the Ledger only; set LEDGER_ADDRESS (decision 0080)`);
   }
   return deployer;
+}
+
+/** The Safe facts of `address`, or null when it has no code or does not answer as a Safe. */
+export async function readSafe(address: string): Promise<SafeFacts | null> {
+  if ((await ethers.provider.getCode(address)) === '0x') return null;
+  const safe = new ethers.Contract(
+    address,
+    ['function getOwners() view returns (address[])', 'function getThreshold() view returns (uint256)'],
+    ethers.provider,
+  );
+  try {
+    const slot0 = await ethers.provider.getStorage(address, 0);
+    return {
+      singleton: ethers.getAddress(ethers.dataSlice(slot0, 12)),
+      owners: [...(await safe.getOwners())],
+      threshold: await safe.getThreshold(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Under the dev-key exception on chain 8453, the registries' owner is the
+ * CofferdamDev wallet or a Safe v1.4.1 it signs for, read from the chain. A
+ * no-op otherwise.
+ */
+export async function assertMainnetOwner(owner: string): Promise<void> {
+  if (!devKeyExceptionRequested() || !(await isBaseMainnetChain())) return;
+  const refusal = exceptionOwnerRefusal(owner, await readSafe(owner));
+  if (refusal) throw new Error(refusal);
 }
 
 /** A delay from the environment, at least 72 hours on Base mainnet. */

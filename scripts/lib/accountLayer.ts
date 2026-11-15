@@ -1,5 +1,5 @@
 import { ethers, network } from 'hardhat';
-import { assertMainnetSigner, chainId as nodeChainId, getDeployer, mainnetDelay } from './chain';
+import { assertMainnetOwner, assertMainnetSigner, chainId as nodeChainId, getDeployer, mainnetDelay } from './chain';
 import { readDeployments, refuseRecordedGeneration } from './deployments';
 import { mainnetRegistryOwner } from './devKeyException';
 import { accountCodeFingerprint, paymasterRelayer } from './paymaster';
@@ -28,7 +28,8 @@ export const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
  *   first). That is decision 0080's test generation: binds and rebinds work,
  *   `recoverHigh` reverts, since today's account calls Self's `provenNullifier`.
  *   The deployer must be the Ledger (the CofferdamDev wallet under the M2
- *   dev-key exception, which also owns both registries: ./devKeyException.ts),
+ *   dev-key exception, ./devKeyException.ts; the owner is then that wallet or
+ *   a Safe it signs for),
  *   and the generation's file must not already hold an account layer.
  * - `RECOVERY_DELAY_SECONDS` is the hard-recovery delay pinned into every
  *   account: 72 hours on mainnet, 0 elsewhere by default.
@@ -46,6 +47,7 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
   await assertMainnetSigner(deployer.address);
   const owner = isMainnet ? mainnetRegistryOwner() : process.env.REGISTRY_OWNER?.trim() || deployer.address;
   if (!ethers.isAddress(owner)) throw new Error(`REGISTRY_OWNER ${owner} is not an address`);
+  await assertMainnetOwner(owner);
   // The paymaster is testnet only.
   const skipPaymaster = isMainnet;
   const relayer = skipPaymaster ? '' : paymasterRelayer(deployer.address);

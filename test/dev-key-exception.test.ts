@@ -4,10 +4,12 @@ import { Wallet, computeAddress } from 'ethers';
 import { assertMainnetSigner, getDeployer } from '../scripts/lib/chain';
 import {
   DEV_KEY_EXCEPTION,
+  SAFE_V141,
   assertNoMainnetKeys,
   devKeyAccounts,
   devKeyExceptionRecord,
   devKeyExceptionRefusal,
+  exceptionOwnerRefusal,
   mainnetRegistryOwner,
   mainnetSignerRefusal,
 } from '../scripts/lib/devKeyException';
@@ -126,24 +128,43 @@ describe('M2 dev-key exception', function () {
   });
 
   describe('the registry owner', function () {
-    it('is the CofferdamDev wallet under the exception, by default or repeated', function () {
+    const SAFE = '0x000000000000000000000000000000000000Safe';
+
+    it('is the CofferdamDev wallet by default under the exception, or REGISTRY_OWNER', function () {
       expect(mainnetRegistryOwner(OK)).to.equal(DEV);
-      expect(mainnetRegistryOwner({ ...OK, REGISTRY_OWNER: DEV.toLowerCase() })).to.equal(DEV);
-      expect(() => mainnetRegistryOwner({ ...OK, REGISTRY_OWNER: LEDGER })).to.throw(/REGISTRY_OWNER is the CofferdamDev wallet/);
+      expect(mainnetRegistryOwner({ ...OK, REGISTRY_OWNER: SAFE })).to.equal(SAFE);
     });
 
     it('is REGISTRY_OWNER, required, without it', function () {
       expect(mainnetRegistryOwner({ REGISTRY_OWNER: LEDGER })).to.equal(LEDGER);
       expect(() => mainnetRegistryOwner({})).to.throw(/REGISTRY_OWNER is required/);
     });
+
+    it('may be the dev wallet, or a Safe v1.4.1 the dev wallet signs for', function () {
+      const safe = { singleton: SAFE_V141.singletonL2, owners: [DEV], threshold: 1n };
+      expect(exceptionOwnerRefusal(DEV, null)).to.equal(null);
+      expect(exceptionOwnerRefusal(SAFE, safe)).to.equal(null);
+      expect(exceptionOwnerRefusal(SAFE, { ...safe, singleton: SAFE_V141.singleton, owners: [LEDGER, DEV] })).to.equal(null);
+    });
+
+    it('refuses an EOA, another contract, a Safe without the dev wallet and a bad threshold', function () {
+      const safe = { singleton: SAFE_V141.singletonL2, owners: [DEV], threshold: 1n };
+      expect(exceptionOwnerRefusal(LEDGER, null)).to.match(/neither the CofferdamDev wallet nor a Safe/);
+      expect(exceptionOwnerRefusal(SAFE, { ...safe, singleton: LEDGER })).to.match(/not a Safe v1.4.1 proxy/);
+      expect(exceptionOwnerRefusal(SAFE, { ...safe, owners: [LEDGER] })).to.match(/does not list the CofferdamDev wallet/);
+      expect(exceptionOwnerRefusal(SAFE, { ...safe, threshold: 2n })).to.match(/threshold 2 over 1/);
+    });
   });
 
-  it('records the exception for the deployments file', function () {
-    const r = devKeyExceptionRecord();
+  it('records the exception and the owner for the deployments file', function () {
+    const r = devKeyExceptionRecord(OK);
     expect(r.generation).to.equal('zkp-test-1');
     expect(r.deployer).to.equal(DEV);
     expect(r.owner).to.equal(DEV);
     expect(r.note).to.match(/never production/);
+    const s = devKeyExceptionRecord({ ...OK, REGISTRY_OWNER: '0x000000000000000000000000000000000000Safe' });
+    expect(s.owner).to.equal('0x000000000000000000000000000000000000Safe');
+    expect(s.note).to.match(/owned from the first block by a Safe/);
   });
 
   describe('off Base mainnet (the in-process network, chain 31337)', function () {
