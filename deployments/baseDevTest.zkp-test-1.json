@@ -1,0 +1,40 @@
+{
+  "CofferdamSafe": {
+    "address": "0xC25c20Fb99f470567F38250acE1A04C095546bFe"
+  },
+  "devKeyException": {
+    "name": "M2 dev-key exception",
+    "generation": "zkp-test-1",
+    "deployer": "0x2c8A01e971d7C51B3B78f9F08c57c45584D96AB2",
+    "owner": "0xC25c20Fb99f470567F38250acE1A04C095546bFe",
+    "note": "Deployed by the CofferdamDev hot wallet under the founder's temporary MVP exception (2026-11-14), not the Ledger; owned from the first block by a Safe the wallet signs for (the Ledger joins it once funded). Departs from decision 0080 T3/T4 and decision 0017 (1) for this generation only; never production. Paused and abandoned after the end-to-end bind test.",
+    "runbook": "docs/runbooks/mainnet-deploys.md (workspace), \"The M2 dev-key exception\""
+  },
+  "ZKPassportEvidenceAdapter": {
+    "address": "0xbd033aCcc1eA326Cb8dC2bD19EE5cBe9f87b44c8"
+  },
+  "CofferdamIdentityRegistry": {
+    "address": "0xfaC4A0fcc6Df2E91C5D8d20a16923BE2590D3d48"
+  },
+  "EntryPoint": {
+    "address": "0x0000000071727De22E5E9d8BAf0edAc6f37da032"
+  },
+  "WebAuthnPasskeyAuthority": {
+    "address": "0xe2489a994EB8a03eeA42dB5E70a1EC060Abbe1ce"
+  },
+  "PartnerPasskeyAuthority": {
+    "address": "0xaC2ebB15893F12C0FA055bE06E075eD6bcC49aAa"
+  },
+  "SessionKeyAuthorityLowManaged": {
+    "address": "0x7300BCd6E1B2901AfddC94fFE8FcAC56aD7047E3"
+  },
+  "CofferdamModuleRegistry": {
+    "address": "0xA62165287D6B2170c086711D5675789B2f5D2E6f"
+  },
+  "CofferdamCeremonyAttesterRegistry": {
+    "address": "0x09cf141a1e2CbaBd2Ba21675af47741af8c0afd1"
+  },
+  "CofferdamAccountFactory4337": {
+    "address": "0x7c2a36fd351178d055815413d5Eb79a85F77e8aa"
+  }
+}
