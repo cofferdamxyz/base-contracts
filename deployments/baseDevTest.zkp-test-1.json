@@ -36,5 +36,8 @@
   },
   "CofferdamAccountFactory4337": {
     "address": "0x7c2a36fd351178d055815413d5Eb79a85F77e8aa"
+  },
+  "ZKPassportEvidenceAdapterDrill": {
+    "address": "0x9f16a54590B28070615d0Dd74Dc56ee1CD88fB90"
   }
 }
