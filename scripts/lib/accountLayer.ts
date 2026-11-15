@@ -1,6 +1,7 @@
 import { ethers, network } from 'hardhat';
 import { assertMainnetSigner, chainId as nodeChainId, getDeployer, mainnetDelay } from './chain';
 import { readDeployments, refuseRecordedGeneration } from './deployments';
+import { mainnetRegistryOwner } from './devKeyException';
 import { accountCodeFingerprint, paymasterRelayer } from './paymaster';
 
 // ERC-4337 EntryPoint v0.7 — preinstalled on Base
@@ -26,8 +27,9 @@ export const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
  *   (`IDENTITY_REGISTRY`, else the generation file's entry; `deploy-identity.ts`
  *   first). That is decision 0080's test generation: binds and rebinds work,
  *   `recoverHigh` reverts, since today's account calls Self's `provenNullifier`.
- *   The deployer must be the Ledger, and the generation's file must not
- *   already hold an account layer.
+ *   The deployer must be the Ledger (the CofferdamDev wallet under the M2
+ *   dev-key exception, which also owns both registries: ./devKeyException.ts),
+ *   and the generation's file must not already hold an account layer.
  * - `RECOVERY_DELAY_SECONDS` is the hard-recovery delay pinned into every
  *   account: 72 hours on mainnet, 0 elsewhere by default.
  * - `PROBATION_PERIOD_SECONDS` is the probation of a High added by a High:
@@ -42,8 +44,8 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
   // By the chain id the node reports, so a fork of mainnet takes this path too.
   const isMainnet = chainId === 8453n;
   await assertMainnetSigner(deployer.address);
-  const owner = process.env.REGISTRY_OWNER || (isMainnet ? '' : deployer.address);
-  if (!owner) throw new Error('REGISTRY_OWNER (the Cofferdam Safe; the Ledger for the test generation) is required on mainnet');
+  const owner = isMainnet ? mainnetRegistryOwner() : process.env.REGISTRY_OWNER?.trim() || deployer.address;
+  if (!ethers.isAddress(owner)) throw new Error(`REGISTRY_OWNER ${owner} is not an address`);
   // The paymaster is testnet only.
   const skipPaymaster = isMainnet;
   const relayer = skipPaymaster ? '' : paymasterRelayer(deployer.address);
@@ -89,8 +91,10 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
   if (probationPeriod >= 2n ** 48n) throw new Error('PROBATION_PERIOD_SECONDS does not fit uint48');
   console.log('probationPeriod:', probationPeriod.toString(), 'seconds');
 
+  // Every contract from the deployer, never the node's first account: on a
+  // fork dry run that is anvil's account #0, not the Ledger or the dev wallet.
   async function deploy(name: string, args: unknown[] = []): Promise<string> {
-    const c = await (await ethers.getContractFactory(name)).deploy(...args);
+    const c = await (await ethers.getContractFactory(name, deployer)).deploy(...args);
     await c.waitForDeployment();
     const addr = await c.getAddress();
     console.log(`${name}:`, addr);

@@ -1,6 +1,7 @@
 import { ethers, network } from 'hardhat';
 import { assertMainnetSigner, chainId as nodeChainId, getDeployer, isBaseMainnetChain, mainnetDelay } from './lib/chain';
 import { refuseRecordedGeneration, writeDeployments } from './lib/deployments';
+import { mainnetRegistryOwner } from './lib/devKeyException';
 import {
   ZKP_DOMAIN,
   ZKP_IDENTIFIER_TYPE,
@@ -15,9 +16,14 @@ import {
 //
 //   GENERATION              Base mainnet only: the deployments file, e.g. zkp-test-1
 //   LEDGER_ADDRESS          Base mainnet only: the deployer (hardhat.config.ts)
+//   MAINNET_DEV_KEY_EXCEPTION  zkp-test-1 only, with --network baseDevTest: the
+//                           M2 dev-key exception, the CofferdamDev wallet
+//                           deploys and owns the generation instead of the
+//                           Ledger (scripts/lib/devKeyException.ts)
 //   REGISTRY_OWNER          owner of the registry; required on mainnet (the
 //                           founder's Ledger for the test generation, T3; the
-//                           Safe for production)
+//                           Safe for production; the CofferdamDev wallet, and
+//                           its default, under the dev-key exception)
 //   ZKP_SCOPE               required; T1's test scope is cofferdam-zkp-test-1
 //   ZKP_CIRCUITS_VERSION    default 0.21.1
 //   ZKP_VALIDITY_SECONDS    default 3600, at most 86400
@@ -44,8 +50,8 @@ async function main() {
   await assertMainnetSigner(deployer.address);
   refuseRecordedGeneration(network.name, chainId, ['CofferdamIdentityRegistry', 'ZKPassportEvidenceAdapter']);
 
-  const owner = process.env.REGISTRY_OWNER?.trim() || (mainnet ? '' : deployer.address);
-  if (!owner || !ethers.isAddress(owner)) throw new Error('REGISTRY_OWNER is required on Base mainnet');
+  const owner = mainnet ? mainnetRegistryOwner() : process.env.REGISTRY_OWNER?.trim() || deployer.address;
+  if (!ethers.isAddress(owner)) throw new Error(`REGISTRY_OWNER ${owner} is not an address`);
 
   const scope = process.env.ZKP_SCOPE?.trim();
   if (!scope) throw new Error('ZKP_SCOPE is required (T1: cofferdam-zkp-test-1 for the test generation, never reused)');
@@ -85,9 +91,9 @@ async function main() {
     console.log(`RootVerifier ${rootVerifier}, helper for ${versionLabel}: ${helper}`);
   } else if (!rootVerifier) {
     console.log('No ZKP_ROOT_VERIFIER: deploying the mock RootVerifier and helper (testnets only).');
-    const mockHelper = await (await ethers.getContractFactory('MockZKPassportHelper')).deploy();
+    const mockHelper = await (await ethers.getContractFactory('MockZKPassportHelper', deployer)).deploy();
     await mockHelper.waitForDeployment();
-    const root = await (await ethers.getContractFactory('MockZKPassportRootVerifier')).deploy();
+    const root = await (await ethers.getContractFactory('MockZKPassportRootVerifier', deployer)).deploy();
     await root.waitForDeployment();
     helper = await mockHelper.getAddress();
     await (await root.setHelper(version, helper)).wait();
@@ -115,7 +121,8 @@ async function main() {
     testAccounts,
   });
 
-  const Adapter = await ethers.getContractFactory('ZKPassportEvidenceAdapter');
+  // From the deployer, never the node's first account (anvil's #0 on a fork).
+  const Adapter = await ethers.getContractFactory('ZKPassportEvidenceAdapter', deployer);
   const adapter = await Adapter.deploy(rootVerifier, helper, version, scope, validity, identifierType, oprfKeyHash, minAge, expiryMargin);
   await adapter.waitForDeployment();
   out.ZKPassportEvidenceAdapter = await adapter.getAddress();
@@ -126,7 +133,7 @@ async function main() {
   if ((await adapter.identifierKind()) !== kind || (await adapter.scopeId()) !== scopeId) {
     throw new Error('The adapter reports another kind or scope than scripts/lib/identity.ts computes');
   }
-  const Registry = await ethers.getContractFactory('CofferdamIdentityRegistry');
+  const Registry = await ethers.getContractFactory('CofferdamIdentityRegistry', deployer);
   const registry = await Registry.deploy(
     owner,
     kind,

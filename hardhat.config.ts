@@ -2,6 +2,8 @@ import { HardhatUserConfig } from 'hardhat/config';
 import '@nomicfoundation/hardhat-toolbox';
 import '@nomicfoundation/hardhat-ledger';
 import 'dotenv/config';
+import { computeAddress } from 'ethers';
+import { assertNoMainnetKeys, devKeyAccounts } from './scripts/lib/devKeyException';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Cofferdam — Base contracts (ERC-4337 account abstraction)
@@ -21,6 +23,13 @@ const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || PUBLIC_DEV_KEY;
 // list LEDGER_ADDRESS through the Hardhat Ledger plugin. The scripts' guards
 // (scripts/lib/chain.ts) check the chain id the node reports, so a fork dry run
 // runs them too.
+//
+// The one departure is the M2 dev-key exception (scripts/lib/devKeyException.ts;
+// workspace docs/runbooks/mainnet-deploys.md): `baseDevTest` carries
+// DEPLOYER_PRIVATE_KEY only when MAINNET_DEV_KEY_EXCEPTION=zkp-test-1 and
+// GENERATION=zkp-test-1 are set and the key is the CofferdamDev wallet's
+// (0x2c8A…6AB2). Temporary, MVP only, never production.
+const DEV_KEY_ACCOUNTS = devKeyAccounts(process.env, computeAddress);
 const LEDGER_ACCOUNTS = process.env.LEDGER_ADDRESS?.trim() ? [process.env.LEDGER_ADDRESS.trim()] : [];
 const BASE_RPC_URL = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
 
@@ -89,6 +98,16 @@ const config: HardhatUserConfig = {
       accounts: [],
       ledgerAccounts: LEDGER_ACCOUNTS,
     },
+
+    // Base mainnet under the M2 dev-key exception only: the CofferdamDev hot
+    // wallet deploys the test generation zkp-test-1, nothing else. No key
+    // unless the exception holds (above); the scripts check the signer and the
+    // generation again (scripts/lib/chain.ts).
+    baseDevTest: {
+      url: BASE_RPC_URL,
+      chainId: 8453,
+      accounts: DEV_KEY_ACCOUNTS,
+    },
   },
 
   paths: {
@@ -126,12 +145,8 @@ const config: HardhatUserConfig = {
 };
 
 // No network that reaches chain 8453 may carry private keys, whatever is
-// added later. The in-process fork is exempt: it is local by construction.
-for (const [name, net] of Object.entries(config.networks ?? {})) {
-  if (name === 'hardhat' || !net || net.chainId !== 8453) continue;
-  if (Array.isArray(net.accounts) && net.accounts.length > 0) {
-    throw new Error(`hardhat.config.ts: network ${name} is chain 8453 and lists private keys; Base mainnet signs with the Ledger only`);
-  }
-}
+// added later, except `baseDevTest` under the dev-key exception. The
+// in-process fork is exempt: it is local by construction.
+assertNoMainnetKeys(config.networks as Parameters<typeof assertNoMainnetKeys>[0]);
 
 export default config;

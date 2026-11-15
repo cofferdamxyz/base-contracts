@@ -70,13 +70,13 @@ Local chain: `yarn node:start` runs [base-anvil](https://github.com/base/base-an
 
 Base Sepolia, signed by the CofferdamDev key in the untracked `.env`: `yarn deploy:self:sepolia` when the registry changes, then `yarn deploy:auth:sepolia`, then `yarn paymaster:move:sepolia`, then move the pins in the API, attester and app. See `docs/runbooks/sepolia-deploys.md` in the cofferdam workspace repository.
 
-Base mainnet signs with the Ledger only (Hardhat Ledger plugin, `LEDGER_ADDRESS`): the `base` network takes no private key, and the scripts' guards read the chain id from the node, so a fork dry run runs them. Self, the escrow demo, `deploy-all` and the paymaster refuse chain 8453; every delay is at least 72 hours; each generation has its own deployments file (`GENERATION`). Nothing is deployed there. See `docs/runbooks/mainnet-deploys.md`.
+Base mainnet signs with the Ledger only (Hardhat Ledger plugin, `LEDGER_ADDRESS`): the `base` network takes no private key, and the scripts' guards read the chain id from the node, so a fork dry run runs them. Self, the escrow demo, `deploy-all` and the paymaster refuse chain 8453; every delay is at least 72 hours; each generation has its own deployments file (`GENERATION`). The one departure is the temporary M2 dev-key exception (the founder, 2026-11-14; MVP only, never production): with `MAINNET_DEV_KEY_EXCEPTION=zkp-test-1` and `GENERATION=zkp-test-1`, the `baseDevTest` network signs with the CofferdamDev wallet, which also owns the generation; any other generation, signer or network on 8453 is refused (`scripts/lib/devKeyException.ts`). Nothing is deployed there. See `docs/runbooks/mainnet-deploys.md`.
 
 ## Key facts
 
 - Current Sepolia addresses are in `deployments/baseSepolia.json`, written by the deploy scripts. `cofferdam-api/src/chain/deployments.ts` mirrors them by hand; the SDK holds no address table. Never edit an address in one place only.
 - EntryPoint v0.7 at its canonical address; RIP-7212 P-256 precompile for passkey verification. Solidity 0.8.28, `viaIR`, Cancun.
-- The Sepolia layer pins `RECOVERY_DELAY` 0 and `PROBATION_PERIOD` 600 seconds; mainnet deploys refuse less than 72 hours for both, for the identity registry's rebind and adapter delays too, and require a registry owner (the Cofferdam Safe; the founder's Ledger for the throwaway test generation).
+- The Sepolia layer pins `RECOVERY_DELAY` 0 and `PROBATION_PERIOD` 600 seconds; mainnet deploys refuse less than 72 hours for both, for the identity registry's rebind and adapter delays too, and require a registry owner (the Cofferdam Safe; the founder's Ledger for the throwaway test generation, or the CofferdamDev wallet under the M2 dev-key exception).
 - `NullifierRegistry` pins the scope of `cofferdam.xyz` × `cofferdam-bind-v1` and Self's destination chain 42220, both immutable.
 - Contract names follow the `Cofferdam*` ladder in the workspace `rules/cofferdam-sdk.md`.
 

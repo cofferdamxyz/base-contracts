@@ -1,4 +1,5 @@
 import { ethers, network } from 'hardhat';
+import { DEV_KEY_EXCEPTION, devKeyExceptionRefusal, devKeyExceptionRequested, mainnetSignerRefusal } from './devKeyException';
 
 // Guards for deploy scripts (decision 0080, 9). They read the chain id from
 // the node, never the network's name, so a dry run on a fork of Base mainnet
@@ -49,22 +50,35 @@ export async function refuseMainnet(what: string): Promise<void> {
  * Ledger for the test generation, T3). The `base` network has no private keys
  * (hardhat.config.ts), so a signer there can only come from `ledgerAccounts`;
  * this checks it once more against the network the script actually reached.
- * On a local fork it only says that this is a dry run.
+ *
+ * The one departure is the M2 dev-key exception (./devKeyException.ts): with
+ * MAINNET_DEV_KEY_EXCEPTION=zkp-test-1 the deployer must be the CofferdamDev
+ * wallet, GENERATION zkp-test-1 and the network `baseDevTest`. A local fork
+ * runs the same checks, then says that this is a dry run.
  */
 export async function assertMainnetSigner(signer: string): Promise<void> {
-  if (!(await isBaseMainnetChain())) return;
-  if (await isLocalFork()) {
-    console.log(`DRY RUN: chain 8453 on a local fork (${network.name}); nothing reaches Base mainnet.`);
+  if (!(await isBaseMainnetChain())) {
+    if (devKeyExceptionRequested()) {
+      throw new Error(`${DEV_KEY_EXCEPTION.env} is for Base mainnet (chain 8453) only; unset it`);
+    }
     return;
   }
+  const fork = await isLocalFork();
   const cfg = network.config as { accounts?: unknown; ledgerAccounts?: string[] };
-  if (Array.isArray(cfg.accounts) && cfg.accounts.length > 0) {
-    throw new Error(`Network ${network.name} reaches Base mainnet with private keys configured: refused (decision 0080)`);
+  const refusal = mainnetSignerRefusal({
+    fork,
+    networkName: network.name,
+    hasKeys: Array.isArray(cfg.accounts) && cfg.accounts.length > 0,
+    ledgerAccounts: cfg.ledgerAccounts ?? [],
+    signer,
+  });
+  if (refusal) throw new Error(refusal);
+  if (devKeyExceptionRequested()) {
+    console.log(
+      `M2 DEV-KEY EXCEPTION: ${DEV_KEY_EXCEPTION.generation} deployed and owned by the CofferdamDev wallet ${DEV_KEY_EXCEPTION.signer}, not the Ledger. MVP only, never production.`,
+    );
   }
-  const ledger = (cfg.ledgerAccounts ?? []).map((a) => a.toLowerCase());
-  if (!ledger.includes(signer.toLowerCase())) {
-    throw new Error(`On Base mainnet the deployer must be a Ledger account (LEDGER_ADDRESS); got ${signer}`);
-  }
+  if (fork) console.log(`DRY RUN: chain 8453 on a local fork (${network.name}); nothing reaches Base mainnet.`);
 }
 
 /**
@@ -72,8 +86,37 @@ export async function assertMainnetSigner(signer: string): Promise<void> {
  * after the node's own accounts, so it must be picked by address), else the
  * first signer. On a local fork an unfunded Ledger gets test ETH, so the
  * Ledger dry run needs no faucet. On `base` the only signer is LEDGER_ADDRESS.
+ *
+ * Under the dev-key exception it is the CofferdamDev wallet: on `baseDevTest`
+ * the configured key, and on a local fork the wallet impersonated (no key
+ * needed), given test ETH only when it holds none, so a funded wallet's real
+ * balance is what the dry run spends.
  */
 export async function getDeployer() {
+  if (devKeyExceptionRequested()) {
+    const refusal = devKeyExceptionRefusal();
+    if (refusal) throw new Error(refusal);
+    const dev = DEV_KEY_EXCEPTION.signer;
+    if ((await isBaseMainnetChain()) && (await isLocalFork())) {
+      for (const method of ['anvil_impersonateAccount', 'hardhat_impersonateAccount']) {
+        try {
+          await ethers.provider.send(method, [dev]);
+          break;
+        } catch {
+          // the other kind of node
+        }
+      }
+      if ((await ethers.provider.getBalance(dev)) === 0n) {
+        await ethers.provider.send('hardhat_setBalance', [dev, ethers.toBeHex(ethers.parseEther('10'))]);
+      }
+      return ethers.getSigner(dev);
+    }
+    const [deployer] = await ethers.getSigners();
+    if (!deployer) {
+      throw new Error(`No signer on ${network.name}: the dev-key exception needs DEPLOYER_PRIVATE_KEY (the CofferdamDev wallet) in .env`);
+    }
+    return deployer;
+  }
   const ledger = process.env.LEDGER_ADDRESS?.trim();
   const listed = ((network.config as { ledgerAccounts?: string[] }).ledgerAccounts ?? []).map((a) => a.toLowerCase());
   if (ledger && listed.includes(ledger.toLowerCase())) {

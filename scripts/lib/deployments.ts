@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { BASE_MAINNET_CHAIN_ID } from './chain';
+import { devKeyExceptionRecord, devKeyExceptionRequested } from './devKeyException';
 
 const DEPLOYMENTS_DIR = path.join(__dirname, '..', '..', 'deployments');
 const ZERO = '0x0000000000000000000000000000000000000000';
@@ -56,7 +57,8 @@ export function refuseRecordedGeneration(networkName: string, chainId: bigint, n
  * identity) ran last. Existing entries are preserved; only the keys passed in
  * are written. Empty/zero addresses are skipped so a partial run never wipes a
  * good entry. On Base mainnet an entry is never overwritten with another
- * address: that would be a new generation.
+ * address: that would be a new generation. A generation made under the M2
+ * dev-key exception records it under `devKeyException`.
  */
 export function writeDeployments(
   networkName: string,
@@ -78,6 +80,7 @@ export function writeDeployments(
     }
     registry[name] = { address };
   }
+  if (chainId === BASE_MAINNET_CHAIN_ID && devKeyExceptionRequested()) registry.devKeyException = devKeyExceptionRecord();
 
   fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2) + '\n');
   return registryPath;
