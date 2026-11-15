@@ -25,6 +25,8 @@
     "deploy:auth:base-dev": "hardhat run scripts/deploy-auth.ts --network baseDevTest",
     "safe:create:fork": "hardhat run scripts/create-safe.ts --network baseFork",
     "safe:create:base-dev": "hardhat run scripts/create-safe.ts --network baseDevTest",
+    "safe:exec:fork": "hardhat run scripts/safe-exec.ts --network baseFork",
+    "safe:exec:base-dev": "hardhat run scripts/safe-exec.ts --network baseDevTest",
     "deploy:identity:local": "hardhat run scripts/deploy-identity.ts --network localhost",
     "deploy:identity:fork": "hardhat run scripts/deploy-identity.ts --network baseFork",
     "deploy:identity:base": "hardhat run scripts/deploy-identity.ts --network base",

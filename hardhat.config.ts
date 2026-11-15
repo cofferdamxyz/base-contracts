@@ -117,30 +117,12 @@ const config: HardhatUserConfig = {
     artifacts: './artifacts',
   },
 
-  // Etherscan / Basescan verification
+  // Basescan verification through Etherscan's v2 API: one Etherscan.io key for
+  // every chain (hardhat-verify uses v2 only when apiKey is a single string; its
+  // built-in Base and Base Sepolia entries carry the chain ids). The per-chain
+  // keys and api.basescan.org endpoints of the v1 API are retired.
   etherscan: {
-    apiKey: {
-      baseSepolia: process.env.BASESCAN_API_KEY || '',
-      base: process.env.BASESCAN_API_KEY || '',
-    },
-    customChains: [
-      {
-        network: 'baseSepolia',
-        chainId: 84532,
-        urls: {
-          apiURL: 'https://api-sepolia.basescan.org/api',
-          browserURL: 'https://sepolia.basescan.org',
-        },
-      },
-      {
-        network: 'base',
-        chainId: 8453,
-        urls: {
-          apiURL: 'https://api.basescan.org/api',
-          browserURL: 'https://basescan.org',
-        },
-      },
-    ],
+    apiKey: process.env.ETHERSCAN_API_KEY || process.env.BASESCAN_API_KEY || '',
   },
 };
 

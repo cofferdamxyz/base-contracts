@@ -1,0 +1,169 @@
+import { ethers, network } from 'hardhat';
+import { assertMainnetSigner, chainId as nodeChainId, getDeployer, isLocalFork, readSafe } from './lib/chain';
+import { readDeployments, writeDeployments } from './lib/deployments';
+import { SAFE_EXEC_ABI, parseSafeAction, safeExecRefusal, senderOwnerSignature } from './lib/safe';
+
+// Owner actions on a generation's identity registry, sent through the Safe that
+// owns it, as production's will be (decision 0017; for zkp-test-1, the
+// throwaway Safe of the M2 dev-key exception, signed by the CofferdamDev
+// wallet alone, threshold 1). Each call is pre-flighted from the Safe's address,
+// simulated, sent as `execTransaction` with the sender's pre-validated
+// signature, and its effect read back.
+//
+//   SAFE_ACTION        pause-drill    setPaused(true), then setPaused(false)
+//                      adapter-drill  proposeAdapter, then cancelAdapterProposal, on a
+//                                     second copy of the live adapter (deployed once,
+//                                     recorded as ZKPassportEvidenceAdapterDrill); it
+//                                     never becomes active
+//                      set-test-account  setTestAccount(ACCOUNT, ALLOWED)
+//                      pause / unpause   setPaused(true / false), for an incident
+//   ACCOUNT, ALLOWED   set-test-account: the account; ALLOWED 1 (default) or 0
+//   SAFE_ADDRESS       default the generation's recorded CofferdamSafe
+//   IDENTITY_REGISTRY  default the generation's recorded CofferdamIdentityRegistry
+//
+// On Base mainnet the generation's variables are the deploy's
+// (MAINNET_DEV_KEY_EXCEPTION, GENERATION); a fork dry run passes SAFE_ADDRESS
+// and IDENTITY_REGISTRY, since the fork's own deployments file is empty.
+
+
+function pick(name: string, fromEnv: string | undefined, recorded: string | undefined): string {
+  const env = fromEnv?.trim();
+  if (env && recorded && env.toLowerCase() !== recorded.toLowerCase()) {
+    throw new Error(`${name} ${env} differs from the generation's recorded ${recorded}`);
+  }
+  const address = env || recorded;
+  if (!address || !ethers.isAddress(address)) throw new Error(`No ${name}: set it, or run with the generation's GENERATION`);
+  return ethers.getAddress(address);
+}
+
+async function main() {
+  const action = parseSafeAction(process.env.SAFE_ACTION);
+  const signer = await getDeployer();
+  const chainId = await nodeChainId();
+  console.log(`Safe action ${action} on ${network.name} (chain ${chainId}) from ${signer.address}`);
+  await assertMainnetSigner(signer.address);
+
+  const recorded = readDeployments(network.name, chainId);
+  const safeAddress = pick('SAFE_ADDRESS', process.env.SAFE_ADDRESS, recorded.CofferdamSafe?.address);
+  const registryAddress = pick('IDENTITY_REGISTRY', process.env.IDENTITY_REGISTRY, recorded.CofferdamIdentityRegistry?.address);
+  const refusal = safeExecRefusal(safeAddress, await readSafe(safeAddress), signer.address, recorded.CofferdamSafe?.address);
+  if (refusal) throw new Error(refusal);
+  // writeDeployments re-records the exception with REGISTRY_OWNER as the owner.
+  const owner = process.env.REGISTRY_OWNER?.trim();
+  if (owner && owner.toLowerCase() !== safeAddress.toLowerCase()) throw new Error(`REGISTRY_OWNER ${owner} is not the Safe ${safeAddress}`);
+  process.env.REGISTRY_OWNER = safeAddress;
+
+  const safe = new ethers.Contract(safeAddress, SAFE_EXEC_ABI, signer);
+  // The full artifact, so a refusal decodes to the registry's own error name.
+  const registry = await ethers.getContractAt('CofferdamIdentityRegistry', registryAddress);
+  const registryOwner: string = await registry.owner();
+  if (registryOwner.toLowerCase() !== safeAddress.toLowerCase()) {
+    throw new Error(`The registry ${registryAddress} is owned by ${registryOwner}, not the Safe ${safeAddress}`);
+  }
+  console.log({ safe: safeAddress, registry: registryAddress, safeNonce: (await safe.nonce()).toString() });
+  // base-anvil charges an eth_call's gas to its sender even at gas price 0, and
+  // the Safe holds no ETH; Base's own nodes do not. On a fork only, give the
+  // Safe a little test ETH so the pre-flight below runs as it does live.
+  if ((await isLocalFork()) && (await ethers.provider.getBalance(safeAddress)) === 0n) {
+    await ethers.provider.send('hardhat_setBalance', [safeAddress, ethers.toBeHex(ethers.parseEther('0.01'))]);
+  }
+
+  /** One call from the Safe to the registry. */
+  async function exec(label: string, data: string) {
+    // Pre-flight as the Safe, so a refusal comes back with the registry's own error.
+    try {
+      await ethers.provider.call({ from: safeAddress, to: registryAddress, data });
+    } catch (e) {
+      const raw = (e as { data?: string }).data;
+      let reason = (e as Error).message;
+      try {
+        const parsed = raw ? registry.interface.parseError(raw) : null;
+        if (parsed) reason = `${parsed.name}(${parsed.args.join(', ')})`;
+      } catch {
+        // not one of the listed errors
+      }
+      throw new Error(`${label}: the registry refuses it: ${reason}`);
+    }
+    const args = [registryAddress, 0, data, 0, 0, 0, 0, ethers.ZeroAddress, ethers.ZeroAddress, senderOwnerSignature(signer.address)] as const;
+    await safe.execTransaction.staticCall(...args);
+    const receipt = await (await safe.execTransaction(...args)).wait();
+    const ok = receipt?.logs.some((log: { address: string; topics: readonly string[]; data: string }) => {
+      if (log.address.toLowerCase() !== safeAddress.toLowerCase()) return false;
+      try {
+        return safe.interface.parseLog(log)?.name === 'ExecutionSuccess';
+      } catch {
+        return false;
+      }
+    });
+    if (!ok) throw new Error(`${label}: no ExecutionSuccess from the Safe in ${receipt?.hash}`);
+    console.log(`${label}: ${receipt?.hash} (gas ${receipt?.gasUsed})`);
+  }
+
+  const expect = (what: string, actual: unknown, wanted: unknown) => {
+    if (actual !== wanted) throw new Error(`${what}: read ${actual}, expected ${wanted}`);
+    console.log(`  ${what}: ${actual}`);
+  };
+  const iface = registry.interface;
+
+  if (action === 'pause' || action === 'unpause' || action === 'pause-drill') {
+    const steps = action === 'pause-drill' ? [true, false] : [action === 'pause'];
+    if (action === 'pause-drill' && (await registry.paused())) throw new Error('The registry is paused already: unpause it first, or skip the drill');
+    for (const paused of steps) {
+      await exec(`setPaused(${paused})`, iface.encodeFunctionData('setPaused', [paused]));
+      expect('paused', await registry.paused(), paused);
+    }
+  } else if (action === 'set-test-account') {
+    const account = process.env.ACCOUNT?.trim();
+    if (!account || !ethers.isAddress(account)) throw new Error('ACCOUNT is required: the test account address');
+    const allowed = (process.env.ALLOWED?.trim() || '1') === '1';
+    await exec(`setTestAccount(${ethers.getAddress(account)}, ${allowed})`, iface.encodeFunctionData('setTestAccount', [account, allowed]));
+    expect('isTestAccount', await registry.isTestAccount(account), allowed);
+  } else {
+    let drill = recorded.ZKPassportEvidenceAdapterDrill?.address;
+    if (!drill) {
+      // A second copy of a live adapter, built from what it reports: the same
+      // kind and scope, so the registry takes the proposal.
+      const live = process.env.IDENTITY_ADAPTER?.trim() || recorded.ZKPassportEvidenceAdapter?.address;
+      if (!live) throw new Error('No live adapter to copy: set IDENTITY_ADAPTER');
+      if (!(await registry.isAdapter(live))) throw new Error(`${live} is not an active adapter of ${registryAddress}`);
+      const a = await ethers.getContractAt('ZKPassportEvidenceAdapter', live);
+      const Adapter = await ethers.getContractFactory('ZKPassportEvidenceAdapter', signer);
+      const copy = await Adapter.deploy(
+        await a.ROOT_VERIFIER(),
+        await a.HELPER(),
+        await a.VERSION(),
+        await a.scope(),
+        await a.VALIDITY(),
+        await a.IDENTIFIER_TYPE(),
+        await a.OPRF_KEY_HASH(),
+        await a.MIN_AGE(),
+        await a.EXPIRY_MARGIN(),
+      );
+      await copy.waitForDeployment();
+      drill = await copy.getAddress();
+      if ((await copy.identifierKind()) !== (await registry.IDENTIFIER_KIND()) || (await copy.scopeId()) !== (await registry.SCOPE_ID())) {
+        throw new Error(`The drill adapter ${drill} reports another kind or scope than the registry`);
+      }
+      console.log('ZKPassportEvidenceAdapterDrill:', drill, '(deployed; never activated)');
+      console.log('Wrote', writeDeployments(network.name, chainId, { ZKPassportEvidenceAdapterDrill: drill }));
+    }
+    if (await registry.isAdapter(drill)) throw new Error(`The drill adapter ${drill} is active: remove it through the Safe, not with this drill`);
+    if ((await registry.adapterReadyAt(drill)) !== 0n) throw new Error(`The drill adapter ${drill} is proposed already: cancel it first`);
+    await exec(`proposeAdapter(${drill})`, iface.encodeFunctionData('proposeAdapter', [drill]));
+    const readyAt: bigint = await registry.adapterReadyAt(drill);
+    const delay: bigint = await registry.ADAPTER_DELAY();
+    const now = BigInt((await ethers.provider.getBlock('latest'))!.timestamp);
+    if (readyAt < now || readyAt > now + delay) throw new Error(`adapterReadyAt ${readyAt} is not within the delay ${delay} of ${now}`);
+    console.log(`  adapterReadyAt: ${readyAt} (${new Date(Number(readyAt) * 1000).toISOString()}, the ${delay}-second timelock)`);
+    expect('isAdapter', await registry.isAdapter(drill), false);
+    await exec(`cancelAdapterProposal(${drill})`, iface.encodeFunctionData('cancelAdapterProposal', [drill]));
+    expect('adapterReadyAt after cancel', await registry.adapterReadyAt(drill), 0n);
+    expect('isAdapter', await registry.isAdapter(drill), false);
+  }
+  console.log('Safe nonce now', (await safe.nonce()).toString());
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
