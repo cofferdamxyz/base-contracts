@@ -34,6 +34,8 @@ describe('verify (scripts/lib/verify.ts)', function () {
 
   it('refuses an entry it does not know, so nothing is skipped silently', function () {
     expect(() => verifyPlan({ Mystery: { address: DEPLOYER } })).to.throw(/does not know: add it/);
+    expect(verifyPlan({ ZKPassportEvidenceAdapterV0_22_0: { address: DEPLOYER } }).ours[0].contract).to.equal('ZKPassportEvidenceAdapter');
+    expect(() => verifyPlan({ ZKPassportEvidenceAdapterV0_22: { address: DEPLOYER } })).to.throw(/does not know/);
     expect(verifyPlan({ devKeyException: undefined, CofferdamSafe: { address: DEPLOYER } }).notOurs).to.have.length(1);
   });
 

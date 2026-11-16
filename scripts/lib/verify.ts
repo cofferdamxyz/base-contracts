@@ -46,6 +46,7 @@ export function verifyPlan(recorded: Record<string, { address?: string } | undef
     if (!address) continue;
     if ((VERIFY_NOT_OURS as readonly string[]).includes(key)) plan.notOurs.push({ key, address });
     else if (VERIFY_CONTRACTS[key]) plan.ours.push({ key, contract: VERIFY_CONTRACTS[key], address });
+    else if (/^ZKPassportEvidenceAdapterV\d+_\d+_\d+$/.test(key)) plan.ours.push({ key, contract: 'ZKPassportEvidenceAdapter', address });
     else unknown.push(key);
   }
   if (unknown.length > 0) throw new Error(`The deployments file records ${unknown.join(', ')}, which scripts/lib/verify.ts does not know: add it to VERIFY_CONTRACTS or VERIFY_NOT_OURS`);

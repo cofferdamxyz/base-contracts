@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { Wallet } from 'ethers';
 
 import { DEV_KEY_EXCEPTION, SAFE_V141 } from '../scripts/lib/devKeyException';
-import { SAFE_ACTIONS, parseSafeAction, safeExecRefusal, senderOwnerSignature } from '../scripts/lib/safe';
+import { SAFE_ACTIONS, activationRefusal, adapterKeyForVersion, parseSafeAction, safeExecRefusal, senderOwnerSignature } from '../scripts/lib/safe';
 
 // scripts/safe-exec.ts's pure parts: the action, the sender's pre-validated
 // signature and the Safe it may execute through. The script itself was
@@ -40,5 +40,22 @@ describe('safe-exec (scripts/lib/safe.ts)', function () {
     expect(safeExecRefusal(SAFE, { ...facts, singleton: OTHER }, DEV)).to.match(/not a Safe v1.4.1 proxy/);
     expect(safeExecRefusal(SAFE, facts, OTHER)).to.match(/does not list the signer/);
     expect(safeExecRefusal(SAFE, { ...facts, owners: [DEV, OTHER], threshold: 2n }, DEV)).to.match(/threshold 2/);
+  });
+  it('keys an adapter by its circuits version, and refuses anything else', function () {
+    expect(adapterKeyForVersion('0.22.0')).to.equal('ZKPassportEvidenceAdapterV0_22_0');
+    expect(adapterKeyForVersion(' 0.21.0 ')).to.equal('ZKPassportEvidenceAdapterV0_21_0');
+    for (const bad of [undefined, '', '0.22', 'v0.22.0', '0.22.0; rm', '0.22.0.1']) {
+      expect(() => adapterKeyForVersion(bad)).to.throw(/ZKP_CIRCUITS_VERSION/);
+    }
+  });
+
+  it("activates only after the timelock and within the grace, the registry's rule", function () {
+    const grace = 7n * 86_400n;
+    const readyAt = 1_795_044_374n;
+    expect(activationRefusal(0n, readyAt, grace)).to.match(/not proposed/);
+    expect(activationRefusal(readyAt, readyAt - 1n, grace)).to.match(/timelock ends at 2026-11-18T23:26:14/);
+    expect(activationRefusal(readyAt, readyAt, grace)).to.equal(null);
+    expect(activationRefusal(readyAt, readyAt + grace, grace)).to.equal(null);
+    expect(activationRefusal(readyAt, readyAt + grace + 1n, grace)).to.match(/expired .*propose it again/);
   });
 });

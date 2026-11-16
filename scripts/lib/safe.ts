@@ -11,7 +11,7 @@ export const SAFE_EXEC_ABI = [
 ];
 
 /** What `SAFE_ACTION` may name. */
-export const SAFE_ACTIONS = ['pause-drill', 'adapter-drill', 'set-test-account', 'pause', 'unpause'] as const;
+export const SAFE_ACTIONS = ['pause-drill', 'adapter-drill', 'adapter-propose', 'adapter-activate', 'set-test-account', 'pause', 'unpause'] as const;
 export type SafeAction = (typeof SAFE_ACTIONS)[number];
 
 export function parseSafeAction(value: string | undefined): SafeAction {
@@ -51,5 +51,24 @@ export function safeExecRefusal(address: string, safe: SafeFacts | null, signer:
   if (safe.threshold !== 1n) {
     return `The Safe ${address} has threshold ${safe.threshold}: this script executes with one owner's signature only; collect the others in the Safe app`;
   }
+  return null;
+}
+
+/**
+ * The deployments-file key of the adapter for a ZKPassport circuits version,
+ * e.g. `ZKPassportEvidenceAdapterV0_22_0` for 0.22.0. The generation's first
+ * adapter keeps the plain `ZKPassportEvidenceAdapter`.
+ */
+export function adapterKeyForVersion(version: string | undefined): string {
+  const v = version?.trim();
+  if (!v || !/^\d{1,5}\.\d{1,5}\.\d{1,5}$/.test(v)) throw new Error(`ZKP_CIRCUITS_VERSION is a circuits version such as 0.22.0; got ${v || 'nothing'}`);
+  return `ZKPassportEvidenceAdapterV${v.replace(/\./g, '_')}`;
+}
+
+/** Why a proposed adapter may not be activated at `now`, or null (the registry's own rule). */
+export function activationRefusal(readyAt: bigint, now: bigint, grace: bigint): string | null {
+  if (readyAt === 0n) return 'it is not proposed (or was activated or cancelled)';
+  if (now < readyAt) return `its timelock ends at ${new Date(Number(readyAt) * 1000).toISOString()}`;
+  if (now > readyAt + grace) return `its proposal expired at ${new Date(Number(readyAt + grace) * 1000).toISOString()}: propose it again`;
   return null;
 }
