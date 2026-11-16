@@ -3,7 +3,7 @@ import { ethers, network } from 'hardhat';
 import { chainId as nodeChainId, isLocalFork } from './lib/chain';
 import { readDeployments } from './lib/deployments';
 import { IDENTITY_ACTIONS, ZkpSolidityParams, zkpCustomData, zkpEvidenceFromParams } from './lib/identity';
-import type { CofferdamIdentityRegistry } from '../typechain-types';
+import type { CofferdamIdentityRegistry, ZKPassportExampleConsumer } from '../typechain-types';
 
 // Decision 0080: a real bound proof against a generation's registry on a local
 // fork of Base mainnet. Fork only; it refuses any other node, so nothing it
@@ -112,22 +112,49 @@ async function main() {
   await ethers.provider.send('evm_mine', []);
   const evidence = zkpEvidenceFromParams(params);
 
-  // Cross-checks, all read-only.
+  // Cross-checks, all read-only except the fork-only adapter swap below.
   const failures: string[] = [];
   const report = (what: string, ok: boolean, detail = '') => {
     console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}${detail ? `: ${detail}` : ''}`);
     if (!ok) failures.push(what);
   };
-  // The adapter's own configuration, as it passes it to RootVerifier.verify.
+  const label = (v: string) => [2, 6, 10].map((i) => parseInt(v.slice(i, i + 4), 16)).join('.');
+  const rootAddr = await adapter.ROOT_VERIFIER();
+  const root = await ethers.getContractAt('IZKPassportRootVerifier', rootAddr);
+
+  // The phone's ZKPassport app proves in its own circuits version; the adapter
+  // pins one. A registry takes one adapter per version (added through the
+  // owner's timelock); ZKP_FORK_ADAPTER_VERSION=proof stands one in on the
+  // fork: the live adapter's code is replaced by a copy pinned to the proof's
+  // version, its storage (the scope) and the registry untouched, so the
+  // digest still matches.
+  const proofVersion = params.version;
+  const adapterVersion: string = await adapter.VERSION();
+  if (proofVersion.toLowerCase() !== adapterVersion.toLowerCase()) {
+    const helperForProof: string = await root.getHelper(proofVersion);
+    console.log(`NOTE the proof is circuits ${label(proofVersion)}; the adapter pins ${label(adapterVersion)}. RootVerifier's helper for ${label(proofVersion)}: ${helperForProof}`);
+    if (helperForProof === ethers.ZeroAddress) report(`RootVerifier knows circuits ${label(proofVersion)}`, false);
+    else if (process.env.ZKP_FORK_ADAPTER_VERSION === 'proof') {
+      const Adapter = await ethers.getContractFactory('ZKPassportEvidenceAdapter');
+      const copy = await (
+        await Adapter.deploy(rootAddr, helperForProof, proofVersion, scope, validity, await adapter.IDENTIFIER_TYPE(), await adapter.OPRF_KEY_HASH(), minAge, margin)
+      ).waitForDeployment();
+      await ethers.provider.send('anvil_setCode', [adapterAddr, await ethers.provider.getCode(await copy.getAddress())]);
+      console.log(`Fork only: the live adapter's code now pins circuits ${label(await adapter.VERSION())} (a copy, as a ${label(proofVersion)} adapter added through the timelock would)`);
+    } else {
+      console.log(`  (ZKP_FORK_ADAPTER_VERSION=proof stands a ${label(proofVersion)} adapter in on the fork)`);
+    }
+  }
+
+  // ZKPassport's side under the proof's own version, with the adapter's configuration.
   const pinned = {
-    version: await adapter.VERSION(),
+    version: proofVersion,
     proofVerificationData: params.proofVerificationData,
     committedInputs: params.committedInputs,
     serviceConfig: { validityPeriodInSeconds: validity, domain, scope, devMode: false },
   };
-  const root = await ethers.getContractAt('IZKPassportRootVerifier', await adapter.ROOT_VERIFIER());
   const helper = new ethers.Contract(
-    await adapter.HELPER(),
+    await root.getHelper(proofVersion),
     ['function verifyScopes(bytes32[] publicInputs, string domain, string scope) view returns (bool)'],
     ethers.provider,
   );
@@ -155,17 +182,22 @@ async function main() {
     report('the adapter accepts it', false, reasonOf(e));
   }
   const Example = await ethers.getContractFactory('ZKPassportExampleConsumer');
-  const example = await (await Example.deploy(await adapter.ROOT_VERIFIER(), domain, scope, validity, minAge)).waitForDeployment();
+  const example = (await (await Example.deploy(rootAddr, domain, scope, validity, minAge)).waitForDeployment()) as unknown as ZKPassportExampleConsumer;
   try {
-    const exampleId: string = await example.verify(pinned, { from: account });
+    // The example wants the bound address as msg.sender.
+    const exampleId: string = await as(account, async (s) => example.connect(s).verify(pinned));
     report("ZKPassport's example consumer accepts it", true);
     if (adapterId) report('with the same identifier as the adapter', exampleId === adapterId);
   } catch (e) {
     report("ZKPassport's example consumer accepts it", false, reasonOf(e));
   }
-  report(`RootVerifier.verify takes it under ${domain} × ${scope}`, await verifies(pinned.serviceConfig));
-  report(`RootVerifier.verify refuses it under the policy's name ${POLICY_SCOPE}`, !(await verifies({ ...pinned.serviceConfig, scope: POLICY_SCOPE })));
-  report('RootVerifier.verify refuses it under another domain', !(await verifies({ ...pinned.serviceConfig, domain: 'example.com' })));
+  const takes = await verifies(pinned.serviceConfig);
+  report(`RootVerifier.verify takes it under ${domain} × ${scope}`, takes);
+  if (takes) {
+    // Meaningful only once it is taken: a refusal of a proof refused everywhere proves nothing.
+    report(`RootVerifier.verify refuses it under the policy's name ${POLICY_SCOPE}`, !(await verifies({ ...pinned.serviceConfig, scope: POLICY_SCOPE })));
+    report('RootVerifier.verify refuses it under another domain', !(await verifies({ ...pinned.serviceConfig, domain: 'example.com' })));
+  }
   report(`the helper's verifyScopes agrees under ${scope}`, await scopes(domain, scope));
   report(`the helper's verifyScopes refuses ${POLICY_SCOPE}`, !(await scopes(domain, POLICY_SCOPE)));
   if (failures.length > 0) {
