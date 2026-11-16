@@ -7,6 +7,8 @@ import type * as mockUsdcSol from "./MockUSDC.sol";
 export type { mockUsdcSol };
 import type * as mockZkPassportSol from "./MockZKPassport.sol";
 export type { mockZkPassportSol };
+import type * as zkPassportExampleConsumerSol from "./ZKPassportExampleConsumer.sol";
+export type { zkPassportExampleConsumerSol };
 export type { MockCounter } from "./MockCounter";
 export type { MockEntryPoint } from "./MockEntryPoint";
 export type { MockTierModule } from "./MockTierModule";

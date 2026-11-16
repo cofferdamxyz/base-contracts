@@ -34,6 +34,7 @@
     "deploy:identity:base": "hardhat run scripts/deploy-identity.ts --network base",
     "deploy:identity:base-dev": "hardhat run scripts/deploy-identity.ts --network baseDevTest",
     "identity:bind:fork": "hardhat run scripts/identity-bind.ts --network baseFork",
+    "identity:bind:fork:zkp-test-1": "DEPLOYMENTS_NETWORK=baseDevTest GENERATION=zkp-test-1 hardhat run scripts/identity-bind.ts --network baseFork",
     "deploy:self:local": "hardhat run scripts/deploy-self.ts --network localhost",
     "deploy:self:sepolia": "hardhat run scripts/deploy-self.ts --network baseSepolia",
     "deploy:all:local": "hardhat run scripts/deploy-all.ts --network localhost",

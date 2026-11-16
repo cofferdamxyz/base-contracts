@@ -124,3 +124,7 @@ export type { MockZKPassportHelper } from "./contracts/test/MockZKPassport.sol/M
 export { MockZKPassportHelper__factory } from "./factories/contracts/test/MockZKPassport.sol/MockZKPassportHelper__factory";
 export type { MockZKPassportRootVerifier } from "./contracts/test/MockZKPassport.sol/MockZKPassportRootVerifier";
 export { MockZKPassportRootVerifier__factory } from "./factories/contracts/test/MockZKPassport.sol/MockZKPassportRootVerifier__factory";
+export type { IZKPassportHelperScopes } from "./contracts/test/ZKPassportExampleConsumer.sol/IZKPassportHelperScopes";
+export { IZKPassportHelperScopes__factory } from "./factories/contracts/test/ZKPassportExampleConsumer.sol/IZKPassportHelperScopes__factory";
+export type { ZKPassportExampleConsumer } from "./contracts/test/ZKPassportExampleConsumer.sol/ZKPassportExampleConsumer";
+export { ZKPassportExampleConsumer__factory } from "./factories/contracts/test/ZKPassportExampleConsumer.sol/ZKPassportExampleConsumer__factory";

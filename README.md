@@ -12,7 +12,8 @@ contracts/
   self/         NullifierRegistry, SelfAttesterRegistry, Verifier_vc_and_disclose, ISelfGroth16Verifier, SelfPublicSignals
   identity/     CofferdamIdentityRegistry, IIdentityEvidenceAdapter; zkpassport/ ZKPassportEvidenceAdapter, IZKPassportRootVerifier
   interfaces/   IAuthorityModule, IEntryPoint (v0.7), IB20Factory
-  test/         mocks: MockCounter, MockEntryPoint, MockGroth16Verifier, MockTierModule, MockUSDC, MockZKPassport
+  test/         mocks: MockCounter, MockEntryPoint, MockGroth16Verifier, MockTierModule, MockUSDC, MockZKPassport;
+                ZKPassportExampleConsumer (ZKPassport's dashboard example, a fork cross-check only)
   enterprise/   private submodule cofferdamxyz/enterprise-contracts (proprietary)
 scripts/        deploy-self, deploy-auth (lib/accountLayer), deploy-identity, move-paymaster-deposit, inspect-account,
                 rotate-self-attester, deploy-escrow, deploy-all (local only), create-safe, safe-exec, verify; lib/chain (mainnet guards),

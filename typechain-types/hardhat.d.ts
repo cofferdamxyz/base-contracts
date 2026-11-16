@@ -249,6 +249,14 @@ declare module "hardhat/types/runtime" {
       name: "MockZKPassportRootVerifier",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockZKPassportRootVerifier__factory>;
+    getContractFactory(
+      name: "IZKPassportHelperScopes",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IZKPassportHelperScopes__factory>;
+    getContractFactory(
+      name: "ZKPassportExampleConsumer",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ZKPassportExampleConsumer__factory>;
 
     getContractAt(
       name: "Ownable",
@@ -545,6 +553,16 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.MockZKPassportRootVerifier>;
+    getContractAt(
+      name: "IZKPassportHelperScopes",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IZKPassportHelperScopes>;
+    getContractAt(
+      name: "ZKPassportExampleConsumer",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ZKPassportExampleConsumer>;
 
     deployContract(
       name: "Ownable",
@@ -782,6 +800,14 @@ declare module "hardhat/types/runtime" {
       name: "MockZKPassportRootVerifier",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockZKPassportRootVerifier>;
+    deployContract(
+      name: "IZKPassportHelperScopes",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IZKPassportHelperScopes>;
+    deployContract(
+      name: "ZKPassportExampleConsumer",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ZKPassportExampleConsumer>;
 
     deployContract(
       name: "Ownable",
@@ -1078,6 +1104,16 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockZKPassportRootVerifier>;
+    deployContract(
+      name: "IZKPassportHelperScopes",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IZKPassportHelperScopes>;
+    deployContract(
+      name: "ZKPassportExampleConsumer",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ZKPassportExampleConsumer>;
 
     // default types
     getContractFactory(
