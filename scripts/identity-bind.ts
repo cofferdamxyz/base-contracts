@@ -200,6 +200,28 @@ async function main() {
   }
   report(`the helper's verifyScopes agrees under ${scope}`, await scopes(domain, scope));
   report(`the helper's verifyScopes refuses ${POLICY_SCOPE}`, !(await scopes(domain, POLICY_SCOPE)));
+  // One identifier across circuits versions (decision 0080, 8): an earlier
+  // proof of the same passport, in another version, must give the identifier
+  // this one does. It is older than VALIDITY, so RootVerifier gets a validity
+  // that covers its age; a read, never a bind. Prints only same or different.
+  const earlierFile = process.env.ZKP_COMPARE_PARAMS_FILE?.trim();
+  if (earlierFile && adapterId) {
+    const earlier = JSON.parse(fs.readFileSync(earlierFile, 'utf8')) as ZkpSolidityParams;
+    const label2 = label(earlier.version);
+    try {
+      const [valid, earlierId] = await root.verify({
+        version: earlier.version,
+        proofVerificationData: earlier.proofVerificationData,
+        committedInputs: earlier.committedInputs,
+        serviceConfig: { validityPeriodInSeconds: 30 * 86_400, domain, scope, devMode: false },
+      });
+      // Not taking a stale proof says nothing about this one: a note, not a failure.
+      if (!valid) console.log(`NOTE RootVerifier.verify does not take the earlier ${label2} proof: no comparison`);
+      else report(`the earlier ${label2} proof gives the same identifier as this ${label(proofVersion)} one`, earlierId === adapterId, earlierId === adapterId ? 'same' : 'different');
+    } catch (e) {
+      console.log(`NOTE RootVerifier.verify does not take the earlier ${label2} proof (${reasonOf(e)}): no comparison`);
+    }
+  }
   if (failures.length > 0) {
     console.log(`\nNot binding: ${failures.length} cross-check(s) failed`);
     process.exitCode = 1;
