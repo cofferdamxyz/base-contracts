@@ -11,7 +11,7 @@ export const SAFE_EXEC_ABI = [
 ];
 
 /** What `SAFE_ACTION` may name. */
-export const SAFE_ACTIONS = ['pause-drill', 'adapter-drill', 'adapter-propose', 'adapter-activate', 'set-test-account', 'pause', 'unpause'] as const;
+export const SAFE_ACTIONS = ['pause-drill', 'adapter-drill', 'adapter-propose', 'adapter-activate', 'adapter-cancel', 'set-test-account', 'pause', 'unpause'] as const;
 export type SafeAction = (typeof SAFE_ACTIONS)[number];
 
 export function parseSafeAction(value: string | undefined): SafeAction {
@@ -71,4 +71,24 @@ export function activationRefusal(readyAt: bigint, now: bigint, grace: bigint): 
   if (now < readyAt) return `its timelock ends at ${new Date(Number(readyAt) * 1000).toISOString()}`;
   if (now > readyAt + grace) return `its proposal expired at ${new Date(Number(readyAt + grace) * 1000).toISOString()}: propose it again`;
   return null;
+}
+
+/**
+ * Why an adapter may not be proposed at `now`, or null. A live proposal (in
+ * its timelock or its activation window) is refused, since proposing again
+ * would restart the clock; an expired one may be proposed again, which the
+ * registry allows and which restarts the timelock.
+ */
+export function reproposalRefusal(readyAt: bigint, now: bigint, grace: bigint): string | null {
+  if (readyAt === 0n || now > readyAt + grace) return null;
+  const iso = (t: bigint) => new Date(Number(t) * 1000).toISOString();
+  return `it is proposed already: activate it from ${iso(readyAt)} to ${iso(readyAt + grace)}, or cancel it (SAFE_ACTION=adapter-cancel)`;
+}
+
+/** `ALLOWED` for set-test-account: unset or 1 adds the account, 0 removes it; anything else is refused. */
+export function parseAllowed(value: string | undefined): boolean {
+  const v = value?.trim() ?? '';
+  if (v === '' || v === '1') return true;
+  if (v === '0') return false;
+  throw new Error(`ALLOWED is 1 (add, the default) or 0 (remove); got ${v}`);
 }

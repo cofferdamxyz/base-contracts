@@ -86,10 +86,13 @@ async function main() {
   const margin = await adapter.EXPIRY_MARGIN();
   const minAge = await adapter.MIN_AGE();
   const validity = await adapter.VALIDITY();
-  // ZKPassport compares dates by day: ask for a whole day past the margin.
-  const expiryAfter = new Date((Number((await ethers.provider.getBlock('latest'))!.timestamp) + Number(margin) + 86_400) * 1000)
-    .toISOString()
-    .slice(0, 10);
+  // The adapter wants the proven expiry at or after the bind's block time plus
+  // the margin, and ZKPassport commits the asked date at 00:00 UTC. The bind
+  // comes within the proof's validity of now (the later of the wall clock and
+  // the fork's last block, which anvil mines only on transactions), so ask for
+  // the day after now + margin + validity: at least the validity of headroom.
+  const fromTime = Math.max(Math.floor(Date.now() / 1000), (await ethers.provider.getBlock('latest'))!.timestamp);
+  const expiryAfter = new Date((fromTime + Number(margin) + Number(validity) + 86_400) * 1000).toISOString().slice(0, 10);
   console.log({ registry: registryAddr, adapter: adapterAddr, account, domain, scope, minAge: Number(minAge), validitySeconds: Number(validity), expiryMarginDays: Number(margin) / 86_400 });
   console.log(`digest (custom_data): ${zkpCustomData(digest)}`);
 

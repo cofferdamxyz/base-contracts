@@ -1,7 +1,16 @@
 import { ethers, network } from 'hardhat';
 import { assertMainnetSigner, chainId as nodeChainId, getDeployer, isLocalFork, readSafe } from './lib/chain';
 import { readDeployments, writeDeployments } from './lib/deployments';
-import { SAFE_EXEC_ABI, activationRefusal, adapterKeyForVersion, parseSafeAction, safeExecRefusal, senderOwnerSignature } from './lib/safe';
+import {
+  SAFE_EXEC_ABI,
+  activationRefusal,
+  adapterKeyForVersion,
+  parseAllowed,
+  parseSafeAction,
+  reproposalRefusal,
+  safeExecRefusal,
+  senderOwnerSignature,
+} from './lib/safe';
 import { zkpCircuitsVersion } from './lib/identity';
 
 // Owner actions on a generation's identity registry, sent through the Safe that
@@ -19,19 +28,32 @@ import { zkpCircuitsVersion } from './lib/identity';
 //                      adapter-propose   ZKP_CIRCUITS_VERSION (e.g. 0.22.0): deploys once a copy of
 //                                     the live adapter pinned to that version and RootVerifier's
 //                                     helper for it (recorded as ZKPassportEvidenceAdapterV0_22_0),
-//                                     then proposeAdapter; the timelock starts
+//                                     then proposeAdapter; the timelock starts. A live proposal
+//                                     is refused; an expired one is proposed again (the clock restarts)
 //                      adapter-activate  ZKP_CIRCUITS_VERSION: activateAdapter, after the timelock
 //                                     and within ADAPTER_GRACE
+//                      adapter-cancel    ZKP_CIRCUITS_VERSION: cancelAdapterProposal
 //                      set-test-account  setTestAccount(ACCOUNT, ALLOWED)
 //                      pause / unpause   setPaused(true / false), for an incident
-//   ACCOUNT, ALLOWED   set-test-account: the account; ALLOWED 1 (default) or 0
+//   ACCOUNT, ALLOWED   set-test-account: the account; ALLOWED 1 (add, the default) or 0 (remove)
+//   DRILL_CANCEL_LEFTOVER  adapter-drill: 1 cancels a drill proposal an earlier run left, then drills
 //   SAFE_ADDRESS       default the generation's recorded CofferdamSafe
 //   IDENTITY_REGISTRY  default the generation's recorded CofferdamIdentityRegistry
 //   IDENTITY_ADAPTER   the adapter copied, default the generation's recorded ZKPassportEvidenceAdapter
 //
+// A per-version adapter is proposed or activated only while it pins that
+// version and the helper RootVerifier names for it now: after a helper swap it
+// would refuse every proof. adapter-cancel checks neither, so it withdraws
+// such an adapter.
+//
 // On Base mainnet the generation's variables are the deploy's
 // (MAINNET_DEV_KEY_EXCEPTION, GENERATION); a fork dry run passes SAFE_ADDRESS
-// and IDENTITY_REGISTRY, since the fork's own deployments file is empty.
+// and IDENTITY_REGISTRY and starts from no fork deployments file
+// (rm deployments/baseFork.<GENERATION>.json), since adapter-drill and
+// adapter-propose record what they deploy there.
+//
+// Effects are read back at the block that mined the transaction, so a public
+// endpoint's lagging backend cannot report the state before it.
 
 
 function pick(name: string, fromEnv: string | undefined, recorded: string | undefined): string {
@@ -76,8 +98,8 @@ async function main() {
     await ethers.provider.send('hardhat_setBalance', [safeAddress, ethers.toBeHex(ethers.parseEther('0.01'))]);
   }
 
-  /** One call from the Safe to the registry. */
-  async function exec(label: string, data: string) {
+  /** One call from the Safe to the registry; returns the block that mined it. */
+  async function exec(label: string, data: string): Promise<number> {
     // Pre-flight as the Safe, so a refusal comes back with the registry's own error.
     try {
       await ethers.provider.call({ from: safeAddress, to: registryAddress, data });
@@ -105,7 +127,31 @@ async function main() {
     });
     if (!ok) throw new Error(`${label}: no ExecutionSuccess from the Safe in ${receipt?.hash}`);
     console.log(`${label}: ${receipt?.hash} (gas ${receipt?.gasUsed})`);
+    return receipt!.blockNumber;
   }
+
+  /**
+   * A read at `blockTag`, retried while a lagging backend does not have that
+   * block yet (the node's head is below it); any other error is thrown at once.
+   */
+  async function at<T>(blockTag: number, read: (o: { blockTag: number }) => Promise<T>): Promise<T> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await read({ blockTag });
+      } catch (e) {
+        if (attempt === 10 || (await ethers.provider.getBlockNumber().catch(() => -1)) >= blockTag) throw e;
+        await new Promise((r) => setTimeout(r, 3_000));
+      }
+    }
+  }
+  const blockTime = async (blockTag: number): Promise<bigint> => {
+    const block = await at(blockTag, async () => {
+      const b = await ethers.provider.getBlock(blockTag);
+      if (!b) throw new Error(`No block ${blockTag} yet`);
+      return b;
+    });
+    return BigInt(block.timestamp);
+  };
 
   const expect = (what: string, actual: unknown, wanted: unknown) => {
     if (actual !== wanted) throw new Error(`${what}: read ${actual}, expected ${wanted}`);
@@ -116,16 +162,31 @@ async function main() {
   if (action === 'pause' || action === 'unpause' || action === 'pause-drill') {
     const steps = action === 'pause-drill' ? [true, false] : [action === 'pause'];
     if (action === 'pause-drill' && (await registry.paused())) throw new Error('The registry is paused already: unpause it first, or skip the drill');
-    for (const paused of steps) {
-      await exec(`setPaused(${paused})`, iface.encodeFunctionData('setPaused', [paused]));
-      expect('paused', await registry.paused(), paused);
+    let mined: number | undefined;
+    try {
+      for (const paused of steps) {
+        mined = await exec(`setPaused(${paused})`, iface.encodeFunctionData('setPaused', [paused]));
+        expect('paused', await at(mined, (o) => registry.paused(o)), paused);
+      }
+    } catch (e) {
+      // A drill stopped after its pause leaves binds refused: say so, loudly,
+      // read no earlier than its last mined transaction.
+      if (action === 'pause-drill') {
+        const state = await (mined === undefined ? registry.paused() : at(mined, (o) => registry.paused(o))).then(
+          (p: boolean) => (p ? 'The registry is PAUSED: binds are refused until SAFE_ACTION=unpause' : 'The registry reads unpaused'),
+          () => 'paused() could not be read: check it, and run SAFE_ACTION=unpause if it is true',
+        );
+        console.error(`\nThe pause drill stopped part-way. ${state}.\n`);
+      }
+      throw e;
     }
   } else if (action === 'set-test-account') {
     const account = process.env.ACCOUNT?.trim();
     if (!account || !ethers.isAddress(account)) throw new Error('ACCOUNT is required: the test account address');
-    const allowed = (process.env.ALLOWED?.trim() || '1') === '1';
-    await exec(`setTestAccount(${ethers.getAddress(account)}, ${allowed})`, iface.encodeFunctionData('setTestAccount', [account, allowed]));
-    expect('isTestAccount', await registry.isTestAccount(account), allowed);
+    const allowed = parseAllowed(process.env.ALLOWED);
+    console.log(`${allowed ? 'ADD' : 'REMOVE'} test account ${ethers.getAddress(account)}`);
+    const block = await exec(`setTestAccount(${ethers.getAddress(account)}, ${allowed})`, iface.encodeFunctionData('setTestAccount', [account, allowed]));
+    expect('isTestAccount', await at(block, (o) => registry.isTestAccount(account, o)), allowed);
   } else {
     // A second adapter built from what the live one reports: the same kind,
     // scope, validity, identifier type, minimum age and expiry margin, so the
@@ -169,16 +230,23 @@ async function main() {
         console.log('Wrote', writeDeployments(network.name, chainId, { ZKPassportEvidenceAdapterDrill: drill }));
       }
       if (await registry.isAdapter(drill)) throw new Error(`The drill adapter ${drill} is active: remove it through the Safe, not with this drill`);
-      if ((await registry.adapterReadyAt(drill)) !== 0n) throw new Error(`The drill adapter ${drill} is proposed already: cancel it first`);
-      await exec(`proposeAdapter(${drill})`, iface.encodeFunctionData('proposeAdapter', [drill]));
-      const readyAt: bigint = await registry.adapterReadyAt(drill);
-      const t = await now();
-      if (readyAt < t || readyAt > t + delay) throw new Error(`adapterReadyAt ${readyAt} is not within the delay ${delay} of ${t}`);
-      console.log(`  adapterReadyAt: ${readyAt} (${iso(readyAt)}, the ${delay}-second timelock)`);
-      expect('isAdapter', await registry.isAdapter(drill), false);
-      await exec(`cancelAdapterProposal(${drill})`, iface.encodeFunctionData('cancelAdapterProposal', [drill]));
-      expect('adapterReadyAt after cancel', await registry.adapterReadyAt(drill), 0n);
-      expect('isAdapter', await registry.isAdapter(drill), false);
+      if ((await registry.adapterReadyAt(drill)) !== 0n) {
+        // Left by a drill that stopped between its two transactions. Cancelling
+        // it is a transaction of its own, so only when asked.
+        if (process.env.DRILL_CANCEL_LEFTOVER?.trim() !== '1') {
+          throw new Error(`The drill adapter ${drill} is still proposed from an earlier run: rerun with DRILL_CANCEL_LEFTOVER=1 to cancel it first`);
+        }
+        const block = await exec(`cancelAdapterProposal(${drill})`, iface.encodeFunctionData('cancelAdapterProposal', [drill]));
+        expect('adapterReadyAt after cancel', await at(block, (o) => registry.adapterReadyAt(drill, o)), 0n);
+      }
+      const proposed = await exec(`proposeAdapter(${drill})`, iface.encodeFunctionData('proposeAdapter', [drill]));
+      const readyAt: bigint = await at(proposed, (o) => registry.adapterReadyAt(drill, o));
+      expect('adapterReadyAt', readyAt, (await blockTime(proposed)) + delay);
+      console.log(`  (${iso(readyAt)}, the ${delay}-second timelock)`);
+      expect('isAdapter', await at(proposed, (o) => registry.isAdapter(drill, o)), false);
+      const cancelled = await exec(`cancelAdapterProposal(${drill})`, iface.encodeFunctionData('cancelAdapterProposal', [drill]));
+      expect('adapterReadyAt after cancel', await at(cancelled, (o) => registry.adapterReadyAt(drill, o)), 0n);
+      expect('isAdapter', await at(cancelled, (o) => registry.isAdapter(drill, o)), false);
     } else {
       // One adapter per ZKPassport circuits version: ZKPassport's app chooses
       // the version it proves in, and RootVerifier checks a proof under its own.
@@ -186,37 +254,61 @@ async function main() {
       const key = adapterKeyForVersion(versionLabel);
       const version = zkpCircuitsVersion(versionLabel!);
       let adapterAddr = recorded[key]?.address;
+      /** RootVerifier's helper for this version now (propose and activate only: cancel never depends on it). */
+      const currentHelper = async (): Promise<string> =>
+        (await ethers.getContractAt('IZKPassportRootVerifier', await a.ROOT_VERIFIER())).getHelper(version);
+      /** The recorded adapter pins this version and RootVerifier's helper for it now, or it would refuse every proof. */
+      const checkRecorded = async (address: string, helper: string) => {
+        const recordedAdapter = await ethers.getContractAt('ZKPassportEvidenceAdapter', address);
+        const recordedVersion: string = await recordedAdapter.VERSION();
+        if (recordedVersion !== version) throw new Error(`${key} ${address} pins circuits ${label(recordedVersion)}, not ${versionLabel}`);
+        const recordedHelper: string = await recordedAdapter.HELPER();
+        if (recordedHelper.toLowerCase() !== helper.toLowerCase()) {
+          throw new Error(
+            `${key} ${address} pins the helper ${recordedHelper}, but ZKPassport's RootVerifier names ${helper} for circuits ${versionLabel} now: ` +
+              'it would refuse every proof. Cancel its proposal (SAFE_ACTION=adapter-cancel); a replacement needs its own deployments key',
+          );
+        }
+      };
 
       if (action === 'adapter-propose') {
         if ((await a.VERSION()) === version) throw new Error(`The live adapter ${live} pins circuits ${versionLabel} already`);
-        const root = await ethers.getContractAt('IZKPassportRootVerifier', await a.ROOT_VERIFIER());
-        const helper: string = await root.getHelper(version);
+        const helper = await currentHelper();
         if (helper === ethers.ZeroAddress) throw new Error(`ZKPassport's RootVerifier has no helper for circuits ${versionLabel}: it does not verify that version yet`);
         if (!adapterAddr) {
           adapterAddr = await deployCopy(version, helper);
           console.log(`${key}: ${adapterAddr} (circuits ${versionLabel}, helper ${helper})`);
           console.log('Wrote', writeDeployments(network.name, chainId, { [key]: adapterAddr }));
         } else {
-          const recordedVersion: string = await (await ethers.getContractAt('ZKPassportEvidenceAdapter', adapterAddr)).VERSION();
-          if (recordedVersion !== version) throw new Error(`${key} ${adapterAddr} pins circuits ${label(recordedVersion)}, not ${versionLabel}`);
+          await checkRecorded(adapterAddr, helper);
           console.log(`${key}: ${adapterAddr} (recorded; not deployed again)`);
         }
         if (await registry.isAdapter(adapterAddr)) throw new Error(`${key} ${adapterAddr} is active already`);
         const pending: bigint = await registry.adapterReadyAt(adapterAddr);
-        if (pending !== 0n) throw new Error(`${key} ${adapterAddr} is proposed already: activate it from ${iso(pending)} to ${iso(pending + grace)}`);
-        await exec(`proposeAdapter(${adapterAddr})`, iface.encodeFunctionData('proposeAdapter', [adapterAddr]));
-        const readyAt: bigint = await registry.adapterReadyAt(adapterAddr);
-        const t = await now();
-        if (readyAt < t || readyAt > t + delay) throw new Error(`adapterReadyAt ${readyAt} is not within the delay ${delay} of ${t}`);
-        expect('isAdapter', await registry.isAdapter(adapterAddr), false);
+        const refusal = reproposalRefusal(pending, await now(), grace);
+        if (refusal) throw new Error(`${key} ${adapterAddr}: ${refusal}`);
+        if (pending !== 0n) console.log(`  Its proposal expired at ${iso(pending + grace)}: proposing it again restarts the ${delay}-second timelock`);
+        const block = await exec(`proposeAdapter(${adapterAddr})`, iface.encodeFunctionData('proposeAdapter', [adapterAddr]));
+        const readyAt: bigint = await at(block, (o) => registry.adapterReadyAt(adapterAddr!, o));
+        expect('adapterReadyAt', readyAt, (await blockTime(block)) + delay);
+        expect('isAdapter', await at(block, (o) => registry.isAdapter(adapterAddr!, o)), false);
         console.log(`  Activate with SAFE_ACTION=adapter-activate ZKP_CIRCUITS_VERSION=${versionLabel} from ${iso(readyAt)} until ${iso(readyAt + grace)}`);
-      } else {
+      } else if (action === 'adapter-activate') {
         if (!adapterAddr) throw new Error(`No ${key} recorded: propose it first (SAFE_ACTION=adapter-propose)`);
+        await checkRecorded(adapterAddr, await currentHelper());
         const refusal = activationRefusal(await registry.adapterReadyAt(adapterAddr), await now(), grace);
         if (refusal) throw new Error(`${key} ${adapterAddr} cannot be activated: ${refusal}`);
-        await exec(`activateAdapter(${adapterAddr})`, iface.encodeFunctionData('activateAdapter', [adapterAddr]));
-        expect('isAdapter', await registry.isAdapter(adapterAddr), true);
-        expect('adapterReadyAt', await registry.adapterReadyAt(adapterAddr), 0n);
+        const block = await exec(`activateAdapter(${adapterAddr})`, iface.encodeFunctionData('activateAdapter', [adapterAddr]));
+        expect('isAdapter', await at(block, (o) => registry.isAdapter(adapterAddr!, o)), true);
+        expect('adapterReadyAt', await at(block, (o) => registry.adapterReadyAt(adapterAddr!, o)), 0n);
+      } else {
+        // adapter-cancel: by version only, so it never touches the live adapter or the drill.
+        if (!adapterAddr) throw new Error(`No ${key} recorded: nothing to cancel`);
+        if (await registry.isAdapter(adapterAddr)) throw new Error(`${key} ${adapterAddr} is active: a cancel cannot undo that (removeAdapter is not this script's)`);
+        if ((await registry.adapterReadyAt(adapterAddr)) === 0n) throw new Error(`${key} ${adapterAddr} is not proposed`);
+        const block = await exec(`cancelAdapterProposal(${adapterAddr})`, iface.encodeFunctionData('cancelAdapterProposal', [adapterAddr]));
+        expect('adapterReadyAt', await at(block, (o) => registry.adapterReadyAt(adapterAddr!, o)), 0n);
+        expect('isAdapter', await at(block, (o) => registry.isAdapter(adapterAddr!, o)), false);
       }
     }
   }

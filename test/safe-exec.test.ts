@@ -2,7 +2,16 @@ import { expect } from 'chai';
 import { Wallet } from 'ethers';
 
 import { DEV_KEY_EXCEPTION, SAFE_V141 } from '../scripts/lib/devKeyException';
-import { SAFE_ACTIONS, activationRefusal, adapterKeyForVersion, parseSafeAction, safeExecRefusal, senderOwnerSignature } from '../scripts/lib/safe';
+import {
+  SAFE_ACTIONS,
+  activationRefusal,
+  adapterKeyForVersion,
+  parseAllowed,
+  parseSafeAction,
+  reproposalRefusal,
+  safeExecRefusal,
+  senderOwnerSignature,
+} from '../scripts/lib/safe';
 
 // scripts/safe-exec.ts's pure parts: the action, the sender's pre-validated
 // signature and the Safe it may execute through. The script itself was
@@ -41,6 +50,7 @@ describe('safe-exec (scripts/lib/safe.ts)', function () {
     expect(safeExecRefusal(SAFE, facts, OTHER)).to.match(/does not list the signer/);
     expect(safeExecRefusal(SAFE, { ...facts, owners: [DEV, OTHER], threshold: 2n }, DEV)).to.match(/threshold 2/);
   });
+
   it('keys an adapter by its circuits version, and refuses anything else', function () {
     expect(adapterKeyForVersion('0.22.0')).to.equal('ZKPassportEvidenceAdapterV0_22_0');
     expect(adapterKeyForVersion(' 0.21.0 ')).to.equal('ZKPassportEvidenceAdapterV0_21_0');
@@ -57,5 +67,23 @@ describe('safe-exec (scripts/lib/safe.ts)', function () {
     expect(activationRefusal(readyAt, readyAt, grace)).to.equal(null);
     expect(activationRefusal(readyAt, readyAt + grace, grace)).to.equal(null);
     expect(activationRefusal(readyAt, readyAt + grace + 1n, grace)).to.match(/expired .*propose it again/);
+  });
+
+  it('proposes again only once a proposal has expired, so a live one keeps its clock', function () {
+    const grace = 7n * 86_400n;
+    const readyAt = 1_795_044_374n;
+    expect(reproposalRefusal(0n, readyAt, grace)).to.equal(null);
+    expect(reproposalRefusal(readyAt, readyAt - 1n, grace)).to.match(/proposed already: activate it from 2026-11-18T23:26:14.*adapter-cancel/);
+    expect(reproposalRefusal(readyAt, readyAt + grace, grace)).to.match(/proposed already/);
+    // Where activate answers "expired: propose it again", propose takes it.
+    expect(activationRefusal(readyAt, readyAt + grace + 1n, grace)).to.match(/propose it again/);
+    expect(reproposalRefusal(readyAt, readyAt + grace + 1n, grace)).to.equal(null);
+  });
+
+  it('takes ALLOWED as 1 (or unset) to add and 0 to remove, and refuses anything else', function () {
+    for (const add of [undefined, '', ' ', '1', ' 1 ']) expect(parseAllowed(add)).to.equal(true);
+    expect(parseAllowed('0')).to.equal(false);
+    expect(parseAllowed(' 0 ')).to.equal(false);
+    for (const bad of ['true', 'yes', 'TRUE', 'false', 'no', '01', '2', 'o']) expect(() => parseAllowed(bad)).to.throw(/ALLOWED is 1 .* or 0/);
   });
 });

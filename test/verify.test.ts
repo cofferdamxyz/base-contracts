@@ -26,7 +26,10 @@ describe('verify (scripts/lib/verify.ts)', function () {
       'CofferdamCeremonyAttesterRegistry',
       'CofferdamAccountFactory4337',
       'ZKPassportEvidenceAdapterDrill',
+      'ZKPassportEvidenceAdapterV0_21_0',
+      'ZKPassportEvidenceAdapterV0_22_0',
     ]);
+    expect(plan.ours.find((o) => o.key === 'ZKPassportEvidenceAdapterV0_22_0')?.contract).to.equal('ZKPassportEvidenceAdapter');
     expect(plan.ours.find((o) => o.key === 'SessionKeyAuthorityLowManaged')?.contract).to.equal('SessionKeyAuthority');
     expect(plan.ours.find((o) => o.key === 'ZKPassportEvidenceAdapterDrill')?.contract).to.equal('ZKPassportEvidenceAdapter');
     expect(plan.notOurs.map((o) => o.key)).to.have.members(['CofferdamSafe', 'EntryPoint']);
