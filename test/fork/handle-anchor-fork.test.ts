@@ -97,13 +97,13 @@ describe('CofferdamHandleAnchor on a fork of Base mainnet (chain 8453)', functio
     // Gas: a claim (first claim of a label, 66-byte meta-address) and the reads a payer makes.
     const id = handleId('ana');
     const meta = metaOf('owner');
-    const rSig = await REGISTRAR.signTypedData(domain, typesFor('RegistrarClaim'), { handleId: id, owner: OWNER.address, serial: 1n, nonce: 1n, deadline: FAR });
+    const rSig = await REGISTRAR.signTypedData(domain, typesFor('RegistrarClaim'), { handleId: id, owner: OWNER.address, serial: 1n, nonce: 0n, deadline: FAR });
     const oSig = await OWNER.signTypedData(domain, typesFor('OwnerClaim'), { handleId: id, metaAddress: meta, serial: 1n });
-    const claimReceipt = await (await anchor.connect(relayer).claim(id, OWNER.address, meta, 1n, FAR, rSig, oSig)).wait();
+    const claimReceipt = await (await anchor.connect(relayer).claim(id, OWNER.address, meta, FAR, rSig, oSig)).wait();
     const resolveGas = await ethers.provider.estimateGas({ to: anchorAddress, data: anchor.interface.encodeFunctionData('resolve', [id]) });
     const metaGas = await ethers.provider.estimateGas({ to: anchorAddress, data: anchor.interface.encodeFunctionData('stealthMetaAddressOf', [id]) });
-    const holdSig = await REGISTRAR.signTypedData(domain, typesFor('Hold'), { handleId: id, nonce: 2n, deadline: FAR });
-    const holdReceipt = await (await anchor.connect(relayer).hold(id, 2n, FAR, holdSig)).wait();
+    const holdSig = await REGISTRAR.signTypedData(domain, typesFor('Hold'), { handleId: id, nonce: 1n, deadline: FAR });
+    const holdReceipt = await (await anchor.connect(relayer).hold(id, FAR, holdSig)).wait();
     const block = await ethers.provider.getBlock('latest');
     log(`gas: deploy ${deployReceipt!.gasUsed}, claim ${claimReceipt!.gasUsed}, hold ${holdReceipt!.gasUsed}; ` +
       `resolve() ${resolveGas} and stealthMetaAddressOf() ${metaGas} as eth_call (21000 intrinsic included); base fee ${block!.baseFeePerGas} wei`);

@@ -18,77 +18,49 @@ export function handleId(label: string): string {
   return ethers.keccak256(ethers.toUtf8Bytes(`cofferdam-handle-v1:${label}`));
 }
 
-export const HANDLE_ANCHOR_DOMAIN_NAME = 'Cofferdam Handle Anchor';
+/** The anchor's EIP-712 domain name and version, as the SDK's `identity/handle.ts` (runbook step 1) has them. */
+export const HANDLE_ANCHOR_DOMAIN_NAME = 'CofferdamHandleAnchor';
 export const HANDLE_ANCHOR_DOMAIN_VERSION = '1';
 
 export function handleAnchorDomain(chainId: bigint, verifyingContract: string): ethers.TypedDataDomain {
   return { name: HANDLE_ANCHOR_DOMAIN_NAME, version: HANDLE_ANCHOR_DOMAIN_VERSION, chainId, verifyingContract };
 }
 
+const f = (name: string, type: string) => ({ name, type }) as const;
+
 /**
- * Every signed struct of the anchor, as ethers' `signTypedData` takes them.
- * The contract's `*_TYPEHASH` constants are the keccak256 of these encodings;
- * test/handle-anchor.test.ts pins both against each other.
+ * Every signed struct of the anchor, copied from the SDK's
+ * `HANDLE_ANCHOR_TYPES` (cofferdam-sdk `packages/core/src/identity/handle.ts`,
+ * runbook step 1), which owns them. `nonce` is the record's one per-handle
+ * counter; `pendingNonce` names a pending change; `frozenUntil` names a
+ * freeze. The contract's `*_TYPEHASH` constants are the keccak256 of these
+ * encodings, and test/handle-anchor.test.ts pins both against the SDK's
+ * fixture test/fixtures/handleAnchorTypes.json.
  */
 export const HANDLE_ANCHOR_TYPES = {
-  RegistrarClaim: [
-    { name: 'handleId', type: 'bytes32' },
-    { name: 'owner', type: 'address' },
-    { name: 'serial', type: 'uint256' },
-    { name: 'nonce', type: 'uint256' },
-    { name: 'deadline', type: 'uint256' },
+  RegistrarClaim: [f('handleId', 'bytes32'), f('owner', 'address'), f('serial', 'uint64'), f('nonce', 'uint256'), f('deadline', 'uint64')],
+  OwnerClaim: [f('handleId', 'bytes32'), f('metaAddress', 'bytes'), f('serial', 'uint64')],
+  TransferOwner: [f('handleId', 'bytes32'), f('newOwner', 'address'), f('newMetaAddress', 'bytes'), f('nonce', 'uint256'), f('deadline', 'uint64')],
+  TransferOwnerAccept: [f('handleId', 'bytes32'), f('previousOwner', 'address'), f('newMetaAddress', 'bytes'), f('nonce', 'uint256'), f('deadline', 'uint64')],
+  SetMetaAddress: [f('handleId', 'bytes32'), f('newMetaAddress', 'bytes'), f('nonce', 'uint256'), f('deadline', 'uint64')],
+  Release: [f('handleId', 'bytes32'), f('nonce', 'uint256'), f('deadline', 'uint64')],
+  Cancel: [f('handleId', 'bytes32'), f('pendingNonce', 'uint256'), f('nonce', 'uint256'), f('deadline', 'uint64')],
+  Advance: [f('handleId', 'bytes32'), f('newOwner', 'address'), f('newMetaAddress', 'bytes'), f('nonce', 'uint256'), f('deadline', 'uint64')],
+  AdvanceAccept: [f('handleId', 'bytes32'), f('previousOwner', 'address'), f('newMetaAddress', 'bytes'), f('nonce', 'uint256'), f('deadline', 'uint64')],
+  RegistrarAdvance: [
+    f('handleId', 'bytes32'),
+    f('previousOwner', 'address'),
+    f('newOwner', 'address'),
+    f('newMetaAddress', 'bytes'),
+    f('nonce', 'uint256'),
+    f('deadline', 'uint64'),
   ],
-  OwnerClaim: [
-    { name: 'handleId', type: 'bytes32' },
-    { name: 'metaAddress', type: 'bytes' },
-    { name: 'serial', type: 'uint256' },
-  ],
-  TransferOwner: [
-    { name: 'handleId', type: 'bytes32' },
-    { name: 'newOwner', type: 'address' },
-    { name: 'newMetaAddress', type: 'bytes' },
-    { name: 'nonce', type: 'uint256' },
-    { name: 'deadline', type: 'uint256' },
-  ],
-  SetMetaAddress: [
-    { name: 'handleId', type: 'bytes32' },
-    { name: 'newMetaAddress', type: 'bytes' },
-    { name: 'nonce', type: 'uint256' },
-    { name: 'deadline', type: 'uint256' },
-  ],
-  Release: [
-    { name: 'handleId', type: 'bytes32' },
-    { name: 'nonce', type: 'uint256' },
-    { name: 'deadline', type: 'uint256' },
-  ],
-  Cancel: [
-    { name: 'handleId', type: 'bytes32' },
-    { name: 'nonce', type: 'uint256' },
-    { name: 'deadline', type: 'uint256' },
-  ],
-  Advance: [
-    { name: 'handleId', type: 'bytes32' },
-    { name: 'newOwner', type: 'address' },
-    { name: 'newMetaAddress', type: 'bytes' },
-    { name: 'nonce', type: 'uint256' },
-    { name: 'deadline', type: 'uint256' },
-  ],
-  Unfreeze: [
-    { name: 'handleId', type: 'bytes32' },
-    { name: 'nonce', type: 'uint256' },
-    { name: 'deadline', type: 'uint256' },
-  ],
-  Hold: [
-    { name: 'handleId', type: 'bytes32' },
-    { name: 'nonce', type: 'uint256' },
-    { name: 'deadline', type: 'uint256' },
-  ],
-  Veto: [
-    { name: 'handleId', type: 'bytes32' },
-    { name: 'changeNonce', type: 'uint256' },
-    { name: 'nonce', type: 'uint256' },
-    { name: 'deadline', type: 'uint256' },
-  ],
+  Hold: [f('handleId', 'bytes32'), f('nonce', 'uint256'), f('deadline', 'uint64')],
+  RenewHold: [f('handleId', 'bytes32'), f('frozenUntil', 'uint64'), f('nonce', 'uint256'), f('deadline', 'uint64')],
+  Veto: [f('handleId', 'bytes32'), f('pendingNonce', 'uint256'), f('nonce', 'uint256'), f('deadline', 'uint64')],
+  // ASSUMPTION(0086 q15): unfreeze exists, signed by the owner and a registrar.
+  Unfreeze: [f('handleId', 'bytes32'), f('frozenUntil', 'uint64'), f('nonce', 'uint256'), f('deadline', 'uint64')],
+  RegistrarUnfreeze: [f('handleId', 'bytes32'), f('frozenUntil', 'uint64'), f('nonce', 'uint256'), f('deadline', 'uint64')],
 } as const;
 
 export type HandleAnchorType = keyof typeof HANDLE_ANCHOR_TYPES;

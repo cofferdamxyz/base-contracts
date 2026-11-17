@@ -12,24 +12,34 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 ///         addresses from. No account, no inbox and no label in clear: events
 ///         carry `handleId` only.
 ///         - **Claim**: an unowned label that was never released, or released
-///           at least `QUARANTINE` ago, is claimed with the registrar's and the
-///           new owner's EIP-712 signatures; anyone may submit.
+///           at least `QUARANTINE` ago (or by a `forceRelease` that waived
+///           it), is claimed with a registrar's and the new owner's EIP-712
+///           signatures; anyone may submit.
 ///         - **Owner changes** (`transferOwner` co-signed by the new key,
-///           `setMetaAddress`, `release`), signed by the owner with the
-///           record's nonce, wait `CHANGE_DELAY`; one is pending at a time and
-///           the owner may `cancel` it.
-///         - **`advance`** (owner, new owner and registrar together) applies at
-///           once and clears any pending change; it does not clear a freeze.
+///           `setMetaAddress`, `release`), signed by the owner, wait
+///           `CHANGE_DELAY`; one is pending at a time and the owner may
+///           `cancel` it.
+///         - **`advance`** (owner, new owner and a registrar together) applies
+///           at once and clears any pending change; it does not clear a freeze.
 ///         - **The registrar** (hot keys on a Safe-owned list) claims unowned
-///           labels and may `hold` (freeze) a record or `veto` its pending
-///           change (cancel and freeze), each for `FREEZE_DURATION`. A frozen
-///           record refuses every owner change except `advance`, and the Safe's
-///           `rekey`; `unfreeze` takes the owner's and the registrar's
-///           signatures.
+///           labels and may `hold` (freeze) a record, `renewHold`, or `veto`
+///           its pending change (cancel and freeze), each for
+///           `FREEZE_DURATION`. A frozen record refuses every owner change
+///           except `advance`, and the Safe's `rekey`; `unfreeze` takes the
+///           owner's and a registrar's signatures.
 ///         - **The Safe** (the contract `owner`, two-step transfer) adds
 ///           registrars, `rekey`s and `forceRelease`s behind `SAFE_DELAY`, a
 ///           timelock kept here because a Safe has none of its own; removing a
 ///           registrar and lifting a freeze are immediate.
+///
+///         Signatures: EIP-712, domain `CofferdamHandleAnchor` version 1, with
+///         the types of the SDK's `identity/handle.ts` (runbook step 1, whose
+///         fixture `test/fixtures/handleAnchorTypes.json` the tests read). Every
+///         signed struct carries the record's `nonce`, one per-handle counter
+///         that every accepted signed call raises (a call signed by several
+///         keys raises it once), so each signature is good once. A Safe
+///         `rekey` or `forceRelease` raises it too, voiding what was signed for
+///         the record before.
 /// @dev    The anchor names no identity registry and no evidence adapter, and
 ///         reads none: 0086 keeps it outside the account generation, the
 ///         identity registry and the M3 freeze. On Base mainnet (chain 8453)
@@ -58,41 +68,53 @@ contract CofferdamHandleAnchor is EIP712 {
     /// @notice Two 33-byte compressed secp256k1 keys, spending first.
     uint256 public constant META_ADDRESS_LENGTH = 66;
 
-    /// @notice EIP-712 types (domain: name "Cofferdam Handle Anchor", version
-    ///         "1", the chain id, this contract). `bytes` fields are hashed
-    ///         with keccak256, as EIP-712 encodes them.
-    /// @dev    Signed by a registrar; `nonce` is that registrar's, unordered.
+    // EIP-712 types (the SDK's HANDLE_ANCHOR_TYPES). `bytes` fields are
+    // hashed with keccak256, as EIP-712 encodes them; `nonce` is the record's.
+
+    /// @dev A registrar, for the record's next `serial`.
     bytes32 public constant REGISTRAR_CLAIM_TYPEHASH =
-        keccak256("RegistrarClaim(bytes32 handleId,address owner,uint256 serial,uint256 nonce,uint256 deadline)");
-    /// @dev Signed by the new owner; `serial` is the record's next serial.
-    bytes32 public constant OWNER_CLAIM_TYPEHASH =
-        keccak256("OwnerClaim(bytes32 handleId,bytes metaAddress,uint256 serial)");
-    /// @dev Signed by the owner and by `newOwner`; `nonce` is the record's.
+        keccak256("RegistrarClaim(bytes32 handleId,address owner,uint64 serial,uint256 nonce,uint64 deadline)");
+    /// @dev The claiming handle key, for the same `serial`.
+    bytes32 public constant OWNER_CLAIM_TYPEHASH = keccak256("OwnerClaim(bytes32 handleId,bytes metaAddress,uint64 serial)");
+    /// @dev The owner; the new key co-signs `TransferOwnerAccept`.
     bytes32 public constant TRANSFER_OWNER_TYPEHASH =
-        keccak256("TransferOwner(bytes32 handleId,address newOwner,bytes newMetaAddress,uint256 nonce,uint256 deadline)");
+        keccak256("TransferOwner(bytes32 handleId,address newOwner,bytes newMetaAddress,uint256 nonce,uint64 deadline)");
+    bytes32 public constant TRANSFER_OWNER_ACCEPT_TYPEHASH = keccak256(
+        "TransferOwnerAccept(bytes32 handleId,address previousOwner,bytes newMetaAddress,uint256 nonce,uint64 deadline)"
+    );
     bytes32 public constant SET_META_ADDRESS_TYPEHASH =
-        keccak256("SetMetaAddress(bytes32 handleId,bytes newMetaAddress,uint256 nonce,uint256 deadline)");
-    bytes32 public constant RELEASE_TYPEHASH = keccak256("Release(bytes32 handleId,uint256 nonce,uint256 deadline)");
-    bytes32 public constant CANCEL_TYPEHASH = keccak256("Cancel(bytes32 handleId,uint256 nonce,uint256 deadline)");
-    /// @dev Signed by the owner, by `newOwner` and by a registrar, over the
-    ///      same struct; `nonce` is the record's.
+        keccak256("SetMetaAddress(bytes32 handleId,bytes newMetaAddress,uint256 nonce,uint64 deadline)");
+    bytes32 public constant RELEASE_TYPEHASH = keccak256("Release(bytes32 handleId,uint256 nonce,uint64 deadline)");
+    /// @dev The owner; `pendingNonce` names the change it withdraws.
+    bytes32 public constant CANCEL_TYPEHASH =
+        keccak256("Cancel(bytes32 handleId,uint256 pendingNonce,uint256 nonce,uint64 deadline)");
+    /// @dev The owner; the new key signs `AdvanceAccept`, a registrar `RegistrarAdvance`.
     bytes32 public constant ADVANCE_TYPEHASH =
-        keccak256("Advance(bytes32 handleId,address newOwner,bytes newMetaAddress,uint256 nonce,uint256 deadline)");
-    /// @dev Signed by the owner and by a registrar; `nonce` is the record's.
-    bytes32 public constant UNFREEZE_TYPEHASH = keccak256("Unfreeze(bytes32 handleId,uint256 nonce,uint256 deadline)");
-    /// @dev Signed by a registrar; `nonce` is that registrar's. A renewal is a
-    ///      hold on a frozen record.
-    bytes32 public constant HOLD_TYPEHASH = keccak256("Hold(bytes32 handleId,uint256 nonce,uint256 deadline)");
-    /// @dev Signed by a registrar; `changeNonce` names the pending change (the
-    ///      record nonce it was queued with), `nonce` is the registrar's.
+        keccak256("Advance(bytes32 handleId,address newOwner,bytes newMetaAddress,uint256 nonce,uint64 deadline)");
+    bytes32 public constant ADVANCE_ACCEPT_TYPEHASH =
+        keccak256("AdvanceAccept(bytes32 handleId,address previousOwner,bytes newMetaAddress,uint256 nonce,uint64 deadline)");
+    bytes32 public constant REGISTRAR_ADVANCE_TYPEHASH = keccak256(
+        "RegistrarAdvance(bytes32 handleId,address previousOwner,address newOwner,bytes newMetaAddress,uint256 nonce,uint64 deadline)"
+    );
+    /// @dev A registrar, on a record that is not frozen.
+    bytes32 public constant HOLD_TYPEHASH = keccak256("Hold(bytes32 handleId,uint256 nonce,uint64 deadline)");
+    /// @dev A registrar, naming the freeze it renews by its `frozenUntil`.
+    bytes32 public constant RENEW_HOLD_TYPEHASH =
+        keccak256("RenewHold(bytes32 handleId,uint64 frozenUntil,uint256 nonce,uint64 deadline)");
+    /// @dev A registrar; `pendingNonce` names the change it cancels.
     bytes32 public constant VETO_TYPEHASH =
-        keccak256("Veto(bytes32 handleId,uint256 changeNonce,uint256 nonce,uint256 deadline)");
+        keccak256("Veto(bytes32 handleId,uint256 pendingNonce,uint256 nonce,uint64 deadline)");
+    /// @dev The owner and a registrar, each naming the freeze by its `frozenUntil`.
+    bytes32 public constant UNFREEZE_TYPEHASH =
+        keccak256("Unfreeze(bytes32 handleId,uint64 frozenUntil,uint256 nonce,uint64 deadline)");
+    bytes32 public constant REGISTRAR_UNFREEZE_TYPEHASH =
+        keccak256("RegistrarUnfreeze(bytes32 handleId,uint64 frozenUntil,uint256 nonce,uint64 deadline)");
 
     // ── Immutables ───────────────────────────────────────────────────────────
 
     /// @notice Seconds an owner change waits between queue and apply.
     uint256 public immutable CHANGE_DELAY;
-    /// @notice Seconds a hold or a veto freezes a record.
+    /// @notice Seconds a hold, a renewal or a veto freezes a record.
     uint256 public immutable FREEZE_DURATION;
     /// @notice Seconds a released label waits before it can be claimed again.
     uint256 public immutable QUARANTINE;
@@ -113,7 +135,7 @@ contract CofferdamHandleAnchor is EIP712 {
         address owner;
         /// @dev Rises with each fresh claim; kept through a release.
         uint32 serial;
-        /// @dev The nonce the next owner-signed struct must carry; never resets.
+        /// @dev The nonce the next signed struct must carry; never resets.
         uint64 nonce;
         /// @dev Frozen while `block.timestamp < frozenUntil`.
         uint48 frozenUntil;
@@ -140,9 +162,6 @@ contract CofferdamHandleAnchor is EIP712 {
     address public pendingOwner;
 
     mapping(address => bool) public isRegistrar;
-    /// @notice Registrar nonces already used (unordered: the relayer batches
-    ///         claims with random delays, so they land out of order).
-    mapping(address => mapping(uint256 => bool)) public registrarNonceUsed;
 
     enum SafeOpKind {
         None,
@@ -169,11 +188,15 @@ contract CofferdamHandleAnchor is EIP712 {
     event ChangeVetoed(bytes32 indexed handleId, uint256 nonce, address registrar);
     event OwnerChanged(bytes32 indexed handleId, address indexed previousOwner, address indexed newOwner, bytes metaAddress);
     event MetaAddressChanged(bytes32 indexed handleId, bytes metaAddress);
-    event Advanced(bytes32 indexed handleId, address indexed previousOwner, address indexed newOwner, bytes metaAddress, address registrar);
+    event Advanced(
+        bytes32 indexed handleId, address indexed previousOwner, address indexed newOwner, bytes metaAddress, address registrar
+    );
     event Released(bytes32 indexed handleId, uint256 serial, bool quarantined);
     event Frozen(bytes32 indexed handleId, uint256 frozenUntil, address registrar);
     event Unfrozen(bytes32 indexed handleId, address by);
-    event Rekeyed(bytes32 indexed handleId, address indexed previousOwner, address indexed newOwner, uint256 serial, bytes metaAddress);
+    event Rekeyed(
+        bytes32 indexed handleId, address indexed previousOwner, address indexed newOwner, uint256 serial, bytes metaAddress
+    );
 
     event SafeOpScheduled(bytes32 indexed opId, SafeOpKind kind, bytes32 indexed handleId, uint256 readyAt, bytes args);
     event SafeOpCancelled(bytes32 indexed opId);
@@ -191,7 +214,6 @@ contract CofferdamHandleAnchor is EIP712 {
     error BadMetaAddress();
     error Expired(uint256 deadline);
     error NotRegistrar(address signer);
-    error RegistrarNonceUsed(address registrar, uint256 nonce);
     error WrongSigner(address expected, address recovered);
     error AlreadyOwned(bytes32 handleId);
     error NotOwned(bytes32 handleId);
@@ -199,11 +221,13 @@ contract CofferdamHandleAnchor is EIP712 {
     error InQuarantine(uint256 until);
     error RecordFrozen(uint256 until);
     error NotFrozen(bytes32 handleId);
+    error WrongFreeze(uint256 current, uint256 named);
     error ChangePending(uint256 nonce);
     error NoPendingChange(bytes32 handleId);
     error WrongChange(uint256 pending, uint256 named);
     error ChangeNotReady(uint256 readyAt);
     error SameOwner(address owner);
+    error SerialOverflow();
     error RegistrarAlreadyListed(address registrar);
     error RegistrarNotListed(address registrar);
     error SafeOpAlreadyScheduled(bytes32 opId, uint256 readyAt);
@@ -218,7 +242,7 @@ contract CofferdamHandleAnchor is EIP712 {
 
     /// @param _owner The Cofferdam Safe (a throwaway Safe on a test deploy), owner from the first block.
     /// @param changeDelay Owner changes' wait; 72 hours on Base mainnet.
-    /// @param freezeDuration A hold's or a veto's freeze, never 0; 14 days on Base mainnet.
+    /// @param freezeDuration A hold's, a renewal's or a veto's freeze, never 0; 14 days on Base mainnet.
     /// @param quarantine A released label's wait; 365 days on Base mainnet.
     /// @param safeDelay The Safe's timelock; 72 hours on Base mainnet.
     /// @param initialRegistrars Listed from deployment, visible in the constructor arguments.
@@ -229,7 +253,7 @@ contract CofferdamHandleAnchor is EIP712 {
         uint256 quarantine,
         uint256 safeDelay,
         address[] memory initialRegistrars
-    ) EIP712("Cofferdam Handle Anchor", "1") {
+    ) EIP712("CofferdamHandleAnchor", "1") {
         if (_owner == address(0)) revert ZeroAddress();
         if (block.chainid == BASE_MAINNET_CHAIN_ID) {
             if (
@@ -255,18 +279,14 @@ contract CofferdamHandleAnchor is EIP712 {
 
     // ── Claim ────────────────────────────────────────────────────────────────
 
-    /// @notice Claim an unowned label for `handleOwner`. The label must never
-    ///         have been released, or released at least `QUARANTINE` ago (or
-    ///         by a `forceRelease` that waived it). The registrar signs
-    ///         `RegistrarClaim` over the next serial; the new owner signs
-    ///         `OwnerClaim` over the meta-address and that serial. Anyone may
-    ///         submit.
+    /// @notice Claim an unowned label for `handleOwner`. A registrar signs
+    ///         `RegistrarClaim` and the new owner `OwnerClaim`, both over the
+    ///         record's next serial. Anyone may submit.
     function claim(
         bytes32 handleId,
         address handleOwner,
         bytes calldata metaAddress,
-        uint256 registrarNonce,
-        uint256 deadline,
+        uint64 deadline,
         bytes calldata registrarSig,
         bytes calldata ownerSig
     ) external {
@@ -280,15 +300,14 @@ contract CofferdamHandleAnchor is EIP712 {
             uint256 until = uint256(r.releasedAt) + QUARANTINE;
             if (block.timestamp < until) revert InQuarantine(until);
         }
+        if (r.serial == type(uint32).max) revert SerialOverflow();
         uint256 serial = uint256(r.serial) + 1;
-
-        address registrar = _recover(
-            keccak256(abi.encode(REGISTRAR_CLAIM_TYPEHASH, handleId, handleOwner, serial, registrarNonce, deadline)),
-            registrarSig
+        address registrar = _registrar(
+            keccak256(abi.encode(REGISTRAR_CLAIM_TYPEHASH, handleId, handleOwner, serial, r.nonce, deadline)), registrarSig
         );
-        _useRegistrarNonce(registrar, registrarNonce);
         _expect(handleOwner, keccak256(abi.encode(OWNER_CLAIM_TYPEHASH, handleId, keccak256(metaAddress), serial)), ownerSig);
 
+        r.nonce++;
         r.owner = handleOwner;
         r.serial = uint32(serial);
         r.metaAddress = metaAddress;
@@ -300,13 +319,13 @@ contract CofferdamHandleAnchor is EIP712 {
     // ── Owner changes (queued, `CHANGE_DELAY`) ───────────────────────────────
 
     /// @notice Queue a move of the record to `newOwner` and `newMetaAddress`
-    ///         (an epoch advance or a rotation, the slow path), signed by the
-    ///         owner and co-signed by the new key over `TransferOwner`.
+    ///         (the slow path), signed by the owner (`TransferOwner`) and the
+    ///         new key (`TransferOwnerAccept`).
     function transferOwner(
         bytes32 handleId,
         address newOwner,
         bytes calldata newMetaAddress,
-        uint256 deadline,
+        uint64 deadline,
         bytes calldata ownerSig,
         bytes calldata newOwnerSig
     ) external {
@@ -314,16 +333,22 @@ contract CofferdamHandleAnchor is EIP712 {
         if (newOwner == address(0)) revert ZeroAddress();
         if (newOwner == r.owner) revert SameOwner(newOwner);
         _checkMetaAddress(newMetaAddress);
-        uint256 nonce = r.nonce;
-        bytes32 structHash =
-            keccak256(abi.encode(TRANSFER_OWNER_TYPEHASH, handleId, newOwner, keccak256(newMetaAddress), nonce, deadline));
-        _expect(r.owner, structHash, ownerSig);
-        _expect(newOwner, structHash, newOwnerSig);
+        bytes32 metaHash = keccak256(newMetaAddress);
+        _expect(
+            r.owner,
+            keccak256(abi.encode(TRANSFER_OWNER_TYPEHASH, handleId, newOwner, metaHash, r.nonce, deadline)),
+            ownerSig
+        );
+        _expect(
+            newOwner,
+            keccak256(abi.encode(TRANSFER_OWNER_ACCEPT_TYPEHASH, handleId, r.owner, metaHash, r.nonce, deadline)),
+            newOwnerSig
+        );
         _queue(handleId, r, ChangeKind.TransferOwner, newOwner, newMetaAddress);
     }
 
     /// @notice Queue a new meta-address under the same handle key.
-    function setMetaAddress(bytes32 handleId, bytes calldata newMetaAddress, uint256 deadline, bytes calldata ownerSig)
+    function setMetaAddress(bytes32 handleId, bytes calldata newMetaAddress, uint64 deadline, bytes calldata ownerSig)
         external
     {
         Record storage r = _queueable(handleId, deadline);
@@ -338,25 +363,24 @@ contract CofferdamHandleAnchor is EIP712 {
 
     /// @notice Queue the release of the label. Once applied the record has no
     ///         owner and the label is quarantined for `QUARANTINE`.
-    function release(bytes32 handleId, uint256 deadline, bytes calldata ownerSig) external {
+    function release(bytes32 handleId, uint64 deadline, bytes calldata ownerSig) external {
         Record storage r = _queueable(handleId, deadline);
         _expect(r.owner, keccak256(abi.encode(RELEASE_TYPEHASH, handleId, r.nonce, deadline)), ownerSig);
         _queue(handleId, r, ChangeKind.Release, address(0), "");
     }
 
-    /// @notice The owner withdraws the pending change, at once.
+    /// @notice The owner withdraws the pending change named by `pendingNonce`, at once.
     /// @dev    ASSUMPTION(0086 rule 3): a cancel is not an "owner change", so it
     ///         stays open while the record is frozen; it only narrows what
     ///         happens to the record.
-    function cancel(bytes32 handleId, uint256 deadline, bytes calldata ownerSig) external {
+    function cancel(bytes32 handleId, uint256 pendingNonce, uint64 deadline, bytes calldata ownerSig) external {
         _checkDeadline(deadline);
         Record storage r = _owned(handleId);
-        if (r.pendingKind == ChangeKind.None) revert NoPendingChange(handleId);
-        _expect(r.owner, keccak256(abi.encode(CANCEL_TYPEHASH, handleId, r.nonce, deadline)), ownerSig);
+        _namedChange(handleId, r, pendingNonce);
+        _expect(r.owner, keccak256(abi.encode(CANCEL_TYPEHASH, handleId, pendingNonce, r.nonce, deadline)), ownerSig);
         r.nonce++;
-        uint256 cancelled = r.pendingNonce;
         _clearPending(r);
-        emit ChangeCancelled(handleId, cancelled);
+        emit ChangeCancelled(handleId, pendingNonce);
     }
 
     /// @notice Apply the pending change once `CHANGE_DELAY` has passed and the
@@ -388,14 +412,14 @@ contract CofferdamHandleAnchor is EIP712 {
     // ── The immediate advance ────────────────────────────────────────────────
 
     /// @notice Move the record to `newOwner` and `newMetaAddress` at once, with
-    ///         the owner's, the new owner's and a registrar's signatures over
-    ///         one `Advance` struct. Clears any pending change. Open while
-    ///         frozen. The serial does not change.
+    ///         the owner's `Advance`, the new key's `AdvanceAccept` and a
+    ///         registrar's `RegistrarAdvance`. Clears any pending change. Open
+    ///         while frozen. The serial does not change.
     function advance(
         bytes32 handleId,
         address newOwner,
         bytes calldata newMetaAddress,
-        uint256 deadline,
+        uint64 deadline,
         bytes calldata ownerSig,
         bytes calldata newOwnerSig,
         bytes calldata registrarSig
@@ -403,21 +427,27 @@ contract CofferdamHandleAnchor is EIP712 {
         _checkDeadline(deadline);
         Record storage r = _owned(handleId);
         if (newOwner == address(0)) revert ZeroAddress();
-        if (newOwner == r.owner) revert SameOwner(newOwner);
+        address previous = r.owner;
+        if (newOwner == previous) revert SameOwner(newOwner);
         _checkMetaAddress(newMetaAddress);
-        bytes32 structHash =
-            keccak256(abi.encode(ADVANCE_TYPEHASH, handleId, newOwner, keccak256(newMetaAddress), r.nonce, deadline));
-        _expect(r.owner, structHash, ownerSig);
-        _expect(newOwner, structHash, newOwnerSig);
-        address registrar = _recover(structHash, registrarSig);
-        if (!isRegistrar[registrar]) revert NotRegistrar(registrar);
+        bytes32 metaHash = keccak256(newMetaAddress);
+        uint256 nonce = r.nonce;
+        _expect(previous, keccak256(abi.encode(ADVANCE_TYPEHASH, handleId, newOwner, metaHash, nonce, deadline)), ownerSig);
+        _expect(
+            newOwner,
+            keccak256(abi.encode(ADVANCE_ACCEPT_TYPEHASH, handleId, previous, metaHash, nonce, deadline)),
+            newOwnerSig
+        );
+        address registrar = _registrar(
+            keccak256(abi.encode(REGISTRAR_ADVANCE_TYPEHASH, handleId, previous, newOwner, metaHash, nonce, deadline)),
+            registrarSig
+        );
 
         r.nonce++;
         if (r.pendingKind != ChangeKind.None) {
             emit ChangeCancelled(handleId, r.pendingNonce);
             _clearPending(r);
         }
-        address previous = r.owner;
         r.owner = newOwner;
         r.metaAddress = newMetaAddress;
         // ASSUMPTION(0086 q15): `advance` does not clear a freeze; only
@@ -428,51 +458,67 @@ contract CofferdamHandleAnchor is EIP712 {
 
     // ── Freezes ──────────────────────────────────────────────────────────────
 
-    /// @notice A registrar freezes an owned record for `FREEZE_DURATION` from
-    ///         now (the plane signs only after a High ceremony of the identity
-    ///         that holds the handle). A hold on a frozen record renews it.
-    function hold(bytes32 handleId, uint256 registrarNonce, uint256 deadline, bytes calldata registrarSig) external {
+    /// @notice A registrar freezes an owned record that is not frozen, for
+    ///         `FREEZE_DURATION` from now (the plane signs only after a High
+    ///         ceremony of the identity that holds the handle).
+    function hold(bytes32 handleId, uint64 deadline, bytes calldata registrarSig) external {
         _checkDeadline(deadline);
         Record storage r = _owned(handleId);
-        address registrar =
-            _recover(keccak256(abi.encode(HOLD_TYPEHASH, handleId, registrarNonce, deadline)), registrarSig);
-        _useRegistrarNonce(registrar, registrarNonce);
+        _notFrozen(r);
+        address registrar = _registrar(keccak256(abi.encode(HOLD_TYPEHASH, handleId, r.nonce, deadline)), registrarSig);
+        r.nonce++;
         _freeze(handleId, r, registrar);
     }
 
-    /// @notice A registrar cancels the pending change named by `changeNonce`
-    ///         and freezes the record for `FREEZE_DURATION`.
-    function veto(bytes32 handleId, uint256 changeNonce, uint256 registrarNonce, uint256 deadline, bytes calldata registrarSig)
-        external
-    {
+    /// @notice A registrar renews the freeze that ends at `frozenUntil`, for
+    ///         `FREEZE_DURATION` from now.
+    function renewHold(bytes32 handleId, uint64 frozenUntil, uint64 deadline, bytes calldata registrarSig) external {
         _checkDeadline(deadline);
         Record storage r = _owned(handleId);
-        if (r.pendingKind == ChangeKind.None) revert NoPendingChange(handleId);
-        if (r.pendingNonce != changeNonce) revert WrongChange(r.pendingNonce, changeNonce);
-        address registrar = _recover(
-            keccak256(abi.encode(VETO_TYPEHASH, handleId, changeNonce, registrarNonce, deadline)), registrarSig
+        _namedFreeze(handleId, r, frozenUntil);
+        address registrar = _registrar(
+            keccak256(abi.encode(RENEW_HOLD_TYPEHASH, handleId, frozenUntil, r.nonce, deadline)), registrarSig
         );
-        _useRegistrarNonce(registrar, registrarNonce);
-        _clearPending(r);
-        emit ChangeVetoed(handleId, changeNonce, registrar);
+        r.nonce++;
         _freeze(handleId, r, registrar);
     }
 
-    /// @notice Lift a freeze with the owner's and a registrar's signatures over
-    ///         `Unfreeze`.
-    /// @dev    ASSUMPTION(0086 q15): `unfreeze` is signed by the owner and the
-    ///         registrar. When the plane may sign it (a rotation to a new
-    ///         phrase, a hold with no veto, never after a veto under the same
-    ///         phrase) is the plane's rule; the contract cannot tell phrases
-    ///         apart.
-    function unfreeze(bytes32 handleId, uint256 deadline, bytes calldata ownerSig, bytes calldata registrarSig) external {
+    /// @notice A registrar cancels the pending change named by `pendingNonce`
+    ///         and freezes the record for `FREEZE_DURATION` from now.
+    function veto(bytes32 handleId, uint256 pendingNonce, uint64 deadline, bytes calldata registrarSig) external {
         _checkDeadline(deadline);
         Record storage r = _owned(handleId);
-        if (r.frozenUntil <= block.timestamp) revert NotFrozen(handleId);
-        bytes32 structHash = keccak256(abi.encode(UNFREEZE_TYPEHASH, handleId, r.nonce, deadline));
-        _expect(r.owner, structHash, ownerSig);
-        address registrar = _recover(structHash, registrarSig);
-        if (!isRegistrar[registrar]) revert NotRegistrar(registrar);
+        _namedChange(handleId, r, pendingNonce);
+        address registrar =
+            _registrar(keccak256(abi.encode(VETO_TYPEHASH, handleId, pendingNonce, r.nonce, deadline)), registrarSig);
+        r.nonce++;
+        _clearPending(r);
+        emit ChangeVetoed(handleId, pendingNonce, registrar);
+        _freeze(handleId, r, registrar);
+    }
+
+    /// @notice Lift the freeze that ends at `frozenUntil`, with the owner's
+    ///         `Unfreeze` and a registrar's `RegistrarUnfreeze`.
+    /// @dev    ASSUMPTION(0086 q15): `unfreeze` exists, signed by the owner and
+    ///         a registrar. When the plane may sign it (at the end of a rotation
+    ///         to a new phrase, or for a hold with no veto, never after a veto
+    ///         under the same phrase) is the plane's rule: the contract cannot
+    ///         tell phrases apart.
+    function unfreeze(
+        bytes32 handleId,
+        uint64 frozenUntil,
+        uint64 deadline,
+        bytes calldata ownerSig,
+        bytes calldata registrarSig
+    ) external {
+        _checkDeadline(deadline);
+        Record storage r = _owned(handleId);
+        _namedFreeze(handleId, r, frozenUntil);
+        uint256 nonce = r.nonce;
+        _expect(r.owner, keccak256(abi.encode(UNFREEZE_TYPEHASH, handleId, frozenUntil, nonce, deadline)), ownerSig);
+        address registrar = _registrar(
+            keccak256(abi.encode(REGISTRAR_UNFREEZE_TYPEHASH, handleId, frozenUntil, nonce, deadline)), registrarSig
+        );
         r.nonce++;
         r.frozenUntil = 0;
         emit Unfrozen(handleId, registrar);
@@ -488,7 +534,8 @@ contract CofferdamHandleAnchor is EIP712 {
     /// @notice What a Cofferdam payer reads: the owner, the serial, the
     ///         meta-address, and whether to derive to it now. `derivable` is
     ///         false while the record is unowned, frozen or has a pending
-    ///         change (0086 rule 3).
+    ///         change (0086 rule 3). A scheduled Safe `rekey` is not counted
+    ///         here; payers watch `SafeOpScheduled` for it.
     function resolve(bytes32 handleId)
         external
         view
@@ -521,7 +568,7 @@ contract CofferdamHandleAnchor is EIP712 {
         return uint256(r.releasedAt) + QUARANTINE;
     }
 
-    /// @notice The record nonce the next owner-signed struct must carry.
+    /// @notice The nonce the next signed struct for `handleId` must carry.
     function nonceOf(bytes32 handleId) external view returns (uint256) {
         return _records[handleId].nonce;
     }
@@ -585,7 +632,7 @@ contract CofferdamHandleAnchor is EIP712 {
     /// @dev    ASSUMPTION(0086 q16): no owner brake: the record's owner cannot
     ///         cancel a scheduled rekey, since a phrase thief would use one to
     ///         block recovery. Its control is the Safe's signers and this
-    ///         timelock; the event below is what the owner's app shows.
+    ///         timelock; the event is what the owner's app shows.
     function scheduleRekey(bytes32 handleId, address newOwner, bytes calldata newMetaAddress) external onlyOwner {
         _checkRekey(handleId, newOwner, newMetaAddress);
         _schedule(
@@ -594,8 +641,9 @@ contract CofferdamHandleAnchor is EIP712 {
     }
 
     /// @notice Apply a scheduled rekey: the new owner and meta-address, no
-    ///         pending change, no freeze. On a released record it is a fresh
-    ///         holder, so the serial rises and the quarantine ends.
+    ///         pending change, no freeze, and a raised nonce. On a released
+    ///         record it is a fresh holder, so the serial rises and the
+    ///         quarantine ends.
     function executeRekey(bytes32 handleId, address newOwner, bytes calldata newMetaAddress) external onlyOwner {
         _consume(rekeyOpId(handleId, newOwner, newMetaAddress));
         _checkRekey(handleId, newOwner, newMetaAddress);
@@ -605,6 +653,7 @@ contract CofferdamHandleAnchor is EIP712 {
             // ASSUMPTION(0086 rule 3): a rekey of a released record hands the
             // label to a holder again, which 0086 rule 8 reads as a change of
             // hands: the serial rises, so contacts confirm before paying.
+            if (r.serial == type(uint32).max) revert SerialOverflow();
             r.serial++;
             r.releasedAt = 0;
             r.quarantineWaived = false;
@@ -613,6 +662,7 @@ contract CofferdamHandleAnchor is EIP712 {
             emit ChangeCancelled(handleId, r.pendingNonce);
             _clearPending(r);
         }
+        r.nonce++;
         r.owner = newOwner;
         r.metaAddress = newMetaAddress;
         r.frozenUntil = 0;
@@ -631,6 +681,7 @@ contract CofferdamHandleAnchor is EIP712 {
     function executeForceRelease(bytes32 handleId, bool quarantine) external onlyOwner {
         _consume(forceReleaseOpId(handleId, quarantine));
         Record storage r = _owned(handleId);
+        r.nonce++;
         _release(handleId, r, quarantine);
     }
 
@@ -661,11 +712,23 @@ contract CofferdamHandleAnchor is EIP712 {
     }
 
     /// @dev An owned, unfrozen record with no pending change, and a live deadline.
-    function _queueable(bytes32 handleId, uint256 deadline) private view returns (Record storage r) {
+    function _queueable(bytes32 handleId, uint64 deadline) private view returns (Record storage r) {
         _checkDeadline(deadline);
         r = _owned(handleId);
         _notFrozen(r);
         if (r.pendingKind != ChangeKind.None) revert ChangePending(r.pendingNonce);
+    }
+
+    /// @dev The pending change exists and is the one named.
+    function _namedChange(bytes32 handleId, Record storage r, uint256 pendingNonce) private view {
+        if (r.pendingKind == ChangeKind.None) revert NoPendingChange(handleId);
+        if (r.pendingNonce != pendingNonce) revert WrongChange(r.pendingNonce, pendingNonce);
+    }
+
+    /// @dev The record is frozen and the freeze is the one named.
+    function _namedFreeze(bytes32 handleId, Record storage r, uint64 frozenUntil) private view {
+        if (r.frozenUntil <= block.timestamp) revert NotFrozen(handleId);
+        if (r.frozenUntil != frozenUntil) revert WrongFreeze(r.frozenUntil, frozenUntil);
     }
 
     function _queue(bytes32 handleId, Record storage r, ChangeKind kind, address newOwner, bytes memory newMetaAddress)
@@ -740,10 +803,10 @@ contract CofferdamHandleAnchor is EIP712 {
         emit RegistrarAdded(registrar);
     }
 
-    function _useRegistrarNonce(address registrar, uint256 nonce) private {
+    /// @dev The signer of `structHash`, which must be a listed registrar.
+    function _registrar(bytes32 structHash, bytes calldata sig) private view returns (address registrar) {
+        registrar = _recover(structHash, sig);
         if (!isRegistrar[registrar]) revert NotRegistrar(registrar);
-        if (registrarNonceUsed[registrar][nonce]) revert RegistrarNonceUsed(registrar, nonce);
-        registrarNonceUsed[registrar][nonce] = true;
     }
 
     function _recover(bytes32 structHash, bytes calldata sig) private view returns (address) {
@@ -755,7 +818,7 @@ contract CofferdamHandleAnchor is EIP712 {
         if (recovered != expected) revert WrongSigner(expected, recovered);
     }
 
-    function _checkDeadline(uint256 deadline) private view {
+    function _checkDeadline(uint64 deadline) private view {
         if (block.timestamp > deadline) revert Expired(deadline);
     }
 

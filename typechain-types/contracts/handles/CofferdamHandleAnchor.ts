@@ -71,6 +71,7 @@ export declare namespace CofferdamHandleAnchor {
 export interface CofferdamHandleAnchorInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "ADVANCE_ACCEPT_TYPEHASH"
       | "ADVANCE_TYPEHASH"
       | "BASE_MAINNET_CHAIN_ID"
       | "CANCEL_TYPEHASH"
@@ -87,12 +88,16 @@ export interface CofferdamHandleAnchorInterface extends Interface {
       | "META_ADDRESS_LENGTH"
       | "OWNER_CLAIM_TYPEHASH"
       | "QUARANTINE"
+      | "REGISTRAR_ADVANCE_TYPEHASH"
       | "REGISTRAR_CLAIM_TYPEHASH"
+      | "REGISTRAR_UNFREEZE_TYPEHASH"
       | "RELEASE_TYPEHASH"
+      | "RENEW_HOLD_TYPEHASH"
       | "SAFE_DELAY"
       | "SAFE_OP_GRACE"
       | "SCHEME_ID"
       | "SET_META_ADDRESS_TYPEHASH"
+      | "TRANSFER_OWNER_ACCEPT_TYPEHASH"
       | "TRANSFER_OWNER_TYPEHASH"
       | "UNFREEZE_TYPEHASH"
       | "VETO_TYPEHASH"
@@ -117,10 +122,10 @@ export interface CofferdamHandleAnchorInterface extends Interface {
       | "owner"
       | "pendingOwner"
       | "recordOf"
-      | "registrarNonceUsed"
       | "rekeyOpId"
       | "release"
       | "removeRegistrar"
+      | "renewHold"
       | "resolve"
       | "safeOpReadyAt"
       | "scheduleAddRegistrar"
@@ -157,6 +162,10 @@ export interface CofferdamHandleAnchorInterface extends Interface {
       | "Unfrozen"
   ): EventFragment;
 
+  encodeFunctionData(
+    functionFragment: "ADVANCE_ACCEPT_TYPEHASH",
+    values?: undefined
+  ): string;
   encodeFunctionData(
     functionFragment: "ADVANCE_TYPEHASH",
     values?: undefined
@@ -219,11 +228,23 @@ export interface CofferdamHandleAnchorInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "REGISTRAR_ADVANCE_TYPEHASH",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "REGISTRAR_CLAIM_TYPEHASH",
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "REGISTRAR_UNFREEZE_TYPEHASH",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "RELEASE_TYPEHASH",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "RENEW_HOLD_TYPEHASH",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -237,6 +258,10 @@ export interface CofferdamHandleAnchorInterface extends Interface {
   encodeFunctionData(functionFragment: "SCHEME_ID", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "SET_META_ADDRESS_TYPEHASH",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "TRANSFER_OWNER_ACCEPT_TYPEHASH",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -277,7 +302,7 @@ export interface CofferdamHandleAnchorInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "cancel",
-    values: [BytesLike, BigNumberish, BytesLike]
+    values: [BytesLike, BigNumberish, BigNumberish, BytesLike]
   ): string;
   encodeFunctionData(
     functionFragment: "cancelSafeOp",
@@ -289,7 +314,6 @@ export interface CofferdamHandleAnchorInterface extends Interface {
       BytesLike,
       AddressLike,
       BytesLike,
-      BigNumberish,
       BigNumberish,
       BytesLike,
       BytesLike
@@ -321,7 +345,7 @@ export interface CofferdamHandleAnchorInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "hold",
-    values: [BytesLike, BigNumberish, BigNumberish, BytesLike]
+    values: [BytesLike, BigNumberish, BytesLike]
   ): string;
   encodeFunctionData(functionFragment: "isFrozen", values: [BytesLike]): string;
   encodeFunctionData(
@@ -340,10 +364,6 @@ export interface CofferdamHandleAnchorInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "recordOf", values: [BytesLike]): string;
   encodeFunctionData(
-    functionFragment: "registrarNonceUsed",
-    values: [AddressLike, BigNumberish]
-  ): string;
-  encodeFunctionData(
     functionFragment: "rekeyOpId",
     values: [BytesLike, AddressLike, BytesLike]
   ): string;
@@ -354,6 +374,10 @@ export interface CofferdamHandleAnchorInterface extends Interface {
   encodeFunctionData(
     functionFragment: "removeRegistrar",
     values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "renewHold",
+    values: [BytesLike, BigNumberish, BigNumberish, BytesLike]
   ): string;
   encodeFunctionData(functionFragment: "resolve", values: [BytesLike]): string;
   encodeFunctionData(
@@ -397,13 +421,17 @@ export interface CofferdamHandleAnchorInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "unfreeze",
-    values: [BytesLike, BigNumberish, BytesLike, BytesLike]
+    values: [BytesLike, BigNumberish, BigNumberish, BytesLike, BytesLike]
   ): string;
   encodeFunctionData(
     functionFragment: "veto",
-    values: [BytesLike, BigNumberish, BigNumberish, BigNumberish, BytesLike]
+    values: [BytesLike, BigNumberish, BigNumberish, BytesLike]
   ): string;
 
+  decodeFunctionResult(
+    functionFragment: "ADVANCE_ACCEPT_TYPEHASH",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "ADVANCE_TYPEHASH",
     data: BytesLike
@@ -463,11 +491,23 @@ export interface CofferdamHandleAnchorInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "QUARANTINE", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "REGISTRAR_ADVANCE_TYPEHASH",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "REGISTRAR_CLAIM_TYPEHASH",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "REGISTRAR_UNFREEZE_TYPEHASH",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "RELEASE_TYPEHASH",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "RENEW_HOLD_TYPEHASH",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "SAFE_DELAY", data: BytesLike): Result;
@@ -478,6 +518,10 @@ export interface CofferdamHandleAnchorInterface extends Interface {
   decodeFunctionResult(functionFragment: "SCHEME_ID", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "SET_META_ADDRESS_TYPEHASH",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "TRANSFER_OWNER_ACCEPT_TYPEHASH",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -549,16 +593,13 @@ export interface CofferdamHandleAnchorInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "recordOf", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "registrarNonceUsed",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(functionFragment: "rekeyOpId", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "release", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "removeRegistrar",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "renewHold", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "resolve", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "safeOpReadyAt",
@@ -996,6 +1037,8 @@ export interface CofferdamHandleAnchor extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  ADVANCE_ACCEPT_TYPEHASH: TypedContractMethod<[], [string], "view">;
+
   ADVANCE_TYPEHASH: TypedContractMethod<[], [string], "view">;
 
   BASE_MAINNET_CHAIN_ID: TypedContractMethod<[], [bigint], "view">;
@@ -1028,9 +1071,15 @@ export interface CofferdamHandleAnchor extends BaseContract {
 
   QUARANTINE: TypedContractMethod<[], [bigint], "view">;
 
+  REGISTRAR_ADVANCE_TYPEHASH: TypedContractMethod<[], [string], "view">;
+
   REGISTRAR_CLAIM_TYPEHASH: TypedContractMethod<[], [string], "view">;
 
+  REGISTRAR_UNFREEZE_TYPEHASH: TypedContractMethod<[], [string], "view">;
+
   RELEASE_TYPEHASH: TypedContractMethod<[], [string], "view">;
+
+  RENEW_HOLD_TYPEHASH: TypedContractMethod<[], [string], "view">;
 
   SAFE_DELAY: TypedContractMethod<[], [bigint], "view">;
 
@@ -1039,6 +1088,8 @@ export interface CofferdamHandleAnchor extends BaseContract {
   SCHEME_ID: TypedContractMethod<[], [bigint], "view">;
 
   SET_META_ADDRESS_TYPEHASH: TypedContractMethod<[], [string], "view">;
+
+  TRANSFER_OWNER_ACCEPT_TYPEHASH: TypedContractMethod<[], [string], "view">;
 
   TRANSFER_OWNER_TYPEHASH: TypedContractMethod<[], [string], "view">;
 
@@ -1071,7 +1122,12 @@ export interface CofferdamHandleAnchor extends BaseContract {
   applyChange: TypedContractMethod<[handleId: BytesLike], [void], "nonpayable">;
 
   cancel: TypedContractMethod<
-    [handleId: BytesLike, deadline: BigNumberish, ownerSig: BytesLike],
+    [
+      handleId: BytesLike,
+      pendingNonce: BigNumberish,
+      deadline: BigNumberish,
+      ownerSig: BytesLike
+    ],
     [void],
     "nonpayable"
   >;
@@ -1083,7 +1139,6 @@ export interface CofferdamHandleAnchor extends BaseContract {
       handleId: BytesLike,
       handleOwner: AddressLike,
       metaAddress: BytesLike,
-      registrarNonce: BigNumberish,
       deadline: BigNumberish,
       registrarSig: BytesLike,
       ownerSig: BytesLike
@@ -1135,12 +1190,7 @@ export interface CofferdamHandleAnchor extends BaseContract {
   >;
 
   hold: TypedContractMethod<
-    [
-      handleId: BytesLike,
-      registrarNonce: BigNumberish,
-      deadline: BigNumberish,
-      registrarSig: BytesLike
-    ],
+    [handleId: BytesLike, deadline: BigNumberish, registrarSig: BytesLike],
     [void],
     "nonpayable"
   >;
@@ -1163,12 +1213,6 @@ export interface CofferdamHandleAnchor extends BaseContract {
     "view"
   >;
 
-  registrarNonceUsed: TypedContractMethod<
-    [arg0: AddressLike, arg1: BigNumberish],
-    [boolean],
-    "view"
-  >;
-
   rekeyOpId: TypedContractMethod<
     [handleId: BytesLike, newOwner: AddressLike, newMetaAddress: BytesLike],
     [string],
@@ -1183,6 +1227,17 @@ export interface CofferdamHandleAnchor extends BaseContract {
 
   removeRegistrar: TypedContractMethod<
     [registrar: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  renewHold: TypedContractMethod<
+    [
+      handleId: BytesLike,
+      frozenUntil: BigNumberish,
+      deadline: BigNumberish,
+      registrarSig: BytesLike
+    ],
     [void],
     "nonpayable"
   >;
@@ -1259,6 +1314,7 @@ export interface CofferdamHandleAnchor extends BaseContract {
   unfreeze: TypedContractMethod<
     [
       handleId: BytesLike,
+      frozenUntil: BigNumberish,
       deadline: BigNumberish,
       ownerSig: BytesLike,
       registrarSig: BytesLike
@@ -1270,8 +1326,7 @@ export interface CofferdamHandleAnchor extends BaseContract {
   veto: TypedContractMethod<
     [
       handleId: BytesLike,
-      changeNonce: BigNumberish,
-      registrarNonce: BigNumberish,
+      pendingNonce: BigNumberish,
       deadline: BigNumberish,
       registrarSig: BytesLike
     ],
@@ -1283,6 +1338,9 @@ export interface CofferdamHandleAnchor extends BaseContract {
     key: string | FunctionFragment
   ): T;
 
+  getFunction(
+    nameOrSignature: "ADVANCE_ACCEPT_TYPEHASH"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "ADVANCE_TYPEHASH"
   ): TypedContractMethod<[], [string], "view">;
@@ -1332,10 +1390,19 @@ export interface CofferdamHandleAnchor extends BaseContract {
     nameOrSignature: "QUARANTINE"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "REGISTRAR_ADVANCE_TYPEHASH"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "REGISTRAR_CLAIM_TYPEHASH"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "REGISTRAR_UNFREEZE_TYPEHASH"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "RELEASE_TYPEHASH"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "RENEW_HOLD_TYPEHASH"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "SAFE_DELAY"
@@ -1348,6 +1415,9 @@ export interface CofferdamHandleAnchor extends BaseContract {
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "SET_META_ADDRESS_TYPEHASH"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "TRANSFER_OWNER_ACCEPT_TYPEHASH"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "TRANSFER_OWNER_TYPEHASH"
@@ -1385,7 +1455,12 @@ export interface CofferdamHandleAnchor extends BaseContract {
   getFunction(
     nameOrSignature: "cancel"
   ): TypedContractMethod<
-    [handleId: BytesLike, deadline: BigNumberish, ownerSig: BytesLike],
+    [
+      handleId: BytesLike,
+      pendingNonce: BigNumberish,
+      deadline: BigNumberish,
+      ownerSig: BytesLike
+    ],
     [void],
     "nonpayable"
   >;
@@ -1399,7 +1474,6 @@ export interface CofferdamHandleAnchor extends BaseContract {
       handleId: BytesLike,
       handleOwner: AddressLike,
       metaAddress: BytesLike,
-      registrarNonce: BigNumberish,
       deadline: BigNumberish,
       registrarSig: BytesLike,
       ownerSig: BytesLike
@@ -1454,12 +1528,7 @@ export interface CofferdamHandleAnchor extends BaseContract {
   getFunction(
     nameOrSignature: "hold"
   ): TypedContractMethod<
-    [
-      handleId: BytesLike,
-      registrarNonce: BigNumberish,
-      deadline: BigNumberish,
-      registrarSig: BytesLike
-    ],
+    [handleId: BytesLike, deadline: BigNumberish, registrarSig: BytesLike],
     [void],
     "nonpayable"
   >;
@@ -1489,13 +1558,6 @@ export interface CofferdamHandleAnchor extends BaseContract {
     "view"
   >;
   getFunction(
-    nameOrSignature: "registrarNonceUsed"
-  ): TypedContractMethod<
-    [arg0: AddressLike, arg1: BigNumberish],
-    [boolean],
-    "view"
-  >;
-  getFunction(
     nameOrSignature: "rekeyOpId"
   ): TypedContractMethod<
     [handleId: BytesLike, newOwner: AddressLike, newMetaAddress: BytesLike],
@@ -1512,6 +1574,18 @@ export interface CofferdamHandleAnchor extends BaseContract {
   getFunction(
     nameOrSignature: "removeRegistrar"
   ): TypedContractMethod<[registrar: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "renewHold"
+  ): TypedContractMethod<
+    [
+      handleId: BytesLike,
+      frozenUntil: BigNumberish,
+      deadline: BigNumberish,
+      registrarSig: BytesLike
+    ],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "resolve"
   ): TypedContractMethod<
@@ -1587,6 +1661,7 @@ export interface CofferdamHandleAnchor extends BaseContract {
   ): TypedContractMethod<
     [
       handleId: BytesLike,
+      frozenUntil: BigNumberish,
       deadline: BigNumberish,
       ownerSig: BytesLike,
       registrarSig: BytesLike
@@ -1599,8 +1674,7 @@ export interface CofferdamHandleAnchor extends BaseContract {
   ): TypedContractMethod<
     [
       handleId: BytesLike,
-      changeNonce: BigNumberish,
-      registrarNonce: BigNumberish,
+      pendingNonce: BigNumberish,
       deadline: BigNumberish,
       registrarSig: BytesLike
     ],
