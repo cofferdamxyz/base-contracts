@@ -153,19 +153,22 @@ export function describeCustomError(iface: Interface, data: string): string | nu
 }
 
 /**
- * A revert's reason for printing: the error decoded from `iface`, its bytes32
+ * A revert's reason for printing: the error decoded from the first of `ifaces`
+ * that knows it, its bytes32
  * arguments withheld, from ethers' revert data or anvil's message ("custom
  * error 0x<selector>: <hex>", which reaches ethers undecoded); otherwise the
  * first line of the message with every long hex run withheld. The registry's
  * IdentifierAlreadyBound, AccountAlreadyBound and RetiredIdentifier carry the
  * identifier, which a script never prints.
  */
-export function revertReason(iface: Interface, e: unknown): string {
+export function revertReason(ifaces: Interface | Interface[], e: unknown): string {
   const err = (e ?? {}) as { shortMessage?: string; message?: string; data?: unknown };
   const text = `${err.shortMessage ?? ''}\n${err.message ?? String(e)}`;
   const anvil = /custom error (0x[0-9a-fA-F]{8}):\s*([0-9a-fA-F]*)/.exec(text);
   const data = typeof err.data === 'string' && err.data.length >= 10 ? err.data : anvil ? anvil[1] + anvil[2] : null;
-  const described = data ? describeCustomError(iface, data) : null;
-  if (described) return `reverted ${described}`;
+  for (const iface of Array.isArray(ifaces) ? ifaces : [ifaces]) {
+    const described = data ? describeCustomError(iface, data) : null;
+    if (described) return `reverted ${described}`;
+  }
   return withholdWords(err.shortMessage ?? (err.message ?? String(e)).split('\n')[0]);
 }

@@ -2,8 +2,8 @@ import * as fs from 'fs';
 import { ethers, network } from 'hardhat';
 import { forkReceipt, chainId as nodeChainId, isLocalFork } from './lib/chain';
 import { readDeployments } from './lib/deployments';
-import { IDENTITY_ACTIONS, ZkpSolidityParams, revertReason, withholdWords, zkpCustomData, zkpEvidenceFromParams } from './lib/identity';
-import { CofferdamIdentityRegistry__factory } from '../typechain-types';
+import { IDENTITY_ACTIONS, ZKP_IDENTIFIER_TYPE, ZkpSolidityParams, revertReason, withholdWords, zkpCustomData, zkpEvidenceFromParams } from './lib/identity';
+import { CofferdamIdentityRegistry__factory, ZKPassportEvidenceAdapter__factory } from '../typechain-types';
 import type { CofferdamIdentityRegistry, ZKPassportExampleConsumer } from '../typechain-types';
 
 // Decision 0080: a real bound proof against a generation's registry on a local
@@ -42,11 +42,11 @@ import type { CofferdamIdentityRegistry, ZKPassportExampleConsumer } from '../ty
 /** The dashboard policy's name, which a request made through the policy would use as its scope. */
 const POLICY_SCOPE = 'zkp-test-1';
 
-const REGISTRY_ERRORS = CofferdamIdentityRegistry__factory.createInterface();
+const ERRORS = [CofferdamIdentityRegistry__factory.createInterface(), ZKPassportEvidenceAdapter__factory.createInterface()];
 
 // The reason only, the identifier withheld (./lib/identity revertReason).
 function reasonOf(e: unknown): string {
-  return revertReason(REGISTRY_ERRORS, e);
+  return revertReason(ERRORS, e);
 }
 
 async function main() {
@@ -98,14 +98,25 @@ async function main() {
   // the day after now + margin + validity: at least the validity of headroom.
   const fromTime = Math.max(Math.floor(Date.now() / 1000), (await ethers.provider.getBlock('latest'))!.timestamp);
   const expiryAfter = new Date((fromTime + Number(margin) + Number(validity) + 86_400) * 1000).toISOString().slice(0, 10);
-  console.log({ registry: registryAddr, adapter: adapterAddr, account, domain, scope, minAge: Number(minAge), validitySeconds: Number(validity), expiryMarginDays: Number(margin) / 86_400 });
+  const salted = Number(await adapter.IDENTIFIER_TYPE()) === ZKP_IDENTIFIER_TYPE.salted;
+  console.log({
+    registry: registryAddr,
+    adapter: adapterAddr,
+    account,
+    domain,
+    scope,
+    identifier: salted ? `salted, OPRF key hash ${await adapter.OPRF_KEY_HASH()}` : 'non-salted',
+    minAge: Number(minAge),
+    validitySeconds: Number(validity),
+    expiryMarginDays: Number(margin) / 86_400,
+  });
   console.log(`digest (custom_data): ${zkpCustomData(digest)}`);
 
   const file = process.env.ZKP_PARAMS_FILE?.trim();
   if (!file) {
     console.log(`\nRequest the proof (cofferdam-app worktree on branch zkpassport-test); it stays valid for ${Number(validity) / 60} minutes:`);
     console.log(
-      `  node scripts/zkpassport-test.mjs --probe --evm --scope ${scope} --address ${account} --custom-data ${zkpCustomData(digest)} --expiry-after ${expiryAfter}`,
+      `  node scripts/zkpassport-test.mjs ${salted ? '--salted' : '--probe'} --evm --scope ${scope} --address ${account} --custom-data ${zkpCustomData(digest)} --expiry-after ${expiryAfter}`,
     );
     console.log('Then stream its Solidity parameters through a named pipe, so no second copy lands on disk, into this script again:');
     console.log('  mkfifo -m 600 /tmp/zkp.fifo');
