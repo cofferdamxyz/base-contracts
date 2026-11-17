@@ -45,6 +45,32 @@ export async function isLocalFork(): Promise<boolean> {
   return false;
 }
 
+/**
+ * A fork's receipt, waited for through the forked RPC's refusals. anvil can
+ * answer `eth_sendTransaction` before the block that holds the transaction is
+ * in its store, and asks the forked RPC for a receipt it does not hold yet; an
+ * RPC that serves recent state only refuses that (publicnode on 2026-11-16:
+ * "Archive requests require a personal token"), and the wait throws although
+ * the transaction mines. `wait` is retried on that refusal only, `attempts`
+ * times, `delayMs` apart; a revert or any other error throws at once.
+ */
+export async function forkReceipt<T>(wait: () => Promise<T>, attempts = 10, delayMs = 1000): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await wait();
+    } catch (error) {
+      if (attempt >= attempts || !isForkTransportError(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
+/** anvil's error for a request it passed to the forked RPC, which refused or failed it. */
+export function isForkTransportError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('Fork Error: Transport');
+}
+
 /** Throw on Base mainnet (or a fork of it): for scripts whose contracts never go there. */
 export async function refuseMainnet(what: string): Promise<void> {
   if (await isBaseMainnetChain()) {

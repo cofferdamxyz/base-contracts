@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import { ethers, network } from 'hardhat';
-import { chainId as nodeChainId, isLocalFork } from './lib/chain';
+import { forkReceipt, chainId as nodeChainId, isLocalFork } from './lib/chain';
 import { readDeployments } from './lib/deployments';
 import { IDENTITY_ACTIONS, ZkpSolidityParams, zkpCustomData, zkpEvidenceFromParams } from './lib/identity';
 import type { CofferdamIdentityRegistry, ZKPassportExampleConsumer } from '../typechain-types';
@@ -76,7 +76,10 @@ async function main() {
   // Test accounts only: the owner (the Safe, for zkp-test-1) adds ACCOUNT, on this fork alone.
   if ((await registry.allowlistOnly()) && !(await registry.isTestAccount(account))) {
     const owner = await registry.owner();
-    await as(owner, async (s) => (await registry.connect(s).setTestAccount(account, true)).wait());
+    await as(owner, async (s) => {
+      const tx = await registry.connect(s).setTestAccount(account, true);
+      return forkReceipt(() => tx.wait());
+    });
     console.log(`Fork only: ${owner} (the owner) added ${account} as a test account`);
   }
 
@@ -239,7 +242,10 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  const receipt = await as(account, async (s) => (await registry.connect(s).bind(adapterAddr, evidence)).wait());
+  const receipt = await as(account, async (s) => {
+    const tx = await registry.connect(s).bind(adapterAddr, evidence);
+    return forkReceipt(() => tx.wait());
+  });
   console.log(`bind(): mined on the fork, gas used ${receipt!.gasUsed}; isAccountBound = ${await registry.isAccountBound(account)}`);
 }
 
