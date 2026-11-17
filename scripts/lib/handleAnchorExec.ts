@@ -175,6 +175,7 @@ export async function runAnchorSafeAction(o: {
       break;
     case 'anchor-accept-ownership':
       expect('owner', ((await anchor.owner(at)) as string).toLowerCase(), o.safeAddress.toLowerCase());
+      log(`  record ${o.safeAddress} as CofferdamHandleAnchorSafe in the generation's deployments file, or later anchor-* actions refuse it`);
       break;
   }
   return block;

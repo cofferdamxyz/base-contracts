@@ -77,6 +77,10 @@ import { runAnchorSafeAction } from './lib/handleAnchorExec';
 //                                                                        must be the anchor's pendingOwner;
 //                                                                        after the SAFE_DELAY timelock
 //   HANDLE_ANCHOR      default the generation's recorded CofferdamHandleAnchor
+//   SAFE_ADDRESS       for anchor-* actions, default the recorded CofferdamHandleAnchorSafe, else
+//                      CofferdamSafe. After anchor-accept-ownership, record the new Safe as
+//                      CofferdamHandleAnchorSafe in the generation's deployments file (never by
+//                      editing CofferdamSafe, which is the identity registry's Safe too)
 
 
 function pick(name: string, fromEnv: string | undefined, recorded: string | undefined): string {
@@ -103,11 +107,15 @@ async function main() {
     // recorded one yet: it is taken from SAFE_ADDRESS, and runAnchorSafeAction
     // checks it is the anchor's pendingOwner. Every other action is the
     // recorded Safe's.
+    // The anchor's Safe is recorded as CofferdamHandleAnchorSafe once it differs
+    // from the generation's CofferdamSafe (after a handover), so the identity
+    // registry's Safe record is never re-pointed for it.
     const accepting = action === 'anchor-accept-ownership';
+    const anchorSafe = recorded.CofferdamHandleAnchorSafe?.address ?? recorded.CofferdamSafe?.address;
     const safeAddress = accepting
       ? pick('SAFE_ADDRESS', process.env.SAFE_ADDRESS, undefined)
-      : pick('SAFE_ADDRESS', process.env.SAFE_ADDRESS, recorded.CofferdamSafe?.address);
-    const refused = safeExecRefusal(safeAddress, await readSafe(safeAddress), signer.address, accepting ? undefined : recorded.CofferdamSafe?.address);
+      : pick('SAFE_ADDRESS', process.env.SAFE_ADDRESS, anchorSafe);
+    const refused = safeExecRefusal(safeAddress, await readSafe(safeAddress), signer.address, accepting ? undefined : anchorSafe);
     if (refused) throw new Error(refused);
     if ((await isLocalFork()) && (await ethers.provider.getBalance(safeAddress)) === 0n) {
       await ethers.provider.send('hardhat_setBalance', [safeAddress, ethers.toBeHex(ethers.parseEther('0.01'))]);
