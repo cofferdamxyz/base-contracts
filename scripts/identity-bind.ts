@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import { ethers, network } from 'hardhat';
 import { forkReceipt, chainId as nodeChainId, isLocalFork } from './lib/chain';
 import { readDeployments } from './lib/deployments';
-import { IDENTITY_ACTIONS, ZkpSolidityParams, zkpCustomData, zkpEvidenceFromParams } from './lib/identity';
+import { IDENTITY_ACTIONS, ZkpSolidityParams, withholdWords, zkpCustomData, zkpEvidenceFromParams } from './lib/identity';
 import type { CofferdamIdentityRegistry, ZKPassportExampleConsumer } from '../typechain-types';
 
 // Decision 0080: a real bound proof against a generation's registry on a local
@@ -42,9 +42,11 @@ import type { CofferdamIdentityRegistry, ZKPassportExampleConsumer } from '../ty
 const POLICY_SCOPE = 'zkp-test-1';
 
 function reasonOf(e: unknown): string {
-  // The reason only: the revert data of a custom error carries no proof field.
+  // The reason only, with every 32-byte value withheld: the registry's errors
+  // carry the identifier (IdentifierAlreadyBound, AccountAlreadyBound,
+  // RetiredIdentifier), which this script never prints.
   const err = e as { shortMessage?: string; message: string };
-  return err.shortMessage ?? err.message.split('\n')[0];
+  return withholdWords(err.shortMessage ?? err.message.split('\n')[0]);
 }
 
 async function main() {
@@ -250,6 +252,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error);
+  console.error(withholdWords(error instanceof Error ? (error.stack ?? error.message) : String(error)));
   process.exitCode = 1;
 });

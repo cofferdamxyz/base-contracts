@@ -120,3 +120,11 @@ export function encodeZkpEvidence(p: {
 }): string {
   return abi.encode(['bytes32', 'bytes', 'bytes32[]', 'bytes'], [p.vkeyHash, p.proof, p.publicInputs, p.committedInputs]);
 }
+
+/**
+ * Text with every 32-byte hex word replaced by `<32 bytes withheld>`: a
+ * registry error names the identifier, and scripts print errors.
+ */
+export function withholdWords(text: string): string {
+  return text.replace(/0x[0-9a-fA-F]{64}(?![0-9a-fA-F])/g, '<32 bytes withheld>');
+}
