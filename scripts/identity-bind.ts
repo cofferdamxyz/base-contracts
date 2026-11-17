@@ -114,9 +114,7 @@ async function main() {
     return;
   }
 
-  // Read without blocking the event loop: a pipe can wait many minutes for the
-  // phone, and a loop blocked that long makes the RPC client time out its next
-  // request at once (undici's headers timeout, 2026-11-17: a proof read, then lost).
+  // Read without blocking the event loop: a pipe can wait many minutes for the phone.
   const params = JSON.parse(await fs.promises.readFile(file, 'utf8')) as ZkpSolidityParams;
   // anvil mines only on transactions, so its latest block can predate the
   // proof, which the verifier refuses as outside its validity: mine one now.
@@ -147,9 +145,8 @@ async function main() {
     if (helperForProof === ethers.ZeroAddress) report(`RootVerifier knows circuits ${label(proofVersion)}`, false);
     else if (process.env.ZKP_FORK_ADAPTER_VERSION === 'proof') {
       const Adapter = await ethers.getContractFactory('ZKPassportEvidenceAdapter');
-      const copy = await (
-        await Adapter.deploy(rootAddr, helperForProof, proofVersion, scope, validity, await adapter.IDENTIFIER_TYPE(), await adapter.OPRF_KEY_HASH(), minAge, margin)
-      ).waitForDeployment();
+      const sent = await Adapter.deploy(rootAddr, helperForProof, proofVersion, scope, validity, await adapter.IDENTIFIER_TYPE(), await adapter.OPRF_KEY_HASH(), minAge, margin);
+      const copy = await forkReceipt(() => sent.waitForDeployment());
       await ethers.provider.send('anvil_setCode', [adapterAddr, await ethers.provider.getCode(await copy.getAddress())]);
       console.log(`Fork only: the live adapter's code now pins circuits ${label(await adapter.VERSION())} (a copy, as a ${label(proofVersion)} adapter added through the timelock would)`);
     } else {
@@ -193,7 +190,8 @@ async function main() {
     report('the adapter accepts it', false, reasonOf(e));
   }
   const Example = await ethers.getContractFactory('ZKPassportExampleConsumer');
-  const example = (await (await Example.deploy(rootAddr, domain, scope, validity, minAge)).waitForDeployment()) as unknown as ZKPassportExampleConsumer;
+  const exampleSent = await Example.deploy(rootAddr, domain, scope, validity, minAge);
+  const example = (await forkReceipt(() => exampleSent.waitForDeployment())) as unknown as ZKPassportExampleConsumer;
   try {
     // The example wants the bound address as msg.sender.
     const exampleId: string = await as(account, async (s) => example.connect(s).verify(pinned));

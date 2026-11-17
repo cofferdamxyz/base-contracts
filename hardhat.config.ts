@@ -80,6 +80,10 @@ const config: HardhatUserConfig = {
     baseFork: {
       url: 'http://127.0.0.1:8546',
       chainId: 8453,
+      // A fork fetches the state it lacks from the forked RPC: the first proof
+      // verification on a fresh fork outlasts Hardhat's 20 s HTTP default
+      // (2026-11-17: two proofs read, then lost to a headers timeout).
+      timeout: 600_000,
       accounts: 'remote',
       ledgerAccounts: LEDGER_ACCOUNTS,
     },
