@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import { ethers, network } from 'hardhat';
 import { forkReceipt, chainId as nodeChainId, isLocalFork } from './lib/chain';
 import { readDeployments } from './lib/deployments';
-import { IDENTITY_ACTIONS, ZkpSolidityParams, withholdWords, zkpCustomData, zkpEvidenceFromParams } from './lib/identity';
+import { IDENTITY_ACTIONS, ZkpSolidityParams, revertReason, withholdWords, zkpCustomData, zkpEvidenceFromParams } from './lib/identity';
+import { CofferdamIdentityRegistry__factory } from '../typechain-types';
 import type { CofferdamIdentityRegistry, ZKPassportExampleConsumer } from '../typechain-types';
 
 // Decision 0080: a real bound proof against a generation's registry on a local
@@ -41,12 +42,11 @@ import type { CofferdamIdentityRegistry, ZKPassportExampleConsumer } from '../ty
 /** The dashboard policy's name, which a request made through the policy would use as its scope. */
 const POLICY_SCOPE = 'zkp-test-1';
 
+const REGISTRY_ERRORS = CofferdamIdentityRegistry__factory.createInterface();
+
+// The reason only, the identifier withheld (./lib/identity revertReason).
 function reasonOf(e: unknown): string {
-  // The reason only, with every 32-byte value withheld: the registry's errors
-  // carry the identifier (IdentifierAlreadyBound, AccountAlreadyBound,
-  // RetiredIdentifier), which this script never prints.
-  const err = e as { shortMessage?: string; message: string };
-  return withholdWords(err.shortMessage ?? err.message.split('\n')[0]);
+  return revertReason(REGISTRY_ERRORS, e);
 }
 
 async function main() {
@@ -114,7 +114,10 @@ async function main() {
     return;
   }
 
-  const params = JSON.parse(fs.readFileSync(file, 'utf8')) as ZkpSolidityParams;
+  // Read without blocking the event loop: a pipe can wait many minutes for the
+  // phone, and a loop blocked that long makes the RPC client time out its next
+  // request at once (undici's headers timeout, 2026-11-17: a proof read, then lost).
+  const params = JSON.parse(await fs.promises.readFile(file, 'utf8')) as ZkpSolidityParams;
   // anvil mines only on transactions, so its latest block can predate the
   // proof, which the verifier refuses as outside its validity: mine one now.
   await ethers.provider.send('evm_mine', []);
@@ -214,7 +217,7 @@ async function main() {
   // that covers its age; a read, never a bind. Prints only same or different.
   const earlierFile = process.env.ZKP_COMPARE_PARAMS_FILE?.trim();
   if (earlierFile && adapterId) {
-    const earlier = JSON.parse(fs.readFileSync(earlierFile, 'utf8')) as ZkpSolidityParams;
+    const earlier = JSON.parse(await fs.promises.readFile(earlierFile, 'utf8')) as ZkpSolidityParams;
     const label2 = label(earlier.version);
     try {
       const [valid, earlierId] = await root.verify({

@@ -1,7 +1,8 @@
 import { expect } from 'chai';
 
 import { forkReceipt, isForkTransportError } from '../scripts/lib/chain';
-import { withholdWords } from '../scripts/lib/identity';
+import { CofferdamIdentityRegistry__factory } from '../typechain-types';
+import { describeCustomError, revertReason, withholdWords } from '../scripts/lib/identity';
 
 // Script helpers. forkReceipt: a fork's receipt waited for through the forked RPC's refusals
 // (scripts/identity-bind.ts; publicnode refused anvil's receipt lookup on
@@ -56,8 +57,52 @@ describe('withholdWords', () => {
     expect(text).to.equal(`execution reverted: IdentifierAlreadyBound("<32 bytes withheld>", "${account}")`);
   });
 
-  it('leaves longer hex alone', () => {
-    const data = '0x' + 'cd'.repeat(36);
-    expect(withholdWords(data)).to.equal(data);
+  it('withholds a longer run whole, with or without 0x', () => {
+    // ethers prints an undecoded custom error's data without 0x: the selector,
+    // then the identifier and the account as one run.
+    const raw = 'e55adcda' + 'ab'.repeat(32) + '00'.repeat(12) + '70997970c51812dc3a010c7d01b50e0d17dc79c8';
+    expect(withholdWords(`custom error 0xe55adcda: ${raw.slice(8)}`)).to.equal('custom error 0xe55adcda: <64 bytes withheld>');
+    expect(withholdWords('0x' + 'cd'.repeat(36))).to.equal('<36 bytes withheld>');
+  });
+
+  it('keeps addresses, selectors and short values', () => {
+    const text = 'NotTestAccount(0x70997970C51812dc3A010C7d01b50e0d17dc79C8) 0xe55adcda';
+    expect(withholdWords(text)).to.equal(text);
+  });
+});
+
+describe('describeCustomError', () => {
+  const iface = CofferdamIdentityRegistry__factory.createInterface();
+
+  it("names the registry's error, withholds the identifier and keeps the account", () => {
+    const account = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
+    const data = iface.encodeErrorResult('IdentifierAlreadyBound', ['0x' + 'ab'.repeat(32), account]);
+    expect(data.slice(0, 10)).to.equal('0xe55adcda');
+    expect(describeCustomError(iface, data)).to.equal(`IdentifierAlreadyBound(<32 bytes withheld>, ${account})`);
+  });
+
+  it('answers null for data that is not one of its errors', () => {
+    expect(describeCustomError(iface, '0xdeadbeef')).to.equal(null);
+  });
+});
+
+describe('revertReason', () => {
+  const iface = CofferdamIdentityRegistry__factory.createInterface();
+  const account = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
+  const data = iface.encodeErrorResult('IdentifierAlreadyBound', ['0x' + 'ab'.repeat(32), account]);
+
+  it("decodes anvil's undecoded custom error, as the second account's check() printed it (2026-11-17)", () => {
+    const message = `execution reverted: custom error ${data.slice(0, 10)}: ${data.slice(10)}`;
+    expect(revertReason(iface, new Error(message))).to.equal(`reverted IdentifierAlreadyBound(<32 bytes withheld>, ${account})`);
+  });
+
+  it("decodes ethers' revert data", () => {
+    const error = Object.assign(new Error('execution reverted (unknown custom error)'), { data });
+    expect(revertReason(iface, error)).to.equal(`reverted IdentifierAlreadyBound(<32 bytes withheld>, ${account})`);
+  });
+
+  it('withholds the hex of an error it cannot decode', () => {
+    const message = `execution reverted: custom error 0xdeadbeef: ${'ab'.repeat(32)}`;
+    expect(revertReason(iface, new Error(message))).to.equal('execution reverted: custom error 0xdeadbeef: <32 bytes withheld>');
   });
 });

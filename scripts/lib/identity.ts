@@ -1,4 +1,4 @@
-import { AbiCoder, concat, getAddress, getBytes, keccak256, toBeArray, toUtf8Bytes } from 'ethers';
+import { AbiCoder, Interface, concat, getAddress, getBytes, keccak256, toBeArray, toUtf8Bytes } from 'ethers';
 
 // Encodings shared by CofferdamIdentityRegistry, ZKPassportEvidenceAdapter,
 // their tests and the deploy scripts (decision 0080). `@cofferdam/sdk` must
@@ -122,9 +122,50 @@ export function encodeZkpEvidence(p: {
 }
 
 /**
- * Text with every 32-byte hex word replaced by `<32 bytes withheld>`: a
- * registry error names the identifier, and scripts print errors.
+ * Text with every run of 32 bytes or more of hex, with or without `0x`,
+ * replaced by `<N bytes withheld>`: a registry error names the identifier,
+ * and ethers prints an undecoded custom error's data without its `0x`
+ * (2026-11-17), so a run is withheld whole.
  */
 export function withholdWords(text: string): string {
-  return text.replace(/0x[0-9a-fA-F]{64}(?![0-9a-fA-F])/g, '<32 bytes withheld>');
+  return text.replace(/(?:0x)?[0-9a-fA-F]{64,}/g, (run) => {
+    const digits = run.startsWith('0x') ? run.length - 2 : run.length;
+    return `<${Math.floor(digits / 2)} bytes withheld>`;
+  });
+}
+
+/**
+ * A custom error from `iface` named with its arguments, every bytes32 argument
+ * withheld; null when the data is not one of `iface`'s errors.
+ */
+export function describeCustomError(iface: Interface, data: string): string | null {
+  let parsed: ReturnType<Interface['parseError']>;
+  try {
+    parsed = iface.parseError(data);
+  } catch {
+    return null;
+  }
+  if (!parsed) return null;
+  const args = parsed.fragment.inputs.map((input, i) =>
+    input.type === 'bytes32' ? '<32 bytes withheld>' : String(parsed!.args[i]),
+  );
+  return `${parsed.name}(${args.join(', ')})`;
+}
+
+/**
+ * A revert's reason for printing: the error decoded from `iface`, its bytes32
+ * arguments withheld, from ethers' revert data or anvil's message ("custom
+ * error 0x<selector>: <hex>", which reaches ethers undecoded); otherwise the
+ * first line of the message with every long hex run withheld. The registry's
+ * IdentifierAlreadyBound, AccountAlreadyBound and RetiredIdentifier carry the
+ * identifier, which a script never prints.
+ */
+export function revertReason(iface: Interface, e: unknown): string {
+  const err = (e ?? {}) as { shortMessage?: string; message?: string; data?: unknown };
+  const text = `${err.shortMessage ?? ''}\n${err.message ?? String(e)}`;
+  const anvil = /custom error (0x[0-9a-fA-F]{8}):\s*([0-9a-fA-F]*)/.exec(text);
+  const data = typeof err.data === 'string' && err.data.length >= 10 ? err.data : anvil ? anvil[1] + anvil[2] : null;
+  const described = data ? describeCustomError(iface, data) : null;
+  if (described) return `reverted ${described}`;
+  return withholdWords(err.shortMessage ?? (err.message ?? String(e)).split('\n')[0]);
 }
