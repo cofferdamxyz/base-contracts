@@ -97,6 +97,7 @@ export const ANCHOR_SAFE_ACTIONS = [
   'anchor-cancel-op',
   'anchor-lift-freeze',
   'anchor-transfer-ownership',
+  'anchor-cancel-ownership-transfer',
   'anchor-accept-ownership',
 ] as const;
 export type AnchorSafeAction = (typeof ANCHOR_SAFE_ACTIONS)[number];
@@ -148,7 +149,7 @@ function quarantineFrom(env: NodeJS.ProcessEnv): boolean {
  *   NEW_OWNER, META_ADDRESS         anchor-rekey-schedule / anchor-rekey
  *   QUARANTINE 1 (default) or 0     anchor-force-release-schedule / anchor-force-release
  *   SAFE_OP_ID                      anchor-cancel-op
- *   NEW_SAFE                        anchor-transfer-ownership
+ *   NEW_SAFE                        anchor-transfer-ownership (accepted after SAFE_DELAY)
  */
 export function anchorCall(action: AnchorSafeAction, env: NodeJS.ProcessEnv): AnchorCall {
   switch (action) {
@@ -192,6 +193,8 @@ export function anchorCall(action: AnchorSafeAction, env: NodeJS.ProcessEnv): An
       const s = addressFrom(env, 'NEW_SAFE');
       return { fn: 'transferOwnership', args: [s], describe: `transferOwnership(${s})` };
     }
+    case 'anchor-cancel-ownership-transfer':
+      return { fn: 'cancelOwnershipTransfer', args: [], describe: 'cancelOwnershipTransfer()' };
     case 'anchor-accept-ownership':
       return { fn: 'acceptOwnership', args: [], describe: 'acceptOwnership()' };
   }

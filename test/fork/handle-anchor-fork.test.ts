@@ -141,10 +141,12 @@ describe('CofferdamHandleAnchor on a fork of Base mainnet (chain 8453)', functio
     await run('anchor-registrar-remove', { REGISTRAR: REGISTRAR.address });
     expect(await anchor.isRegistrar(REGISTRAR.address)).to.equal(false);
 
-    // Ownership handed to a second Safe in two steps.
+    // Ownership handed to a second Safe in two steps, behind the timelock.
     const safe2 = await createSafe('two');
     await run('anchor-transfer-ownership', { NEW_SAFE: safe2 });
     await rejects(run('anchor-accept-ownership', {}), /pending owner/);
+    await rejects(run('anchor-accept-ownership', {}, safe2), /SafeOpNotReady/);
+    await time.increase(M.safeDelay);
     await run('anchor-accept-ownership', {}, safe2);
     expect(await anchor.owner()).to.equal(safe2);
     await rejects(run('anchor-registrar-remove', { REGISTRAR: REGISTRAR_2.address }), /not the Safe/);

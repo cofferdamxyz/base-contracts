@@ -71,8 +71,11 @@ import { runAnchorSafeAction } from './lib/handleAnchorExec';
 //                                                                        1 (default) or 0 (timelocked)
 //                      anchor-cancel-op                                  SAFE_OP_ID (a scheduled operation)
 //                      anchor-lift-freeze                                HANDLE_LABEL or HANDLE_ID (immediate)
-//                      anchor-transfer-ownership                         NEW_SAFE (two-step)
-//                      anchor-accept-ownership                           sent by the new Safe
+//                      anchor-transfer-ownership                         NEW_SAFE (two-step, timelocked)
+//                      anchor-cancel-ownership-transfer                  withdraws the nomination
+//                      anchor-accept-ownership                           SAFE_ADDRESS the new Safe, which
+//                                                                        must be the anchor's pendingOwner;
+//                                                                        after the SAFE_DELAY timelock
 //   HANDLE_ANCHOR      default the generation's recorded CofferdamHandleAnchor
 
 
@@ -94,10 +97,17 @@ async function main() {
   await assertMainnetSigner(signer.address);
 
   const recorded = readDeployments(network.name, chainId);
-  const safeAddress = pick('SAFE_ADDRESS', process.env.SAFE_ADDRESS, recorded.CofferdamSafe?.address);
   if (isAnchorSafeAction(action)) {
     const anchorAddress = pick('HANDLE_ANCHOR', process.env.HANDLE_ANCHOR, recorded.CofferdamHandleAnchor?.address);
-    const refused = safeExecRefusal(safeAddress, await readSafe(safeAddress), signer.address, recorded.CofferdamSafe?.address);
+    // anchor-accept-ownership is sent by the NEW Safe, which is not the
+    // recorded one yet: it is taken from SAFE_ADDRESS, and runAnchorSafeAction
+    // checks it is the anchor's pendingOwner. Every other action is the
+    // recorded Safe's.
+    const accepting = action === 'anchor-accept-ownership';
+    const safeAddress = accepting
+      ? pick('SAFE_ADDRESS', process.env.SAFE_ADDRESS, undefined)
+      : pick('SAFE_ADDRESS', process.env.SAFE_ADDRESS, recorded.CofferdamSafe?.address);
+    const refused = safeExecRefusal(safeAddress, await readSafe(safeAddress), signer.address, accepting ? undefined : recorded.CofferdamSafe?.address);
     if (refused) throw new Error(refused);
     if ((await isLocalFork()) && (await ethers.provider.getBalance(safeAddress)) === 0n) {
       await ethers.provider.send('hardhat_setBalance', [safeAddress, ethers.toBeHex(ethers.parseEther('0.01'))]);
@@ -115,6 +125,7 @@ async function main() {
     });
     return;
   }
+  const safeAddress = pick('SAFE_ADDRESS', process.env.SAFE_ADDRESS, recorded.CofferdamSafe?.address);
   const registryAddress = pick('IDENTITY_REGISTRY', process.env.IDENTITY_REGISTRY, recorded.CofferdamIdentityRegistry?.address);
   const refusal = safeExecRefusal(safeAddress, await readSafe(safeAddress), signer.address, recorded.CofferdamSafe?.address);
   if (refusal) throw new Error(refusal);

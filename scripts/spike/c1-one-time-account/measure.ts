@@ -136,7 +136,10 @@ async function main() {
     } catch {
       raw = ethers.Transaction.from((await provider.getTransaction(txHash))!).serialized;
     }
-    const l1FeeWei: bigint = await retry(() => oracle.getL1Fee(raw));
+    // GasPriceOracle.getL1Fee takes the UNSIGNED RLP transaction and adds 68
+    // bytes for the signature itself (Fjord), so the signature is stripped.
+    const unsigned = ethers.Transaction.from(raw).unsignedSerialized;
+    const l1FeeWei: bigint = await retry(() => oracle.getL1Fee(unsigned));
     const l2FeeWei = receipt.gasUsed * (baseFee + TIP);
     rows.push({ case: caseName, form, gasUsed: receipt.gasUsed, l2FeeWei, l1FeeWei, totalWei: l2FeeWei + l1FeeWei, txBytes: ethers.dataLength(raw), note });
     console.log(`${form} | ${caseName}: gas ${receipt.gasUsed}, ${ethers.dataLength(raw)} tx bytes`);

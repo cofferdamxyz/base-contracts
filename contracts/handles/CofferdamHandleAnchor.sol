@@ -24,13 +24,14 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 ///         - **The registrar** (hot keys on a Safe-owned list) claims unowned
 ///           labels and may `hold` (freeze) a record, `renewHold`, or `veto`
 ///           its pending change (cancel and freeze), each for
-///           `FREEZE_DURATION`. A frozen record refuses every owner change
-///           except `advance`, and the Safe's `rekey`; `unfreeze` takes the
-///           owner's and a registrar's signatures.
-///         - **The Safe** (the contract `owner`, two-step transfer) adds
-///           registrars, `rekey`s and `forceRelease`s behind `SAFE_DELAY`, a
-///           timelock kept here because a Safe has none of its own; removing a
-///           registrar and lifting a freeze are immediate.
+///           `FREEZE_DURATION`. A frozen record has no pending change and
+///           refuses every owner change except `advance`, and the Safe's
+///           `rekey`; `unfreeze` takes the owner's and a registrar's
+///           signatures.
+///         - **The Safe** (the contract `owner`, two-step and timelocked
+///           transfer) adds registrars, `rekey`s and `forceRelease`s behind
+///           `SAFE_DELAY`, a timelock kept here because a Safe has none of
+///           its own; removing a registrar and lifting a freeze are immediate.
 ///
 ///         Signatures: EIP-712, domain `CofferdamHandleAnchor` version 1, with
 ///         the types of the SDK's `identity/handle.ts` (runbook step 1, whose
@@ -159,7 +160,10 @@ contract CofferdamHandleAnchor is EIP712 {
 
     /// @notice The Cofferdam Safe.
     address public owner;
+    /// @notice The owner `transferOwnership` named; it may accept from
+    ///         `pendingOwnerReadyAt` for `SAFE_OP_GRACE`.
     address public pendingOwner;
+    uint256 public pendingOwnerReadyAt;
 
     mapping(address => bool) public isRegistrar;
 
@@ -175,7 +179,8 @@ contract CofferdamHandleAnchor is EIP712 {
 
     // ── Events ───────────────────────────────────────────────────────────────
 
-    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner, uint256 readyAt);
+    event OwnershipTransferCancelled(address indexed pendingOwner);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event RegistrarAdded(address indexed registrar);
     event RegistrarRemoved(address indexed registrar);
@@ -206,6 +211,7 @@ contract CofferdamHandleAnchor is EIP712 {
 
     error NotOwner();
     error NotPendingOwner();
+    error NoPendingOwner();
     error ZeroAddress();
     error ZeroHandle();
     error DelayTooLong(uint256 delay, uint256 maximum);
@@ -370,9 +376,8 @@ contract CofferdamHandleAnchor is EIP712 {
     }
 
     /// @notice The owner withdraws the pending change named by `pendingNonce`, at once.
-    /// @dev    ASSUMPTION(0086 rule 3): a cancel is not an "owner change", so it
-    ///         stays open while the record is frozen; it only narrows what
-    ///         happens to the record.
+    /// @dev    A frozen record has no pending change (`hold` refuses one, `veto`
+    ///         clears it), so a cancel never meets a freeze.
     function cancel(bytes32 handleId, uint256 pendingNonce, uint64 deadline, bytes calldata ownerSig) external {
         _checkDeadline(deadline);
         Record storage r = _owned(handleId);
@@ -458,13 +463,20 @@ contract CofferdamHandleAnchor is EIP712 {
 
     // ── Freezes ──────────────────────────────────────────────────────────────
 
-    /// @notice A registrar freezes an owned record that is not frozen, for
-    ///         `FREEZE_DURATION` from now (the plane signs only after a High
-    ///         ceremony of the identity that holds the handle).
+    /// @notice A registrar freezes an owned record that is not frozen and has
+    ///         no pending change, for `FREEZE_DURATION` from now (the plane
+    ///         signs only after a High ceremony of the identity that holds the
+    ///         handle).
+    /// @dev    ASSUMPTION(0086 rule 3): a hold refuses a record with a pending
+    ///         change; the plane vetoes that change instead (a veto also
+    ///         freezes). So a frozen record never has a pending change, and no
+    ///         change queued before a freeze can ripen under it and apply the
+    ///         moment the freeze ends (review round 1, finding 1).
     function hold(bytes32 handleId, uint64 deadline, bytes calldata registrarSig) external {
         _checkDeadline(deadline);
         Record storage r = _owned(handleId);
         _notFrozen(r);
+        if (r.pendingKind != ChangeKind.None) revert ChangePending(r.pendingNonce);
         address registrar = _registrar(keccak256(abi.encode(HOLD_TYPEHASH, handleId, r.nonce, deadline)), registrarSig);
         r.nonce++;
         _freeze(handleId, r, registrar);
@@ -548,10 +560,16 @@ contract CofferdamHandleAnchor is EIP712 {
         derivable = handleOwner != address(0) && r.frozenUntil <= block.timestamp && r.pendingKind == ChangeKind.None;
     }
 
-    /// @notice The ERC-5564 scheme id and stealth meta-address of `handleId`
-    ///         (empty while unowned).
+    /// @notice The ERC-5564 scheme id and the stealth meta-address to derive
+    ///         to now: empty while the record is unowned, frozen or has a
+    ///         pending change, so a reader of this view alone stops deriving
+    ///         as 0086 rule 3 asks. `recordOf` gives the stored value.
     function stealthMetaAddressOf(bytes32 handleId) external view returns (uint256 schemeId, bytes memory metaAddress) {
-        return (SCHEME_ID, _records[handleId].metaAddress);
+        Record storage r = _records[handleId];
+        if (r.owner != address(0) && r.frozenUntil <= block.timestamp && r.pendingKind == ChangeKind.None) {
+            metaAddress = r.metaAddress;
+        }
+        return (SCHEME_ID, metaAddress);
     }
 
     function isFrozen(bytes32 handleId) external view returns (bool) {
@@ -580,17 +598,36 @@ contract CofferdamHandleAnchor is EIP712 {
 
     // ── The Safe ─────────────────────────────────────────────────────────────
 
+    /// @notice Name the next owner. Two steps and timelocked: 0086 rule 3
+    ///         leaves only removing a registrar and lifting a freeze immediate,
+    ///         so the new owner may `acceptOwnership` only from `SAFE_DELAY`
+    ///         later, within `SAFE_OP_GRACE` (review round 1, finding 2). A
+    ///         later call replaces the nomination and restarts the clock.
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert ZeroAddress();
+        uint256 readyAt = block.timestamp + SAFE_DELAY;
         pendingOwner = newOwner;
-        emit OwnershipTransferStarted(owner, newOwner);
+        pendingOwnerReadyAt = readyAt;
+        emit OwnershipTransferStarted(owner, newOwner, readyAt);
+    }
+
+    function cancelOwnershipTransfer() external onlyOwner {
+        address pending = pendingOwner;
+        if (pending == address(0)) revert NoPendingOwner();
+        pendingOwner = address(0);
+        pendingOwnerReadyAt = 0;
+        emit OwnershipTransferCancelled(pending);
     }
 
     function acceptOwnership() external {
         if (msg.sender != pendingOwner) revert NotPendingOwner();
+        uint256 readyAt = pendingOwnerReadyAt;
+        if (block.timestamp < readyAt) revert SafeOpNotReady(readyAt);
+        if (block.timestamp > readyAt + SAFE_OP_GRACE) revert SafeOpExpired(readyAt + SAFE_OP_GRACE);
         address previous = owner;
-        owner = pendingOwner;
+        owner = msg.sender;
         pendingOwner = address(0);
+        pendingOwnerReadyAt = 0;
         emit OwnershipTransferred(previous, owner);
     }
 

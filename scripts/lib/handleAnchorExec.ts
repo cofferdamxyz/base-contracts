@@ -12,6 +12,7 @@ import { AnchorSafeAction, anchorCall } from './handleAnchor';
 export const HANDLE_ANCHOR_EXEC_ABI = [
   'function owner() view returns (address)',
   'function pendingOwner() view returns (address)',
+  'function pendingOwnerReadyAt() view returns (uint256)',
   'function isRegistrar(address) view returns (bool)',
   'function safeOpReadyAt(bytes32) view returns (uint256)',
   'function isFrozen(bytes32) view returns (bool)',
@@ -32,6 +33,7 @@ export const HANDLE_ANCHOR_EXEC_ABI = [
   'function cancelSafeOp(bytes32)',
   'function liftFreeze(bytes32)',
   'function transferOwnership(address)',
+  'function cancelOwnershipTransfer()',
   'function acceptOwnership()',
 ];
 
@@ -62,6 +64,8 @@ export async function runAnchorSafeAction(o: {
   if (o.action === 'anchor-accept-ownership') {
     const pending: string = await anchor.pendingOwner();
     if (!same(pending, o.safeAddress)) throw new Error(`The anchor's pending owner is ${pending}, not the Safe ${o.safeAddress}`);
+    const readyAt: bigint = await anchor.pendingOwnerReadyAt();
+    log(`  ownership acceptable from ${new Date(Number(readyAt) * 1000).toISOString()}`);
   } else if (!same(anchorOwner, o.safeAddress)) {
     throw new Error(`The anchor ${o.anchorAddress} is owned by ${anchorOwner}, not the Safe ${o.safeAddress}`);
   }
@@ -160,8 +164,14 @@ export async function runAnchorSafeAction(o: {
     case 'anchor-lift-freeze':
       expect('isFrozen', await anchor.isFrozen(call.args[0], at), false);
       break;
-    case 'anchor-transfer-ownership':
+    case 'anchor-transfer-ownership': {
       expect('pendingOwner', ((await anchor.pendingOwner(at)) as string).toLowerCase(), (call.args[0] as string).toLowerCase());
+      const readyAt: bigint = await anchor.pendingOwnerReadyAt(at);
+      log(`  the new Safe accepts from ${new Date(Number(readyAt) * 1000).toISOString()}: SAFE_ACTION=anchor-accept-ownership SAFE_ADDRESS=<new Safe>`);
+      break;
+    }
+    case 'anchor-cancel-ownership-transfer':
+      expect('pendingOwner', await anchor.pendingOwner(at), ethers.ZeroAddress);
       break;
     case 'anchor-accept-ownership':
       expect('owner', ((await anchor.owner(at)) as string).toLowerCase(), o.safeAddress.toLowerCase());

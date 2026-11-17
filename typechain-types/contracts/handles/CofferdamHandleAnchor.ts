@@ -106,6 +106,7 @@ export interface CofferdamHandleAnchorInterface extends Interface {
       | "advance"
       | "applyChange"
       | "cancel"
+      | "cancelOwnershipTransfer"
       | "cancelSafeOp"
       | "claim"
       | "claimableAt"
@@ -121,6 +122,7 @@ export interface CofferdamHandleAnchorInterface extends Interface {
       | "nonceOf"
       | "owner"
       | "pendingOwner"
+      | "pendingOwnerReadyAt"
       | "recordOf"
       | "rekeyOpId"
       | "release"
@@ -150,6 +152,7 @@ export interface CofferdamHandleAnchorInterface extends Interface {
       | "Frozen"
       | "MetaAddressChanged"
       | "OwnerChanged"
+      | "OwnershipTransferCancelled"
       | "OwnershipTransferStarted"
       | "OwnershipTransferred"
       | "RegistrarAdded"
@@ -305,6 +308,10 @@ export interface CofferdamHandleAnchorInterface extends Interface {
     values: [BytesLike, BigNumberish, BigNumberish, BytesLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "cancelOwnershipTransfer",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "cancelSafeOp",
     values: [BytesLike]
   ): string;
@@ -360,6 +367,10 @@ export interface CofferdamHandleAnchorInterface extends Interface {
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "pendingOwner",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "pendingOwnerReadyAt",
     values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "recordOf", values: [BytesLike]): string;
@@ -551,6 +562,10 @@ export interface CofferdamHandleAnchorInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "cancel", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "cancelOwnershipTransfer",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "cancelSafeOp",
     data: BytesLike
   ): Result;
@@ -590,6 +605,10 @@ export interface CofferdamHandleAnchorInterface extends Interface {
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "pendingOwner",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "pendingOwnerReadyAt",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "recordOf", data: BytesLike): Result;
@@ -829,12 +848,33 @@ export namespace OwnerChangedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace OwnershipTransferCancelledEvent {
+  export type InputTuple = [pendingOwner: AddressLike];
+  export type OutputTuple = [pendingOwner: string];
+  export interface OutputObject {
+    pendingOwner: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace OwnershipTransferStartedEvent {
-  export type InputTuple = [previousOwner: AddressLike, newOwner: AddressLike];
-  export type OutputTuple = [previousOwner: string, newOwner: string];
+  export type InputTuple = [
+    previousOwner: AddressLike,
+    newOwner: AddressLike,
+    readyAt: BigNumberish
+  ];
+  export type OutputTuple = [
+    previousOwner: string,
+    newOwner: string,
+    readyAt: bigint
+  ];
   export interface OutputObject {
     previousOwner: string;
     newOwner: string;
+    readyAt: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -1132,6 +1172,8 @@ export interface CofferdamHandleAnchor extends BaseContract {
     "nonpayable"
   >;
 
+  cancelOwnershipTransfer: TypedContractMethod<[], [void], "nonpayable">;
+
   cancelSafeOp: TypedContractMethod<[opId: BytesLike], [void], "nonpayable">;
 
   claim: TypedContractMethod<
@@ -1206,6 +1248,8 @@ export interface CofferdamHandleAnchor extends BaseContract {
   owner: TypedContractMethod<[], [string], "view">;
 
   pendingOwner: TypedContractMethod<[], [string], "view">;
+
+  pendingOwnerReadyAt: TypedContractMethod<[], [bigint], "view">;
 
   recordOf: TypedContractMethod<
     [handleId: BytesLike],
@@ -1465,6 +1509,9 @@ export interface CofferdamHandleAnchor extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "cancelOwnershipTransfer"
+  ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "cancelSafeOp"
   ): TypedContractMethod<[opId: BytesLike], [void], "nonpayable">;
   getFunction(
@@ -1550,6 +1597,9 @@ export interface CofferdamHandleAnchor extends BaseContract {
   getFunction(
     nameOrSignature: "pendingOwner"
   ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "pendingOwnerReadyAt"
+  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "recordOf"
   ): TypedContractMethod<
@@ -1746,6 +1796,13 @@ export interface CofferdamHandleAnchor extends BaseContract {
     OwnerChangedEvent.OutputObject
   >;
   getEvent(
+    key: "OwnershipTransferCancelled"
+  ): TypedContractEvent<
+    OwnershipTransferCancelledEvent.InputTuple,
+    OwnershipTransferCancelledEvent.OutputTuple,
+    OwnershipTransferCancelledEvent.OutputObject
+  >;
+  getEvent(
     key: "OwnershipTransferStarted"
   ): TypedContractEvent<
     OwnershipTransferStartedEvent.InputTuple,
@@ -1916,7 +1973,18 @@ export interface CofferdamHandleAnchor extends BaseContract {
       OwnerChangedEvent.OutputObject
     >;
 
-    "OwnershipTransferStarted(address,address)": TypedContractEvent<
+    "OwnershipTransferCancelled(address)": TypedContractEvent<
+      OwnershipTransferCancelledEvent.InputTuple,
+      OwnershipTransferCancelledEvent.OutputTuple,
+      OwnershipTransferCancelledEvent.OutputObject
+    >;
+    OwnershipTransferCancelled: TypedContractEvent<
+      OwnershipTransferCancelledEvent.InputTuple,
+      OwnershipTransferCancelledEvent.OutputTuple,
+      OwnershipTransferCancelledEvent.OutputObject
+    >;
+
+    "OwnershipTransferStarted(address,address,uint256)": TypedContractEvent<
       OwnershipTransferStartedEvent.InputTuple,
       OwnershipTransferStartedEvent.OutputTuple,
       OwnershipTransferStartedEvent.OutputObject

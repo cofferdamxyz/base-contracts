@@ -297,6 +297,7 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
       expect([owner, serial, meta, derivable]).to.deep.equal([OWNER_E0.address, 1n, META_E0, true]);
       expect(await ctx.anchor.stealthMetaAddressOf(ID)).to.deep.equal([1n, META_E0]);
       expect(await ctx.anchor.claimableAt(ID)).to.equal(ethers.MaxUint256);
+      expect(await ctx.anchor.stealthMetaAddressOf(handleId('nobody'))).to.deep.equal([1n, '0x']);
       expect(await nonceOf(ctx)).to.equal(1n);
       await expect(claim(ctx, { owner: THIEF, meta: META_E2 })).to.be.revertedWithCustomError(ctx.anchor, 'AlreadyOwned').withArgs(ID);
     });
@@ -401,6 +402,17 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
       const ownerSig = await sign(ctx, OWNER_E0, 'TransferOwner', msg);
       const wrongType = await sign(ctx, OWNER_E1, 'TransferOwner', msg);
       await expect(ctx.anchor.transferOwner(ID, OWNER_E1.address, META_E1, FAR, ownerSig, wrongType)).to.be.revertedWithCustomError(ctx.anchor, 'WrongSigner');
+    });
+
+    it('stealthMetaAddressOf answers empty while a change is pending or the record is frozen (rule 3)', async function () {
+      const ctx = await loadFixture(claimed);
+      await queueRelease(ctx);
+      expect(await ctx.anchor.stealthMetaAddressOf(ID)).to.deep.equal([1n, '0x']);
+      expect((await ctx.anchor.recordOf(ID)).metaAddress).to.equal(META_E0);
+      await vetoBy(ctx, 1n);
+      expect(await ctx.anchor.stealthMetaAddressOf(ID)).to.deep.equal([1n, '0x']);
+      await time.increase(FREEZE);
+      expect(await ctx.anchor.stealthMetaAddressOf(ID)).to.deep.equal([1n, META_E0]);
     });
 
     it('applies setMetaAddress after 72 hours', async function () {
@@ -536,18 +548,26 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
       await expect(ctx.anchor.veto(ID, 1n, FAR, sig)).to.be.revertedWithCustomError(ctx.anchor, 'NoPendingChange');
     });
 
-    it('a frozen record refuses every owner change, and applying a change queued before the hold', async function () {
+    it('a frozen record refuses every owner change', async function () {
       const ctx = await loadFixture(claimed);
-      await queueRelease(ctx);
       await holdBy(ctx);
       const until = await frozenUntilOf(ctx);
       await expect(queueTransfer(ctx)).to.be.revertedWithCustomError(ctx.anchor, 'RecordFrozen').withArgs(until);
       await expect(queueSetMeta(ctx)).to.be.revertedWithCustomError(ctx.anchor, 'RecordFrozen');
       await expect(queueRelease(ctx)).to.be.revertedWithCustomError(ctx.anchor, 'RecordFrozen');
-      await time.increase(CHANGE_DELAY);
-      await expect(ctx.anchor.applyChange(ID)).to.be.revertedWithCustomError(ctx.anchor, 'RecordFrozen').withArgs(until);
-      // ASSUMPTION(0086 rule 3): the owner's cancel stays open while frozen.
-      await expect(cancelBy(ctx, OWNER_E0)).to.emit(ctx.anchor, 'ChangeCancelled');
+      expect((await ctx.anchor.recordOf(ID)).pendingKind).to.equal(0n);
+    });
+
+    it('a hold refuses a record with a pending change (ASSUMPTION rule 3): the plane vetoes it, so nothing ripens under a freeze', async function () {
+      const ctx = await loadFixture(claimed);
+      await queueTransfer(ctx, { to: THIEF, meta: META_E2 });
+      await expect(holdBy(ctx)).to.be.revertedWithCustomError(ctx.anchor, 'ChangePending').withArgs(1n);
+      await vetoBy(ctx, 1n);
+      // The 72 hours and the freeze both run out: nothing is left to apply.
+      await time.increase(FREEZE + 1n);
+      expect(await ctx.anchor.isFrozen(ID)).to.equal(false);
+      await expect(ctx.anchor.applyChange(ID)).to.be.revertedWithCustomError(ctx.anchor, 'NoPendingChange');
+      expect((await ctx.anchor.resolve(ID)).handleOwner).to.equal(OWNER_E0.address);
     });
 
     it('a freeze lapses after 14 days; a hold refuses a frozen record, and RenewHold renews the freeze it names', async function () {
@@ -685,9 +705,8 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
       await expect(safe.scheduleAddRegistrar(REGISTRAR_2.address)).to.emit(ctx.anchor, 'SafeOpScheduled');
     });
 
-    it('rekeys a frozen record after 72 hours, clearing the freeze and any pending change; the owner cannot stop it (ASSUMPTION q16)', async function () {
+    it('rekeys a frozen record after 72 hours, clearing the freeze; the owner cannot stop it (ASSUMPTION q16)', async function () {
       const ctx = await loadFixture(claimed);
-      await queueRelease(ctx);
       await holdBy(ctx);
       const nonceBefore = await nonceOf(ctx);
       const safe = ctx.anchor.connect(ctx.safe);
@@ -695,13 +714,19 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
       await expect(safe.executeRekey(ID, OWNER_E2.address, META_E2)).to.be.revertedWithCustomError(ctx.anchor, 'SafeOpNotReady');
       // No function takes the record owner's signature over a scheduled rekey.
       await time.increase(SAFE_DELAY);
-      await expect(safe.executeRekey(ID, OWNER_E2.address, META_E2))
-        .to.emit(ctx.anchor, 'Rekeyed')
-        .withArgs(ID, OWNER_E0.address, OWNER_E2.address, 1n, META_E2)
-        .and.to.emit(ctx.anchor, 'ChangeCancelled');
+      await expect(safe.executeRekey(ID, OWNER_E2.address, META_E2)).to.emit(ctx.anchor, 'Rekeyed').withArgs(ID, OWNER_E0.address, OWNER_E2.address, 1n, META_E2);
       const r = await ctx.anchor.recordOf(ID);
       expect([r.owner, r.serial, r.metaAddress, r.frozenUntil, r.pendingKind, r.nonce]).to.deep.equal([OWNER_E2.address, 1n, META_E2, 0n, 0n, nonceBefore + 1n]);
       expect((await ctx.anchor.resolve(ID)).derivable).to.equal(true);
+    });
+
+    it('a rekey clears a pending change', async function () {
+      const ctx = await loadFixture(claimed);
+      await queueRelease(ctx);
+      await expect(safeRekey(ctx)).to.emit(ctx.anchor, 'ChangeCancelled').withArgs(ID, 1n);
+      expect((await ctx.anchor.recordOf(ID)).pendingKind).to.equal(0n);
+      await time.increase(CHANGE_DELAY);
+      await expect(ctx.anchor.applyChange(ID)).to.be.revertedWithCustomError(ctx.anchor, 'NoPendingChange');
     });
 
     it('a rekey voids what was signed for the record before it', async function () {
@@ -752,17 +777,34 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
       await expect(claim(ctx, { id: bob, owner: OWNER_E1, meta: META_E1 })).to.emit(ctx.anchor, 'Claimed').withArgs(bob, OWNER_E1.address, 2n, META_E1, REGISTRAR.address);
     });
 
-    it('transfers ownership in two steps', async function () {
+    it('transfers ownership in two steps, behind the 72-hour timelock and within its grace; the Safe may cancel', async function () {
       const ctx = await loadFixture(deploy);
-      await expect(ctx.anchor.connect(ctx.safe).transferOwnership(ethers.ZeroAddress)).to.be.revertedWithCustomError(ctx.anchor, 'ZeroAddress');
-      await expect(ctx.anchor.connect(ctx.safe).transferOwnership(ctx.newSafe.address))
-        .to.emit(ctx.anchor, 'OwnershipTransferStarted')
-        .withArgs(ctx.safe.address, ctx.newSafe.address);
+      const safe = ctx.anchor.connect(ctx.safe);
+      await expect(safe.transferOwnership(ethers.ZeroAddress)).to.be.revertedWithCustomError(ctx.anchor, 'ZeroAddress');
+      await expect(safe.cancelOwnershipTransfer()).to.be.revertedWithCustomError(ctx.anchor, 'NoPendingOwner');
+      await expect(ctx.anchor.connect(ctx.stranger).cancelOwnershipTransfer()).to.be.revertedWithCustomError(ctx.anchor, 'NotOwner');
+      // A nomination withdrawn.
+      await safe.transferOwnership(ctx.stranger.address);
+      await expect(safe.cancelOwnershipTransfer()).to.emit(ctx.anchor, 'OwnershipTransferCancelled').withArgs(ctx.stranger.address);
+      await time.increase(SAFE_DELAY);
+      await expect(ctx.anchor.connect(ctx.stranger).acceptOwnership()).to.be.revertedWithCustomError(ctx.anchor, 'NotPendingOwner');
+      // A nomination left past its grace.
+      await safe.transferOwnership(ctx.newSafe.address);
+      const grace = await ctx.anchor.SAFE_OP_GRACE();
+      await time.increase(SAFE_DELAY + grace + 1n);
+      await expect(ctx.anchor.connect(ctx.newSafe).acceptOwnership()).to.be.revertedWithCustomError(ctx.anchor, 'SafeOpExpired');
+      // The nomination that lands.
+      await expect(safe.transferOwnership(ctx.newSafe.address)).to.emit(ctx.anchor, 'OwnershipTransferStarted');
+      const readyAt = BigInt(await time.latest()) + SAFE_DELAY;
+      expect(await ctx.anchor.pendingOwnerReadyAt()).to.equal(readyAt);
       expect(await ctx.anchor.owner()).to.equal(ctx.safe.address);
       await expect(ctx.anchor.connect(ctx.stranger).acceptOwnership()).to.be.revertedWithCustomError(ctx.anchor, 'NotPendingOwner');
+      await expect(ctx.anchor.connect(ctx.newSafe).acceptOwnership()).to.be.revertedWithCustomError(ctx.anchor, 'SafeOpNotReady').withArgs(readyAt);
+      await time.increaseTo(readyAt);
       await expect(ctx.anchor.connect(ctx.newSafe).acceptOwnership()).to.emit(ctx.anchor, 'OwnershipTransferred').withArgs(ctx.safe.address, ctx.newSafe.address);
       expect(await ctx.anchor.owner()).to.equal(ctx.newSafe.address);
       expect(await ctx.anchor.pendingOwner()).to.equal(ethers.ZeroAddress);
+      expect(await ctx.anchor.pendingOwnerReadyAt()).to.equal(0n);
       await expect(ctx.anchor.connect(ctx.safe).removeRegistrar(REGISTRAR.address)).to.be.revertedWithCustomError(ctx.anchor, 'NotOwner');
     });
   });
@@ -776,8 +818,9 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
       const id = handleId(label);
       const receipts = [];
       receipts.push(await (await claim(ctx, { id })).wait());
-      receipts.push(await (await queueRelease(ctx, { id })).wait());
       receipts.push(await (await holdBy(ctx, { id })).wait());
+      receipts.push(await (await ctx.anchor.connect(ctx.safe).liftFreeze(id)).wait());
+      receipts.push(await (await queueRelease(ctx, { id })).wait());
       const labelHex = ethers.hexlify(ethers.toUtf8Bytes(label)).slice(2);
       let seen = 0;
       for (const rc of receipts) {
@@ -815,6 +858,7 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
       expect(anchorCall('anchor-cancel-op', { SAFE_OP_ID: ID }).fn).to.equal('cancelSafeOp');
       expect(anchorCall('anchor-transfer-ownership', { NEW_SAFE: OWNER_E1.address }).args).to.deep.equal([OWNER_E1.address]);
       expect(anchorCall('anchor-accept-ownership', {}).args).to.deep.equal([]);
+      expect(anchorCall('anchor-cancel-ownership-transfer', {}).fn).to.equal('cancelOwnershipTransfer');
 
       expect(() => anchorCall('anchor-registrar-add', {})).to.throw(/REGISTRAR is required/);
       expect(() => anchorCall('anchor-lift-freeze', {})).to.throw(/HANDLE_LABEL .* or HANDLE_ID/);
