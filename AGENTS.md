@@ -4,8 +4,10 @@
 
 Cofferdam's Base contracts: the ERC-4337 account layer (`contracts/account/`,
 `contracts/auth/`, `contracts/registry/`), the Self.xyz registries (`contracts/self/`), the
-identity registry and its ZKPassport adapter (`contracts/identity/`, decision 0080) and the
-interfaces, all MIT, plus the proprietary enterprise module as the private git
+identity registry and its ZKPassport adapter (`contracts/identity/`, decision 0080), the
+handle anchor (`contracts/handles/`, decision 0086; not deployed) and the
+interfaces, all MIT, a gas-measurement spike that is never deployed
+(`contracts/spike/`), plus the proprietary enterprise module as the private git
 submodule `contracts/enterprise/` (`cofferdamxyz/enterprise-contracts`,
 decision 0002). Hardhat with TypeScript tests. Design and the byte-level
 encoding live in the workspace: `docs/architecture/contracts.md` and
