@@ -2,6 +2,7 @@
 // Imports nothing from Hardhat, so the tests call it without a network.
 
 import { SAFE_V141, type SafeFacts } from './devKeyException';
+import { ANCHOR_SAFE_ACTIONS } from './handleAnchor';
 
 export const SAFE_EXEC_ABI = [
   'function execTransaction(address to, uint256 value, bytes data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address payable refundReceiver, bytes signatures) payable returns (bool success)',
@@ -10,8 +11,11 @@ export const SAFE_EXEC_ABI = [
   'event ExecutionFailure(bytes32 indexed txHash, uint256 payment)',
 ];
 
-/** What `SAFE_ACTION` may name. */
-export const SAFE_ACTIONS = ['pause-drill', 'adapter-drill', 'adapter-propose', 'adapter-activate', 'adapter-cancel', 'set-test-account', 'pause', 'unpause'] as const;
+/** What `SAFE_ACTION` may name: the identity registry's actions, then the handle anchor's (`anchor-*`, ./handleAnchor.ts). */
+export const SAFE_ACTIONS = [
+  'pause-drill', 'adapter-drill', 'adapter-propose', 'adapter-activate', 'adapter-cancel', 'set-test-account', 'pause', 'unpause',
+  ...ANCHOR_SAFE_ACTIONS,
+] as const;
 export type SafeAction = (typeof SAFE_ACTIONS)[number];
 
 export function parseSafeAction(value: string | undefined): SafeAction {

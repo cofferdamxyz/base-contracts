@@ -76,6 +76,8 @@ export type { CofferdamSubTreasuryFactory } from "./contracts/enterprise/treasur
 export { CofferdamSubTreasuryFactory__factory } from "./factories/contracts/enterprise/treasury/CofferdamSubTreasuryFactory__factory";
 export type { CofferdamWalletBind } from "./contracts/enterprise/wallet/CofferdamWalletBind";
 export { CofferdamWalletBind__factory } from "./factories/contracts/enterprise/wallet/CofferdamWalletBind__factory";
+export type { CofferdamHandleAnchor } from "./contracts/handles/CofferdamHandleAnchor";
+export { CofferdamHandleAnchor__factory } from "./factories/contracts/handles/CofferdamHandleAnchor__factory";
 export type { CofferdamIdentityRegistry } from "./contracts/identity/CofferdamIdentityRegistry";
 export { CofferdamIdentityRegistry__factory } from "./factories/contracts/identity/CofferdamIdentityRegistry__factory";
 export type { IIdentityEvidenceAdapter } from "./contracts/identity/IIdentityEvidenceAdapter";

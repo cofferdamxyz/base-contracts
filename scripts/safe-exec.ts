@@ -12,6 +12,8 @@ import {
   senderOwnerSignature,
 } from './lib/safe';
 import { zkpCircuitsVersion } from './lib/identity';
+import { isAnchorSafeAction } from './lib/handleAnchor';
+import { runAnchorSafeAction } from './lib/handleAnchorExec';
 
 // Owner actions on a generation's identity registry, sent through the Safe that
 // owns it, as production's will be (decision 0017; for zkp-test-1, the
@@ -54,6 +56,24 @@ import { zkpCircuitsVersion } from './lib/identity';
 //
 // Effects are read back at the block that mined the transaction, so a public
 // endpoint's lagging backend cannot report the state before it.
+//
+// The handle anchor's actions (workspace decision 0086, rule 3), sent to
+// CofferdamHandleAnchor instead of the registry. Timelocked ones are scheduled,
+// then executed after its SAFE_DELAY and within SAFE_OP_GRACE:
+//
+//   SAFE_ACTION        anchor-registrar-schedule, anchor-registrar-add   REGISTRAR (timelocked)
+//                      anchor-registrar-remove                           REGISTRAR (immediate)
+//                      anchor-rekey-schedule, anchor-rekey               HANDLE_LABEL or HANDLE_ID, NEW_OWNER,
+//                                                                        META_ADDRESS (timelocked; also on a
+//                                                                        frozen or released record)
+//                      anchor-force-release-schedule, anchor-force-release
+//                                                                        HANDLE_LABEL or HANDLE_ID, QUARANTINE
+//                                                                        1 (default) or 0 (timelocked)
+//                      anchor-cancel-op                                  SAFE_OP_ID (a scheduled operation)
+//                      anchor-lift-freeze                                HANDLE_LABEL or HANDLE_ID (immediate)
+//                      anchor-transfer-ownership                         NEW_SAFE (two-step)
+//                      anchor-accept-ownership                           sent by the new Safe
+//   HANDLE_ANCHOR      default the generation's recorded CofferdamHandleAnchor
 
 
 function pick(name: string, fromEnv: string | undefined, recorded: string | undefined): string {
@@ -75,6 +95,26 @@ async function main() {
 
   const recorded = readDeployments(network.name, chainId);
   const safeAddress = pick('SAFE_ADDRESS', process.env.SAFE_ADDRESS, recorded.CofferdamSafe?.address);
+  if (isAnchorSafeAction(action)) {
+    const anchorAddress = pick('HANDLE_ANCHOR', process.env.HANDLE_ANCHOR, recorded.CofferdamHandleAnchor?.address);
+    const refused = safeExecRefusal(safeAddress, await readSafe(safeAddress), signer.address, recorded.CofferdamSafe?.address);
+    if (refused) throw new Error(refused);
+    if ((await isLocalFork()) && (await ethers.provider.getBalance(safeAddress)) === 0n) {
+      await ethers.provider.send('hardhat_setBalance', [safeAddress, ethers.toBeHex(ethers.parseEther('0.01'))]);
+    }
+    const artifact = await ethers.getContractFactory('CofferdamHandleAnchor');
+    await runAnchorSafeAction({
+      action,
+      env: process.env,
+      provider: ethers.provider,
+      signer,
+      safeAddress,
+      anchorAddress,
+      errorInterface: artifact.interface,
+      log: (line) => console.log(line),
+    });
+    return;
+  }
   const registryAddress = pick('IDENTITY_REGISTRY', process.env.IDENTITY_REGISTRY, recorded.CofferdamIdentityRegistry?.address);
   const refusal = safeExecRefusal(safeAddress, await readSafe(safeAddress), signer.address, recorded.CofferdamSafe?.address);
   if (refusal) throw new Error(refusal);

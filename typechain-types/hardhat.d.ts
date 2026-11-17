@@ -154,6 +154,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.CofferdamWalletBind__factory>;
     getContractFactory(
+      name: "CofferdamHandleAnchor",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.CofferdamHandleAnchor__factory>;
+    getContractFactory(
       name: "CofferdamIdentityRegistry",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.CofferdamIdentityRegistry__factory>;
@@ -434,6 +438,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.CofferdamWalletBind>;
     getContractAt(
+      name: "CofferdamHandleAnchor",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.CofferdamHandleAnchor>;
+    getContractAt(
       name: "CofferdamIdentityRegistry",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -705,6 +714,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.CofferdamWalletBind>;
     deployContract(
+      name: "CofferdamHandleAnchor",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.CofferdamHandleAnchor>;
+    deployContract(
       name: "CofferdamIdentityRegistry",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.CofferdamIdentityRegistry>;
@@ -984,6 +997,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.CofferdamWalletBind>;
+    deployContract(
+      name: "CofferdamHandleAnchor",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.CofferdamHandleAnchor>;
     deployContract(
       name: "CofferdamIdentityRegistry",
       args: any[],
