@@ -9,4 +9,5 @@ export * as identity from "./identity";
 export * as interfaces from "./interfaces";
 export * as registry from "./registry";
 export * as self from "./self";
+export * as spike from "./spike";
 export * as test from "./test";

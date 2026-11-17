@@ -34,6 +34,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC5267__factory>;
     getContractFactory(
+      name: "Clones",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.Clones__factory>;
+    getContractFactory(
       name: "ERC20",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ERC20__factory>;
@@ -222,6 +226,30 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Verifier_vc_and_disclose__factory>;
     getContractFactory(
+      name: "Spike7702Delegate",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.Spike7702Delegate__factory>;
+    getContractFactory(
+      name: "SpikeOneTimeAccount",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.SpikeOneTimeAccount__factory>;
+    getContractFactory(
+      name: "SpikeOneTimeAccountFactory",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.SpikeOneTimeAccountFactory__factory>;
+    getContractFactory(
+      name: "SpikeOneTimeAccountFull",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.SpikeOneTimeAccountFull__factory>;
+    getContractFactory(
+      name: "SpikeOneTimeAccountFullFactory",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.SpikeOneTimeAccountFullFactory__factory>;
+    getContractFactory(
+      name: "SpikeSponsorAllPaymaster",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.SpikeSponsorAllPaymaster__factory>;
+    getContractFactory(
       name: "MockCounter",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockCounter__factory>;
@@ -288,6 +316,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IERC5267>;
     getContractAt(
+      name: "Clones",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.Clones>;
+    getContractAt(
       name: "ERC20",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -522,6 +555,36 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.Verifier_vc_and_disclose>;
+    getContractAt(
+      name: "Spike7702Delegate",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.Spike7702Delegate>;
+    getContractAt(
+      name: "SpikeOneTimeAccount",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.SpikeOneTimeAccount>;
+    getContractAt(
+      name: "SpikeOneTimeAccountFactory",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.SpikeOneTimeAccountFactory>;
+    getContractAt(
+      name: "SpikeOneTimeAccountFull",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.SpikeOneTimeAccountFull>;
+    getContractAt(
+      name: "SpikeOneTimeAccountFullFactory",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.SpikeOneTimeAccountFullFactory>;
+    getContractAt(
+      name: "SpikeSponsorAllPaymaster",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.SpikeSponsorAllPaymaster>;
     getContractAt(
       name: "MockCounter",
       address: string | ethers.Addressable,
@@ -594,6 +657,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC5267>;
     deployContract(
+      name: "Clones",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Clones>;
+    deployContract(
       name: "ERC20",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ERC20>;
@@ -781,6 +848,30 @@ declare module "hardhat/types/runtime" {
       name: "Verifier_vc_and_disclose",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Verifier_vc_and_disclose>;
+    deployContract(
+      name: "Spike7702Delegate",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Spike7702Delegate>;
+    deployContract(
+      name: "SpikeOneTimeAccount",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SpikeOneTimeAccount>;
+    deployContract(
+      name: "SpikeOneTimeAccountFactory",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SpikeOneTimeAccountFactory>;
+    deployContract(
+      name: "SpikeOneTimeAccountFull",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SpikeOneTimeAccountFull>;
+    deployContract(
+      name: "SpikeOneTimeAccountFullFactory",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SpikeOneTimeAccountFullFactory>;
+    deployContract(
+      name: "SpikeSponsorAllPaymaster",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SpikeSponsorAllPaymaster>;
     deployContract(
       name: "MockCounter",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -848,6 +939,11 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC5267>;
     deployContract(
+      name: "Clones",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Clones>;
+    deployContract(
       name: "ERC20",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -1082,6 +1178,36 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Verifier_vc_and_disclose>;
+    deployContract(
+      name: "Spike7702Delegate",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Spike7702Delegate>;
+    deployContract(
+      name: "SpikeOneTimeAccount",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SpikeOneTimeAccount>;
+    deployContract(
+      name: "SpikeOneTimeAccountFactory",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SpikeOneTimeAccountFactory>;
+    deployContract(
+      name: "SpikeOneTimeAccountFull",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SpikeOneTimeAccountFull>;
+    deployContract(
+      name: "SpikeOneTimeAccountFullFactory",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SpikeOneTimeAccountFullFactory>;
+    deployContract(
+      name: "SpikeSponsorAllPaymaster",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SpikeSponsorAllPaymaster>;
     deployContract(
       name: "MockCounter",
       args: any[],

@@ -16,6 +16,8 @@ export type { IERC721Errors } from "./@openzeppelin/contracts/interfaces/draft-I
 export { IERC721Errors__factory } from "./factories/@openzeppelin/contracts/interfaces/draft-IERC6093.sol/IERC721Errors__factory";
 export type { IERC5267 } from "./@openzeppelin/contracts/interfaces/IERC5267";
 export { IERC5267__factory } from "./factories/@openzeppelin/contracts/interfaces/IERC5267__factory";
+export type { Clones } from "./@openzeppelin/contracts/proxy/Clones";
+export { Clones__factory } from "./factories/@openzeppelin/contracts/proxy/Clones__factory";
 export type { ERC20 } from "./@openzeppelin/contracts/token/ERC20/ERC20";
 export { ERC20__factory } from "./factories/@openzeppelin/contracts/token/ERC20/ERC20__factory";
 export type { IERC20Metadata } from "./@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata";
@@ -110,6 +112,18 @@ export type { SelfAttesterRegistry } from "./contracts/self/SelfAttesterRegistry
 export { SelfAttesterRegistry__factory } from "./factories/contracts/self/SelfAttesterRegistry__factory";
 export type { Verifier_vc_and_disclose } from "./contracts/self/Verifier_vc_and_disclose";
 export { Verifier_vc_and_disclose__factory } from "./factories/contracts/self/Verifier_vc_and_disclose__factory";
+export type { Spike7702Delegate } from "./contracts/spike/c1-one-time-account/SpikeOneTimeAccount.sol/Spike7702Delegate";
+export { Spike7702Delegate__factory } from "./factories/contracts/spike/c1-one-time-account/SpikeOneTimeAccount.sol/Spike7702Delegate__factory";
+export type { SpikeOneTimeAccount } from "./contracts/spike/c1-one-time-account/SpikeOneTimeAccount.sol/SpikeOneTimeAccount";
+export { SpikeOneTimeAccount__factory } from "./factories/contracts/spike/c1-one-time-account/SpikeOneTimeAccount.sol/SpikeOneTimeAccount__factory";
+export type { SpikeOneTimeAccountFactory } from "./contracts/spike/c1-one-time-account/SpikeOneTimeAccount.sol/SpikeOneTimeAccountFactory";
+export { SpikeOneTimeAccountFactory__factory } from "./factories/contracts/spike/c1-one-time-account/SpikeOneTimeAccount.sol/SpikeOneTimeAccountFactory__factory";
+export type { SpikeOneTimeAccountFull } from "./contracts/spike/c1-one-time-account/SpikeOneTimeAccount.sol/SpikeOneTimeAccountFull";
+export { SpikeOneTimeAccountFull__factory } from "./factories/contracts/spike/c1-one-time-account/SpikeOneTimeAccount.sol/SpikeOneTimeAccountFull__factory";
+export type { SpikeOneTimeAccountFullFactory } from "./contracts/spike/c1-one-time-account/SpikeOneTimeAccount.sol/SpikeOneTimeAccountFullFactory";
+export { SpikeOneTimeAccountFullFactory__factory } from "./factories/contracts/spike/c1-one-time-account/SpikeOneTimeAccount.sol/SpikeOneTimeAccountFullFactory__factory";
+export type { SpikeSponsorAllPaymaster } from "./contracts/spike/c1-one-time-account/SpikeOneTimeAccount.sol/SpikeSponsorAllPaymaster";
+export { SpikeSponsorAllPaymaster__factory } from "./factories/contracts/spike/c1-one-time-account/SpikeOneTimeAccount.sol/SpikeSponsorAllPaymaster__factory";
 export type { MockCounter } from "./contracts/test/MockCounter";
 export { MockCounter__factory } from "./factories/contracts/test/MockCounter__factory";
 export type { MockEntryPoint } from "./contracts/test/MockEntryPoint";

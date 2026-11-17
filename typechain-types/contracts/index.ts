@@ -17,5 +17,7 @@ import type * as registry from "./registry";
 export type { registry };
 import type * as self from "./self";
 export type { self };
+import type * as spike from "./spike";
+export type { spike };
 import type * as test from "./test";
 export type { test };
