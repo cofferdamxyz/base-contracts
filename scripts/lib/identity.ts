@@ -146,16 +146,21 @@ export function describeCustomError(iface: Interface, data: string): string | nu
     return null;
   }
   if (!parsed) return null;
-  const args = parsed.fragment.inputs.map((input, i) =>
-    input.type === 'bytes32' ? '<32 bytes withheld>' : String(parsed!.args[i]),
-  );
+  // A bytes32, or an integer too large to be a count, a date or an enum, may be an identifier:
+  // the adapter's WrongIdentifierType(expected, got) carried one when circuits 0.23.0 moved the
+  // public inputs (2026-11-18).
+  const args = parsed.fragment.inputs.map((input, i) => {
+    const value = parsed!.args[i];
+    if (input.type === 'bytes32') return '<32 bytes withheld>';
+    if (typeof value === 'bigint' && value >= 2n ** 64n) return `<${input.type} withheld>`;
+    return String(value);
+  });
   return `${parsed.name}(${args.join(', ')})`;
 }
 
 /**
  * A revert's reason for printing: the error decoded from the first of `ifaces`
- * that knows it, its bytes32
- * arguments withheld, from ethers' revert data or anvil's message ("custom
+ * that knows it, its bytes32 and large integer arguments withheld, from ethers' revert data or anvil's message ("custom
  * error 0x<selector>: <hex>", which reaches ethers undecoded); otherwise the
  * first line of the message with every long hex run withheld. The registry's
  * IdentifierAlreadyBound, AccountAlreadyBound and RetiredIdentifier carry the

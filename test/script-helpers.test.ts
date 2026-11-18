@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 
 import { forkReceipt, isForkTransportError } from '../scripts/lib/chain';
-import { CofferdamIdentityRegistry__factory } from '../typechain-types';
+import { CofferdamIdentityRegistry__factory, ZKPassportEvidenceAdapter__factory } from '../typechain-types';
 import { describeCustomError, revertReason, withholdWords } from '../scripts/lib/identity';
 
 // Script helpers. forkReceipt: a fork's receipt waited for through the forked RPC's refusals
@@ -79,6 +79,15 @@ describe('describeCustomError', () => {
     const data = iface.encodeErrorResult('IdentifierAlreadyBound', ['0x' + 'ab'.repeat(32), account]);
     expect(data.slice(0, 10)).to.equal('0xe55adcda');
     expect(describeCustomError(iface, data)).to.equal(`IdentifierAlreadyBound(<32 bytes withheld>, ${account})`);
+  });
+
+  it("withholds an integer argument too large to be a count: the adapter's WrongIdentifierType carried the identifier (2026-11-18)", () => {
+    const adapter = ZKPassportEvidenceAdapter__factory.createInterface();
+    const data = adapter.encodeErrorResult('WrongIdentifierType', [1n, 2n ** 250n + 7n]);
+    expect(describeCustomError(adapter, data)).to.equal('WrongIdentifierType(1, <uint256 withheld>)');
+    expect(describeCustomError(adapter, adapter.encodeErrorResult('ExpiryNotProven', [1797558977n]))).to.equal(
+      'ExpiryNotProven(1797558977)',
+    );
   });
 
   it('answers null for data that is not one of its errors', () => {
