@@ -31,15 +31,23 @@ import {IZKPassportHelper, IZKPassportRootVerifier} from "./IZKPassportRootVerif
 ///           public: no document bytes, no nationality or issuing-country
 ///           inclusion, no birth-date range, and no upper bound on age or
 ///           expiry (a range that closes reveals the value).
+///         - From circuits 0.23.0 the proof states how the document's data
+///           was verified, and only a government-signed document is accepted
+///           (verification methods 100 to 199: an eMRTD chip, Aadhaar, JPKI,
+///           an mDoc), never a camera read attested by a device (200 to 299;
+///           the founder, 2026-11-17, ruling S7 of decision 0080).
 /// @dev    `evidence` is `abi.encode(bytes32 vkeyHash, bytes proof,
 ///         bytes32[] publicInputs, bytes committedInputs)`, the fields of
 ///         SDK 0.19.3's `getSolidityVerifierParameters` that come from the
 ///         proof. Public inputs of an outer proof: [0] certificate registry
 ///         root, [1] circuit registry root, [2] proof date, [3] scope, [4]
-///         subscope, [5, n-3) parameter commitments, [n-3] identifier type,
-///         [n-2] identifier, [n-1] OPRF key hash. `RootVerifier` checks the
-///         committed inputs against the parameter commitments and the scopes
-///         against the service configuration.
+///         subscope, then the parameter commitments, then the trailing
+///         inputs: identifier type, identifier, OPRF key hash and, from
+///         circuits 0.23.0, the verification method (`TRAILING_INPUTS` is 3
+///         or 4, from the pinned version, as ZKPassport's SDK reads them by
+///         name). `RootVerifier` checks the committed inputs against the
+///         parameter commitments and the scopes against the service
+///         configuration.
 contract ZKPassportEvidenceAdapter is IIdentityEvidenceAdapter {
     /// @notice ZKPassport's verifier on Base mainnet; required on chain 8453.
     address public constant CANONICAL_ROOT_VERIFIER = 0x1D000001000EFD9a6371f4d90bB8920D5431c0D8;
@@ -53,6 +61,15 @@ contract ZKPassportEvidenceAdapter is IIdentityEvidenceAdapter {
     ///         their mocks, 4 none. Only 0 and 1 are accepted.
     uint8 public constant NON_SALTED = 0;
     uint8 public constant SALTED = 1;
+
+    /// @notice The first circuits version whose outer proof ends with the
+    ///         verification method (0.23.0).
+    bytes32 public constant VERIFICATION_METHOD_VERSION = bytes32(uint256(0x0000001700000000) << 192);
+    /// @notice Government-signed verification methods, the only ones accepted:
+    ///         100 the eMRTD chip, 101 Aadhaar, 102 JPKI, 103 an ISO mDoc, up to
+    ///         199. 200 to 299 are camera reads attested by a device.
+    uint256 public constant MIN_GOVERNMENT_SIGNED = 100;
+    uint256 public constant MAX_GOVERNMENT_SIGNED = 199;
 
     /// @notice Committed-input section types this adapter refuses: they put
     ///         document bytes, a nationality or an issuing country in calldata.
@@ -82,6 +99,9 @@ contract ZKPassportEvidenceAdapter is IIdentityEvidenceAdapter {
     ///         none. The proof's committed lower bound on the expiry date must
     ///         be at least `block.timestamp + EXPIRY_MARGIN`, with no upper bound.
     uint256 public immutable EXPIRY_MARGIN;
+    /// @notice How many public inputs follow the parameter commitments: 3
+    ///         before circuits 0.23.0, 4 from it (the verification method).
+    uint256 public immutable TRAILING_INPUTS;
     /// @notice Ceiling on `EXPIRY_MARGIN`.
     uint256 public constant MAX_EXPIRY_MARGIN = 5 * 365 days;
 
@@ -112,6 +132,7 @@ contract ZKPassportEvidenceAdapter is IIdentityEvidenceAdapter {
     error DisclosureRefused(uint8 sectionType);
     error MalformedCommittedInputs();
     error BindSectionCount(uint256 count);
+    error VerificationMethodRefused(uint256 method);
 
     /// @param rootVerifier ZKPassport's `RootVerifier`; must be canonical on Base mainnet.
     /// @param helper The helper `rootVerifier` names for `version` now; checked here.
@@ -156,6 +177,7 @@ contract ZKPassportEvidenceAdapter is IIdentityEvidenceAdapter {
         OPRF_KEY_HASH = oprfKeyHash;
         MIN_AGE = minAge;
         EXPIRY_MARGIN = expiryMargin;
+        TRAILING_INPUTS = uint256(version) >= uint256(VERIFICATION_METHOD_VERSION) ? 4 : 3;
         _scope = scope_;
         _identifierKind = keccak256(abi.encode("zkpassport-identifier-v1", identifierType, oprfKeyHash));
         _scopeId = keccak256(abi.encode(DOMAIN, scope_));
@@ -189,12 +211,19 @@ contract ZKPassportEvidenceAdapter is IIdentityEvidenceAdapter {
         (bytes32 vkeyHash, bytes memory proof, bytes32[] memory publicInputs, bytes memory committedInputs) =
             abi.decode(evidence, (bytes32, bytes, bytes32[], bytes));
         uint256 n = publicInputs.length;
-        if (n < 8) revert MalformedEvidence();
+        if (n < 5 + TRAILING_INPUTS) revert MalformedEvidence();
+        uint256 t = n - TRAILING_INPUTS;
 
-        uint256 idType = uint256(publicInputs[n - 3]);
+        uint256 idType = uint256(publicInputs[t]);
         if (idType != IDENTIFIER_TYPE) revert WrongIdentifierType(IDENTIFIER_TYPE, idType);
-        if (IDENTIFIER_TYPE == SALTED && publicInputs[n - 1] != OPRF_KEY_HASH) {
-            revert WrongOprfKey(OPRF_KEY_HASH, publicInputs[n - 1]);
+        if (IDENTIFIER_TYPE == SALTED && publicInputs[t + 2] != OPRF_KEY_HASH) {
+            revert WrongOprfKey(OPRF_KEY_HASH, publicInputs[t + 2]);
+        }
+        if (TRAILING_INPUTS == 4) {
+            uint256 method = uint256(publicInputs[t + 3]);
+            if (method < MIN_GOVERNMENT_SIGNED || method > MAX_GOVERNMENT_SIGNED) {
+                revert VerificationMethodRefused(method);
+            }
         }
 
         IZKPassportRootVerifier.ProofVerificationParams memory params = IZKPassportRootVerifier.ProofVerificationParams({
@@ -214,7 +243,7 @@ contract ZKPassportEvidenceAdapter is IIdentityEvidenceAdapter {
         });
         (bool valid, bytes32 uniqueIdentifier, address helper) = ROOT_VERIFIER.verify(params);
         if (!valid) revert ProofInvalid();
-        if (uniqueIdentifier != publicInputs[n - 2]) revert IdentifierMismatch(uniqueIdentifier, publicInputs[n - 2]);
+        if (uniqueIdentifier != publicInputs[t + 1]) revert IdentifierMismatch(uniqueIdentifier, publicInputs[t + 1]);
 
         // Fail closed when ZKPassport swaps the helper of this version.
         if (helper != address(HELPER) || ROOT_VERIFIER.getHelper(VERSION) != address(HELPER)) {

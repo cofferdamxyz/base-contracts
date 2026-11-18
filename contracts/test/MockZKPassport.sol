@@ -9,7 +9,9 @@ import {IZKPassportHelper, IZKPassportRootVerifier} from "../identity/zkpassport
 ///         commitments), its date plus the caller's validity has not passed,
 ///         and the caller's version and service configuration are the ones
 ///         set with `setExpected`. Like the real verifier it returns the
-///         identifier at `publicInputs[n-2]` and the version's helper.
+///         identifier, `publicInputs[n-2]` before circuits 0.23.0 and
+///         `publicInputs[n-3]` from it (the verification method comes last),
+///         and the version's helper.
 contract MockZKPassportRootVerifier is IZKPassportRootVerifier {
     bytes32 public constant MOCK_PROOF = keccak256("mock-zkpassport-proof");
 
@@ -44,7 +46,8 @@ contract MockZKPassportRootVerifier is IZKPassportRootVerifier {
         valid = pi.length >= 8 && keccak256(params.proofVerificationData.proof) == MOCK_PROOF
             && pi[5] == keccak256(params.committedInputs) && config == expectedConfig
             && block.timestamp <= uint256(pi[2]) + sc.validityPeriodInSeconds;
-        uniqueIdentifier = pi.length >= 8 ? pi[pi.length - 2] : bytes32(0);
+        uint256 tail = uint256(params.version) >= uint256(0x0000001700000000) << 192 ? 3 : 2;
+        uniqueIdentifier = pi.length >= 8 ? pi[pi.length - tail] : bytes32(0);
         helper = helpers[params.version];
     }
 }

@@ -145,23 +145,29 @@ async function main() {
   // The phone's ZKPassport app proves in its own circuits version; the adapter
   // pins one. A registry takes one adapter per version (added through the
   // owner's timelock); ZKP_FORK_ADAPTER_VERSION=proof stands one in on the
-  // fork: the live adapter's code is replaced by a copy pinned to the proof's
-  // version, its storage (the scope) and the registry untouched, so the
-  // digest still matches.
+  // fork: the live adapter's code is replaced by a copy compiled here and
+  // pinned to the proof's version, its storage (the scope) and the registry
+  // untouched, so the digest still matches. It also replaces a stand-in an
+  // earlier run left with other code (an adapter change since).
   const proofVersion = params.version;
   const adapterVersion: string = await adapter.VERSION();
-  if (proofVersion.toLowerCase() !== adapterVersion.toLowerCase()) {
-    const helperForProof: string = await root.getHelper(proofVersion);
+  const otherVersion = proofVersion.toLowerCase() !== adapterVersion.toLowerCase();
+  const helperForProof: string = await root.getHelper(proofVersion);
+  if (otherVersion) {
     console.log(`NOTE the proof is circuits ${label(proofVersion)}; the adapter pins ${label(adapterVersion)}. RootVerifier's helper for ${label(proofVersion)}: ${helperForProof}`);
     if (helperForProof === ethers.ZeroAddress) report(`RootVerifier knows circuits ${label(proofVersion)}`, false);
-    else if (process.env.ZKP_FORK_ADAPTER_VERSION === 'proof') {
-      const Adapter = await ethers.getContractFactory('ZKPassportEvidenceAdapter');
-      const sent = await Adapter.deploy(rootAddr, helperForProof, proofVersion, scope, validity, await adapter.IDENTIFIER_TYPE(), await adapter.OPRF_KEY_HASH(), minAge, margin);
-      const copy = await forkReceipt(() => sent.waitForDeployment());
-      await ethers.provider.send('anvil_setCode', [adapterAddr, await ethers.provider.getCode(await copy.getAddress())]);
-      console.log(`Fork only: the live adapter's code now pins circuits ${label(await adapter.VERSION())} (a copy, as a ${label(proofVersion)} adapter added through the timelock would)`);
-    } else {
+    else if (process.env.ZKP_FORK_ADAPTER_VERSION !== 'proof') {
       console.log(`  (ZKP_FORK_ADAPTER_VERSION=proof stands a ${label(proofVersion)} adapter in on the fork)`);
+    }
+  }
+  if (process.env.ZKP_FORK_ADAPTER_VERSION === 'proof' && helperForProof !== ethers.ZeroAddress) {
+    const Adapter = await ethers.getContractFactory('ZKPassportEvidenceAdapter');
+    const sent = await Adapter.deploy(rootAddr, helperForProof, proofVersion, scope, validity, await adapter.IDENTIFIER_TYPE(), await adapter.OPRF_KEY_HASH(), minAge, margin);
+    const copy = await forkReceipt(() => sent.waitForDeployment());
+    const code: string = await ethers.provider.getCode(await copy.getAddress());
+    if (code !== (await ethers.provider.getCode(adapterAddr))) {
+      await ethers.provider.send('anvil_setCode', [adapterAddr, code]);
+      console.log(`Fork only: the live adapter's code is now this checkout's, pinning circuits ${label(await adapter.VERSION())} (a copy, as a ${label(proofVersion)} adapter added through the timelock would)`);
     }
   }
 

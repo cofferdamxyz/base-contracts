@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { time } from '@nomicfoundation/hardhat-network-helpers';
+import { anyValue } from '@nomicfoundation/hardhat-chai-matchers/withArgs';
 import { ethers } from 'hardhat';
 import type { HardhatEthersSigner } from '@nomicfoundation/hardhat-ethers/signers';
 import type {
@@ -50,6 +51,8 @@ type EvidenceOptions = {
   identifier?: string;
   identifierType?: number;
   oprf?: string;
+  /** The verification method a circuits 0.23.0 proof ends with; undefined: none (before 0.23.0). */
+  method?: number;
   chainId?: bigint;
   age?: number;
   /** The proof's lower bound on the document's expiry; default bind time + 1 year. null: no expiry section. */
@@ -142,6 +145,7 @@ describe('CofferdamIdentityRegistry + ZKPassportEvidenceAdapter', () => {
       ethers.toBeHex(o.identifierType ?? ZKP_IDENTIFIER_TYPE.nonSalted, 32),
       o.identifier ?? ID_A,
       o.oprf ?? ZERO32,
+      ...(o.method === undefined ? [] : [ethers.toBeHex(o.method, 32)]),
     ];
     return encodeZkpEvidence({
       vkeyHash: ethers.id('vkey'),
@@ -434,6 +438,90 @@ describe('CofferdamIdentityRegistry + ZKPassportEvidenceAdapter', () => {
       const d = await deploy();
       const ev = encodeZkpEvidence({ vkeyHash: ZERO32, proof: MOCK_PROOF, publicInputs: [ZERO32], committedInputs: '0x' });
       await expect(d.registry.connect(alice).bind(d.adapter, ev)).to.be.revertedWithCustomError(d.adapter, 'MalformedEvidence');
+    });
+  });
+
+  describe('circuits 0.23.0: the verification method (decision 0080, ruling S7)', () => {
+    const V23 = zkpCircuitsVersion('0.23.0');
+
+    async function deploy23(o: { type?: number; oprf?: string } = {}) {
+      const type = o.type ?? ZKP_IDENTIFIER_TYPE.nonSalted;
+      const oprf = o.oprf ?? ZERO32;
+      const helper = await (await ethers.getContractFactory('MockZKPassportHelper')).deploy();
+      const root = (await (await ethers.getContractFactory('MockZKPassportRootVerifier')).deploy()) as unknown as MockZKPassportRootVerifier;
+      await root.setHelper(V23, await helper.getAddress());
+      await root.setExpected(V23, VALIDITY, ZKP_DOMAIN, SCOPE, false);
+      const adapter = (await (await ethers.getContractFactory('ZKPassportEvidenceAdapter')).deploy(
+        await root.getAddress(),
+        await helper.getAddress(),
+        V23,
+        SCOPE,
+        VALIDITY,
+        type,
+        oprf,
+        MIN_AGE,
+        EXPIRY_MARGIN,
+      )) as unknown as ZKPassportEvidenceAdapter;
+      const registry = (await (await ethers.getContractFactory('CofferdamIdentityRegistry')).deploy(
+        owner.address,
+        zkpIdentifierKind(type, oprf),
+        zkpScopeId(SCOPE),
+        0,
+        0,
+        [await adapter.getAddress()],
+        false,
+        [],
+      )) as unknown as CofferdamIdentityRegistry;
+      return { helper, root, adapter, registry } as unknown as Deployed;
+    }
+
+    it('reads four trailing inputs from 0.23.0, three before', async () => {
+      const d = await deploy23();
+      expect(await d.adapter.VERIFICATION_METHOD_VERSION()).to.equal(V23);
+      expect(await d.adapter.TRAILING_INPUTS()).to.equal(4);
+      expect(await (await deploy()).adapter.TRAILING_INPUTS()).to.equal(3);
+    });
+
+    it('binds a government-signed document: the chip, Aadhaar, the top of the range', async () => {
+      const d = await deploy23();
+      const cases: [HardhatEthersSigner, string, number][] = [
+        [alice, ID_A, 100],
+        [bob, ID_B, 101],
+        [carol, ethers.id('passport-c'), 199],
+      ];
+      for (const [who, identifier, method] of cases) {
+        await expect(d.registry.connect(who).bind(d.adapter, await evidence(d, { account: who.address, identifier, method })))
+          .to.emit(d.registry, 'Bound');
+      }
+    });
+
+    it('refuses a camera read attested by a device, and anything outside 100 to 199', async () => {
+      const d = await deploy23();
+      for (const method of [0, 99, 200, 201, 299, 300]) {
+        await expect(d.registry.connect(alice).bind(d.adapter, await evidence(d, { method })))
+          .to.be.revertedWithCustomError(d.adapter, 'VerificationMethodRefused')
+          .withArgs(method);
+      }
+    });
+
+    it("a salted 0.23.0 proof: the OPRF key read before the method, as ZKPassport's app proved on 2026-11-18", async () => {
+      const d = await deploy23({ type: ZKP_IDENTIFIER_TYPE.salted, oprf: OPRF });
+      await expect(d.registry.connect(alice).bind(d.adapter, await evidence(d, { identifierType: 1, oprf: ethers.id('oprf-key-2'), method: 100 })))
+        .to.be.revertedWithCustomError(d.adapter, 'WrongOprfKey');
+      await expect(d.registry.connect(alice).bind(d.adapter, await evidence(d, { identifierType: 1, oprf: OPRF, method: 100 })))
+        .to.emit(d.registry, 'Bound')
+        .withArgs(alice.address, ID_A, await d.adapter.getAddress(), anyValue);
+    });
+
+    it("refuses a proof of the other layout: an earlier adapter reads a 0.23.0 proof's identifier as its type", async () => {
+      const old = await deploy();
+      await expect(old.registry.connect(alice).bind(old.adapter, await evidence(old, { method: 100 })))
+        .to.be.revertedWithCustomError(old.adapter, 'WrongIdentifierType')
+        .withArgs(0, BigInt(ID_A));
+      const d = await deploy23();
+      await expect(d.registry.connect(alice).bind(d.adapter, await evidence(d))).to.be.revertedWithCustomError(d.adapter, 'WrongIdentifierType');
+      const short = encodeZkpEvidence({ vkeyHash: ZERO32, proof: MOCK_PROOF, publicInputs: new Array(8).fill(ZERO32), committedInputs: '0x' });
+      await expect(d.registry.connect(alice).bind(d.adapter, short)).to.be.revertedWithCustomError(d.adapter, 'MalformedEvidence');
     });
   });
 

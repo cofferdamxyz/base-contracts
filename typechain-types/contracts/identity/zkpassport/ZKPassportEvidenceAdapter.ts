@@ -31,13 +31,17 @@ export interface ZKPassportEvidenceAdapterInterface extends Interface {
       | "HELPER"
       | "IDENTIFIER_TYPE"
       | "MAX_EXPIRY_MARGIN"
+      | "MAX_GOVERNMENT_SIGNED"
       | "MAX_VALIDITY"
       | "MIN_AGE"
+      | "MIN_GOVERNMENT_SIGNED"
       | "NON_SALTED"
       | "OPRF_KEY_HASH"
       | "ROOT_VERIFIER"
       | "SALTED"
+      | "TRAILING_INPUTS"
       | "VALIDITY"
+      | "VERIFICATION_METHOD_VERSION"
       | "VERSION"
       | "customData"
       | "identifierKind"
@@ -70,10 +74,18 @@ export interface ZKPassportEvidenceAdapterInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "MAX_GOVERNMENT_SIGNED",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "MAX_VALIDITY",
     values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "MIN_AGE", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "MIN_GOVERNMENT_SIGNED",
+    values?: undefined
+  ): string;
   encodeFunctionData(
     functionFragment: "NON_SALTED",
     values?: undefined
@@ -87,7 +99,15 @@ export interface ZKPassportEvidenceAdapterInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "SALTED", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "TRAILING_INPUTS",
+    values?: undefined
+  ): string;
   encodeFunctionData(functionFragment: "VALIDITY", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "VERIFICATION_METHOD_VERSION",
+    values?: undefined
+  ): string;
   encodeFunctionData(functionFragment: "VERSION", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "customData",
@@ -128,10 +148,18 @@ export interface ZKPassportEvidenceAdapterInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "MAX_GOVERNMENT_SIGNED",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "MAX_VALIDITY",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "MIN_AGE", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "MIN_GOVERNMENT_SIGNED",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "NON_SALTED", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "OPRF_KEY_HASH",
@@ -142,7 +170,15 @@ export interface ZKPassportEvidenceAdapterInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "SALTED", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "TRAILING_INPUTS",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "VALIDITY", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "VERIFICATION_METHOD_VERSION",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "VERSION", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "customData", data: BytesLike): Result;
   decodeFunctionResult(
@@ -213,9 +249,13 @@ export interface ZKPassportEvidenceAdapter extends BaseContract {
 
   MAX_EXPIRY_MARGIN: TypedContractMethod<[], [bigint], "view">;
 
+  MAX_GOVERNMENT_SIGNED: TypedContractMethod<[], [bigint], "view">;
+
   MAX_VALIDITY: TypedContractMethod<[], [bigint], "view">;
 
   MIN_AGE: TypedContractMethod<[], [bigint], "view">;
+
+  MIN_GOVERNMENT_SIGNED: TypedContractMethod<[], [bigint], "view">;
 
   NON_SALTED: TypedContractMethod<[], [bigint], "view">;
 
@@ -225,7 +265,11 @@ export interface ZKPassportEvidenceAdapter extends BaseContract {
 
   SALTED: TypedContractMethod<[], [bigint], "view">;
 
+  TRAILING_INPUTS: TypedContractMethod<[], [bigint], "view">;
+
   VALIDITY: TypedContractMethod<[], [bigint], "view">;
+
+  VERIFICATION_METHOD_VERSION: TypedContractMethod<[], [string], "view">;
 
   VERSION: TypedContractMethod<[], [string], "view">;
 
@@ -272,10 +316,16 @@ export interface ZKPassportEvidenceAdapter extends BaseContract {
     nameOrSignature: "MAX_EXPIRY_MARGIN"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "MAX_GOVERNMENT_SIGNED"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "MAX_VALIDITY"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "MIN_AGE"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "MIN_GOVERNMENT_SIGNED"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "NON_SALTED"
@@ -290,8 +340,14 @@ export interface ZKPassportEvidenceAdapter extends BaseContract {
     nameOrSignature: "SALTED"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "TRAILING_INPUTS"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "VALIDITY"
   ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "VERIFICATION_METHOD_VERSION"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "VERSION"
   ): TypedContractMethod<[], [string], "view">;
