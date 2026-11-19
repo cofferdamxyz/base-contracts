@@ -364,6 +364,8 @@ describe('CofferdamZKPassportPepperAdapter (decision 0080, the pepper)', () => {
       await expect(bind(d, alice, await evidence(d, { date: now - VALIDITY })))
         .to.be.revertedWithCustomError(d.adapter, 'ProofDateInvalid');
       await expect(bind(d, alice, await evidence(d, { date: now + 60 }))).to.be.revertedWithCustomError(d.adapter, 'ProofDateInvalid');
+      const max = await evidence(d, { editInputs: (p) => (p[2] = ethers.toBeHex(ethers.MaxUint256, 32)) });
+      await expect(bind(d, alice, max)).to.be.revertedWithCustomError(d.adapter, 'ProofDateInvalid');
       await expect(bind(d, alice, await evidence(d, { date: now - VALIDITY + 10 }))).to.emit(d.registry, 'Bound');
     });
 

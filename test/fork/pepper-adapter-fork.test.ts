@@ -45,9 +45,18 @@ describe('The pepper adapter on a fork of Base mainnet (chain 8453)', function (
     if ((await ethers.provider.getNetwork()).chainId !== 8453n) this.skip();
     await network.provider.send('hardhat_mine', ['0x1']);
     root = (await ethers.getContractAt('IZKPassportRootVerifierState', ZKP_ROOT_VERIFIER)) as unknown as IZKPassportRootVerifierState;
-    const subAddress = await root.getSubVerifier(V23);
-    // A fork pinned before 0.23.0 was registered (BASE_FORK_BLOCK) has nothing to read.
-    if (subAddress === ethers.ZeroAddress) this.skip();
+    let subAddress = await root.getSubVerifier(V23);
+    if (subAddress === ethers.ZeroAddress) {
+      // zkpassport-fork.test.ts pins the fork at an older proof's block when
+      // ZKP_PARAMS_FILE is set, before 0.23.0 was registered: move it back to
+      // the latest block. A fork pinned on purpose (BASE_FORK_BLOCK) fails here.
+      if (process.env.BASE_FORK_BLOCK?.trim()) throw new Error('BASE_FORK_BLOCK is before circuits 0.23.0 was registered');
+      const rpc = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
+      await network.provider.request({ method: 'hardhat_reset', params: [{ forking: { jsonRpcUrl: rpc } }] });
+      await network.provider.send('hardhat_mine', ['0x1']);
+      subAddress = await root.getSubVerifier(V23);
+      if (subAddress === ethers.ZeroAddress) throw new Error('No sub-verifier for circuits 0.23.0 on Base mainnet');
+    }
     sub = (await ethers.getContractAt('IZKPassportSubVerifier', subAddress)) as unknown as IZKPassportSubVerifier;
   });
 

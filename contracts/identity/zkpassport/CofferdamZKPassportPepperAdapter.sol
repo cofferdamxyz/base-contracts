@@ -318,7 +318,8 @@ contract CofferdamZKPassportPepperAdapter is IIdentityEvidenceAdapter {
         address verifier = _checkLive(vkeyHash);
 
         uint256 proofDate = uint256(publicInputs[2]);
-        if (!Checks.isDateValid(proofDate, VALIDITY)) revert ProofDateInvalid(proofDate);
+        // A future date first, so a date near 2^256 is refused by name, not by an overflow.
+        if (proofDate > block.timestamp || !Checks.isDateValid(proofDate, VALIDITY)) revert ProofDateInvalid(proofDate);
         if (publicInputs[3] != _domainHash || publicInputs[4] != _scopeHash) revert WrongScope();
         _checkRoots(publicInputs[0], publicInputs[1], proofDate);
         if (!Checks.committedInputsMatch(publicInputs, LEADING_INPUTS, t, committedInputs)) revert CommitmentMismatch();
