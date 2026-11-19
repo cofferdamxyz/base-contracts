@@ -50,8 +50,9 @@ import {ZKPassportSubVerifierChecks as Checks} from "./ZKPassportSubVerifierChec
 ///             with a face match signed by ZKPassport's own app
 ///             (`FaceMatch.isGenuine` pins its app IDs), which needs both the
 ///             hand-off and FaceMatch the initial release ruled out; 102 and
-///             103 are not verifiable at all. S7's 100 to 199 stays the
-///             ceiling, and a later adapter can widen within it.
+///             103 are not verifiable at all. Ruled by the founder on
+///             2026-11-19 ("only passport with chips for now"). S7's 100 to
+///             199 stays the ceiling, and a later adapter can widen within it.
 ///         11. A device-attested method needs a valid attested-ID section,
 ///             any other must carry none: no device-attested method is
 ///             accepted, and `_screenSections` admits only the age, expiry
