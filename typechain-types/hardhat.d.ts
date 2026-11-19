@@ -170,6 +170,26 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IIdentityEvidenceAdapter__factory>;
     getContractFactory(
+      name: "CofferdamZKPassportPepperAdapter",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.CofferdamZKPassportPepperAdapter__factory>;
+    getContractFactory(
+      name: "IZKPassportProofVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IZKPassportProofVerifier__factory>;
+    getContractFactory(
+      name: "IZKPassportRootRegistry",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IZKPassportRootRegistry__factory>;
+    getContractFactory(
+      name: "IZKPassportRootVerifierState",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IZKPassportRootVerifierState__factory>;
+    getContractFactory(
+      name: "IZKPassportSubVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IZKPassportSubVerifier__factory>;
+    getContractFactory(
       name: "IZKPassportHelper",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IZKPassportHelper__factory>;
@@ -281,6 +301,18 @@ declare module "hardhat/types/runtime" {
       name: "MockZKPassportRootVerifier",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockZKPassportRootVerifier__factory>;
+    getContractFactory(
+      name: "MockZKPassportProofVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockZKPassportProofVerifier__factory>;
+    getContractFactory(
+      name: "MockZKPassportRootRegistry",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockZKPassportRootRegistry__factory>;
+    getContractFactory(
+      name: "MockZKPassportSubVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockZKPassportSubVerifier__factory>;
     getContractFactory(
       name: "IZKPassportHelperScopes",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -486,6 +518,31 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IIdentityEvidenceAdapter>;
     getContractAt(
+      name: "CofferdamZKPassportPepperAdapter",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.CofferdamZKPassportPepperAdapter>;
+    getContractAt(
+      name: "IZKPassportProofVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IZKPassportProofVerifier>;
+    getContractAt(
+      name: "IZKPassportRootRegistry",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IZKPassportRootRegistry>;
+    getContractAt(
+      name: "IZKPassportRootVerifierState",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IZKPassportRootVerifierState>;
+    getContractAt(
+      name: "IZKPassportSubVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IZKPassportSubVerifier>;
+    getContractAt(
       name: "IZKPassportHelper",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -625,6 +682,21 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.MockZKPassportRootVerifier>;
+    getContractAt(
+      name: "MockZKPassportProofVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockZKPassportProofVerifier>;
+    getContractAt(
+      name: "MockZKPassportRootRegistry",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockZKPassportRootRegistry>;
+    getContractAt(
+      name: "MockZKPassportSubVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockZKPassportSubVerifier>;
     getContractAt(
       name: "IZKPassportHelperScopes",
       address: string | ethers.Addressable,
@@ -793,6 +865,26 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IIdentityEvidenceAdapter>;
     deployContract(
+      name: "CofferdamZKPassportPepperAdapter",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.CofferdamZKPassportPepperAdapter>;
+    deployContract(
+      name: "IZKPassportProofVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IZKPassportProofVerifier>;
+    deployContract(
+      name: "IZKPassportRootRegistry",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IZKPassportRootRegistry>;
+    deployContract(
+      name: "IZKPassportRootVerifierState",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IZKPassportRootVerifierState>;
+    deployContract(
+      name: "IZKPassportSubVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IZKPassportSubVerifier>;
+    deployContract(
       name: "IZKPassportHelper",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IZKPassportHelper>;
@@ -904,6 +996,18 @@ declare module "hardhat/types/runtime" {
       name: "MockZKPassportRootVerifier",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockZKPassportRootVerifier>;
+    deployContract(
+      name: "MockZKPassportProofVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockZKPassportProofVerifier>;
+    deployContract(
+      name: "MockZKPassportRootRegistry",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockZKPassportRootRegistry>;
+    deployContract(
+      name: "MockZKPassportSubVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockZKPassportSubVerifier>;
     deployContract(
       name: "IZKPassportHelperScopes",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -1109,6 +1213,31 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IIdentityEvidenceAdapter>;
     deployContract(
+      name: "CofferdamZKPassportPepperAdapter",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.CofferdamZKPassportPepperAdapter>;
+    deployContract(
+      name: "IZKPassportProofVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IZKPassportProofVerifier>;
+    deployContract(
+      name: "IZKPassportRootRegistry",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IZKPassportRootRegistry>;
+    deployContract(
+      name: "IZKPassportRootVerifierState",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IZKPassportRootVerifierState>;
+    deployContract(
+      name: "IZKPassportSubVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IZKPassportSubVerifier>;
+    deployContract(
       name: "IZKPassportHelper",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -1248,6 +1377,21 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockZKPassportRootVerifier>;
+    deployContract(
+      name: "MockZKPassportProofVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockZKPassportProofVerifier>;
+    deployContract(
+      name: "MockZKPassportRootRegistry",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockZKPassportRootRegistry>;
+    deployContract(
+      name: "MockZKPassportSubVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockZKPassportSubVerifier>;
     deployContract(
       name: "IZKPassportHelperScopes",
       args: any[],

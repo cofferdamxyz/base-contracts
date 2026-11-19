@@ -79,10 +79,17 @@ export interface MockZKPassportRootVerifierInterface extends Interface {
       | "MOCK_PROOF"
       | "expectedConfig"
       | "getHelper"
+      | "getSubVerifier"
       | "helpers"
       | "owner"
+      | "paused"
+      | "rootRegistry"
       | "setExpected"
       | "setHelper"
+      | "setPaused"
+      | "setRootRegistry"
+      | "setSubVerifier"
+      | "subVerifiers"
       | "verify"
   ): FunctionFragment;
 
@@ -98,8 +105,17 @@ export interface MockZKPassportRootVerifierInterface extends Interface {
     functionFragment: "getHelper",
     values: [BytesLike]
   ): string;
+  encodeFunctionData(
+    functionFragment: "getSubVerifier",
+    values: [BytesLike]
+  ): string;
   encodeFunctionData(functionFragment: "helpers", values: [BytesLike]): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
+  encodeFunctionData(functionFragment: "paused", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "rootRegistry",
+    values?: undefined
+  ): string;
   encodeFunctionData(
     functionFragment: "setExpected",
     values: [BytesLike, BigNumberish, string, string, boolean]
@@ -107,6 +123,19 @@ export interface MockZKPassportRootVerifierInterface extends Interface {
   encodeFunctionData(
     functionFragment: "setHelper",
     values: [BytesLike, AddressLike]
+  ): string;
+  encodeFunctionData(functionFragment: "setPaused", values: [boolean]): string;
+  encodeFunctionData(
+    functionFragment: "setRootRegistry",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setSubVerifier",
+    values: [BytesLike, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "subVerifiers",
+    values: [BytesLike]
   ): string;
   encodeFunctionData(
     functionFragment: "verify",
@@ -119,13 +148,35 @@ export interface MockZKPassportRootVerifierInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "getHelper", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "getSubVerifier",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "helpers", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "paused", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "rootRegistry",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "setExpected",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "setHelper", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "setPaused", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "setRootRegistry",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setSubVerifier",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "subVerifiers",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "verify", data: BytesLike): Result;
 }
 
@@ -178,9 +229,15 @@ export interface MockZKPassportRootVerifier extends BaseContract {
 
   getHelper: TypedContractMethod<[version: BytesLike], [string], "view">;
 
+  getSubVerifier: TypedContractMethod<[version: BytesLike], [string], "view">;
+
   helpers: TypedContractMethod<[arg0: BytesLike], [string], "view">;
 
   owner: TypedContractMethod<[], [string], "view">;
+
+  paused: TypedContractMethod<[], [boolean], "view">;
+
+  rootRegistry: TypedContractMethod<[], [string], "view">;
 
   setExpected: TypedContractMethod<
     [
@@ -199,6 +256,18 @@ export interface MockZKPassportRootVerifier extends BaseContract {
     [void],
     "nonpayable"
   >;
+
+  setPaused: TypedContractMethod<[p: boolean], [void], "nonpayable">;
+
+  setRootRegistry: TypedContractMethod<[r: AddressLike], [void], "nonpayable">;
+
+  setSubVerifier: TypedContractMethod<
+    [version: BytesLike, sub: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  subVerifiers: TypedContractMethod<[arg0: BytesLike], [string], "view">;
 
   verify: TypedContractMethod<
     [params: IZKPassportRootVerifier.ProofVerificationParamsStruct],
@@ -226,10 +295,19 @@ export interface MockZKPassportRootVerifier extends BaseContract {
     nameOrSignature: "getHelper"
   ): TypedContractMethod<[version: BytesLike], [string], "view">;
   getFunction(
+    nameOrSignature: "getSubVerifier"
+  ): TypedContractMethod<[version: BytesLike], [string], "view">;
+  getFunction(
     nameOrSignature: "helpers"
   ): TypedContractMethod<[arg0: BytesLike], [string], "view">;
   getFunction(
     nameOrSignature: "owner"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "paused"
+  ): TypedContractMethod<[], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "rootRegistry"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "setExpected"
@@ -251,6 +329,22 @@ export interface MockZKPassportRootVerifier extends BaseContract {
     [void],
     "nonpayable"
   >;
+  getFunction(
+    nameOrSignature: "setPaused"
+  ): TypedContractMethod<[p: boolean], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "setRootRegistry"
+  ): TypedContractMethod<[r: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "setSubVerifier"
+  ): TypedContractMethod<
+    [version: BytesLike, sub: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "subVerifiers"
+  ): TypedContractMethod<[arg0: BytesLike], [string], "view">;
   getFunction(
     nameOrSignature: "verify"
   ): TypedContractMethod<

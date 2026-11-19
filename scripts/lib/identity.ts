@@ -1,4 +1,4 @@
-import { AbiCoder, Interface, concat, getAddress, getBytes, keccak256, toBeArray, toUtf8Bytes } from 'ethers';
+import { AbiCoder, Interface, concat, getAddress, getBytes, keccak256, sha256, toBeArray, toBeHex, toUtf8Bytes } from 'ethers';
 
 // Encodings shared by CofferdamIdentityRegistry, ZKPassportEvidenceAdapter,
 // their tests and the deploy scripts (decision 0080). `@cofferdam/sdk` must
@@ -61,6 +61,46 @@ export function zkpIdentifierKind(identifierType: number, oprfKeyHash = '0x' + '
 /** `ZKPassportEvidenceAdapter.scopeId()` for a scope under cofferdam.xyz. */
 export function zkpScopeId(scope: string): string {
   return keccak256(abi.encode(['string', 'string'], [ZKP_DOMAIN, scope]));
+}
+
+// ── The pepper: CofferdamZKPassportPepperAdapter (decision 0080, P1) ──────────
+
+/**
+ * ZKPassport's global OPRF key hash on Base mainnet, the 0.23.0 sub-verifier's
+ * `globalOPRFPubKeyHash()` read 2026-11-19. The pepper adapter refuses it.
+ */
+export const ZKP_GLOBAL_OPRF_KEY_HASH = '0x029ad69ef5e692aa43cd3635002a473d72b412d10741d2cba30700df1e895334';
+
+/**
+ * The outer-proof verifiers of circuits 0.23.0 on Base mainnet, by
+ * verification-key hash: the `ProofVerifierAdded` events of the version's
+ * sub-verifier (0xBEcf247a16aEEa812256D1aBdAaF95Ab062084b2, block 58320674),
+ * each confirmed against `proofVerifiers(vkeyHash)` on 2026-11-19. The pepper
+ * adapter pins them and checks them again against the chain at deployment.
+ */
+export const ZKP_OUTER_VERIFIERS_0_23_0: Readonly<Record<string, string>> = {
+  '0x0345a25899029830ed562e47667bb6da8c07e5355e5a4d18d7b4a0507dd1b890': '0x58fFFf2B6Ffd44f3bfa4e3968EEB8D6CCECA53CF',
+  '0x086b6104133cfce2bfc1bd89fa1c0f4d44499a6fa638ccca1842d10223e261ee': '0xB213e4cCFDc2CF597eF7390c1169a459D3854204',
+  '0x259d9ac1c92499dffc83c15f85ace25c51e34c3fba52e0f4db94f936bc1e21b2': '0xaE729d77F10ceF0691cf8a0794e83468441B3D48',
+  '0x17b5cc890adda9b3d4f2e278a1dc33199a66fe4547a38d066f669b6dea0d0a09': '0x7DD1dc29A6121a0CE2199e6B064A9f8902559f41',
+  '0x2b231a73ce09ae03936db30861f69d2b7afef42118736b57a970bd5ef22e6b4b': '0x1fd8552c8BA59A4ee1573327fDd2651c615c1448',
+  '0x0ba9bda5ed8feb20117e04edade722d588fffc3f686873b8c18e33abbf13bb4b': '0x6F0f129B0f4dd8898254E0b08D4E604d56A261d3',
+  '0x01af51387480391d39772760fc43f21e2d839a57580da51209ba193e29ef8875': '0x3e89f1E177022A36526Fa48C4554C648F5B4cB9c',
+  '0x2705cc052c4e7b0f9d56d7c7ce7652e4d88e3ae4d64a27d82da69195bc5437de': '0x37D0C91a81E78DC859d15892ec407703388aDb60',
+  '0x0b5cd3365308dfebd3279b7e3a36b29282f68efd405b960432dfc92fc380886c': '0xAfEd263bA88A11fA48a5FF9cBD1b675d820C69a6',
+  '0x182060d3c0edf4ce03c8b8b4645f114ed756914dc1019ad3b85b60c3b2ce4831': '0xD35cdBcFb3687dA105976D2f9A5754175DD5aDcd',
+  '0x01cb2a9cc9d0cdbc96253fa28828a3a74c11d368cbdd51cc19a99c040803f332': '0x1aBe61bbDdeD5aaabF6051Fa49E1Ef22288D71d8',
+  '0x07620e594d8b5c5f63ed244cfc6f078d54fa65a28991bb9451aca0aeb8196f8e': '0xf0CeBB573306C6F717Fd0C6bB3dEe1f524fa247b',
+};
+
+/** The public input a domain or scope must equal: its SHA-256 with the last byte dropped (ZKPassport's `SubVerifier`). */
+export function zkpScopeHash(s: string): string {
+  return s === '' ? '0x' + '00'.repeat(32) : toBeHex(BigInt(sha256(toUtf8Bytes(s))) >> 8n, 32);
+}
+
+/** The parameter commitment of one committed-input section (type, length and data): SHA-256, the last byte dropped. */
+export function zkpParamCommitment(section: Uint8Array | string): string {
+  return toBeHex(BigInt(sha256(section)) >> 8n, 32);
 }
 
 /** The expiry section (type 3): the proof's bounds on the document's expiry date, in seconds; no upper bound is 0. */

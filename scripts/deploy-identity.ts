@@ -1,18 +1,43 @@
 import { ethers, network } from 'hardhat';
-import { assertMainnetOwner, assertMainnetSigner, chainId as nodeChainId, getDeployer, isBaseMainnetChain, mainnetDelay } from './lib/chain';
+import {
+  assertMainnetOwner,
+  assertMainnetSigner,
+  chainId as nodeChainId,
+  getDeployer,
+  isBaseMainnetChain,
+  isLocalFork,
+  mainnetDelay,
+} from './lib/chain';
 import { refuseRecordedGeneration, writeDeployments } from './lib/deployments';
 import { mainnetRegistryOwner } from './lib/devKeyException';
 import {
   ZKP_DOMAIN,
+  ZKP_GLOBAL_OPRF_KEY_HASH,
   ZKP_IDENTIFIER_TYPE,
+  ZKP_OUTER_VERIFIERS_0_23_0,
   ZKP_ROOT_VERIFIER,
   zkpCircuitsVersion,
   zkpIdentifierKind,
   zkpScopeId,
 } from './lib/identity';
 
-// Deploys decision 0080's identity registry with its first evidence adapter,
-// ZKPassport's RootVerifier checked on-chain (ruling T5). Nothing else.
+// Deploys decision 0080's identity registry with its first evidence adapter:
+// ZKPassport's RootVerifier checked on-chain (ruling T5), or, with
+// ZKP_ADAPTER=pepper, CofferdamZKPassportPepperAdapter (the pepper, P1).
+// Nothing else.
+//
+//   ZKP_ADAPTER             root-verifier (default) or pepper. The pepper
+//                           adapter deploys on a local fork of Base mainnet
+//                           or a testnet only, never on Base mainnet itself:
+//                           no generation runs it yet. It is salted only,
+//                           circuits 0.23.0 by default, and takes
+//                           ZKP_OPRF_KEY_HASH, Cofferdam's OPRF key hash
+//                           (never ZKPassport's global key)
+//   ZKP_OUTER_VKEY_HASHES   pepper only: comma-separated vkey hashes of the
+//                           outer verifiers to pin, read from the version's
+//                           sub-verifier; default the 0.23.0 table in
+//                           scripts/lib/identity.ts. Off mainnet with no
+//                           ZKP_ROOT_VERIFIER, mocks pin one mock verifier
 //
 //   GENERATION              Base mainnet only: the deployments file, e.g. zkp-test-1
 //   LEDGER_ADDRESS          Base mainnet only: the deployer (hardhat.config.ts)
@@ -48,8 +73,19 @@ async function main() {
   const chainId = await nodeChainId();
   const mainnet = await isBaseMainnetChain();
   console.log(`Deploying the identity registry on ${network.name} (chain ${chainId}) from ${deployer.address}`);
+  const adapterKind = process.env.ZKP_ADAPTER?.trim() || 'root-verifier';
+  if (adapterKind !== 'root-verifier' && adapterKind !== 'pepper') throw new Error('ZKP_ADAPTER is root-verifier or pepper');
+  const pepper = adapterKind === 'pepper';
+  // Before the signer check, so Base mainnet refuses before any Ledger prompt.
+  if (pepper && mainnet && !(await isLocalFork())) {
+    throw new Error('ZKP_ADAPTER=pepper deploys on a local fork of Base mainnet or a testnet only: no mainnet generation runs it yet');
+  }
   await assertMainnetSigner(deployer.address);
-  refuseRecordedGeneration(network.name, chainId, ['CofferdamIdentityRegistry', 'ZKPassportEvidenceAdapter']);
+  refuseRecordedGeneration(network.name, chainId, [
+    'CofferdamIdentityRegistry',
+    'ZKPassportEvidenceAdapter',
+    'CofferdamZKPassportPepperAdapter',
+  ]);
 
   const owner = mainnet ? mainnetRegistryOwner() : process.env.REGISTRY_OWNER?.trim() || deployer.address;
   if (!ethers.isAddress(owner)) throw new Error(`REGISTRY_OWNER ${owner} is not an address`);
@@ -57,13 +93,22 @@ async function main() {
 
   const scope = process.env.ZKP_SCOPE?.trim();
   if (!scope) throw new Error('ZKP_SCOPE is required (T1: cofferdam-zkp-test-1 for the test generation, never reused)');
-  const versionLabel = process.env.ZKP_CIRCUITS_VERSION?.trim() || '0.21.1';
+  const versionLabel = process.env.ZKP_CIRCUITS_VERSION?.trim() || (pepper ? '0.23.0' : '0.21.1');
   const version = zkpCircuitsVersion(versionLabel);
   const validity = BigInt(process.env.ZKP_VALIDITY_SECONDS?.trim() || '3600');
-  const typeName = process.env.ZKP_IDENTIFIER_TYPE?.trim() || 'non-salted';
+  const typeName = process.env.ZKP_IDENTIFIER_TYPE?.trim() || (pepper ? 'salted' : 'non-salted');
   if (typeName !== 'non-salted' && typeName !== 'salted') throw new Error('ZKP_IDENTIFIER_TYPE is non-salted or salted');
+  if (pepper && typeName !== 'salted') throw new Error('The pepper adapter takes salted identifiers only');
   const identifierType = typeName === 'salted' ? ZKP_IDENTIFIER_TYPE.salted : ZKP_IDENTIFIER_TYPE.nonSalted;
   const oprfKeyHash = process.env.ZKP_OPRF_KEY_HASH?.trim() || ethers.ZeroHash;
+  if (pepper) {
+    if (!/^0x[0-9a-fA-F]{64}$/.test(oprfKeyHash) || oprfKeyHash === ethers.ZeroHash) {
+      throw new Error("ZKP_OPRF_KEY_HASH is required for the pepper: Cofferdam's OPRF public key hash, 32 bytes of hex");
+    }
+    if (oprfKeyHash.toLowerCase() === ZKP_GLOBAL_OPRF_KEY_HASH) {
+      throw new Error("ZKP_OPRF_KEY_HASH is ZKPassport's global key: the pepper adapter pins Cofferdam's own");
+    }
+  }
   const minAge = Number(process.env.ZKP_MIN_AGE?.trim() || '18');
   if (mainnet && minAge < 18) throw new Error('ZKP_MIN_AGE must be at least 18 on Base mainnet (decision 0080, 6)');
   const expiryMargin = BigInt(process.env.ZKP_EXPIRY_MARGIN_SECONDS?.trim() || (mainnet ? '2592000' : '0'));
@@ -103,16 +148,39 @@ async function main() {
     rootVerifier = await root.getAddress();
     out.MockZKPassportRootVerifier = rootVerifier;
     out.MockZKPassportHelper = helper;
+    if (pepper) {
+      // What the pepper adapter reads instead of RootVerifier.verify: a
+      // sub-verifier holding ZKPassport's global key, a root registry with
+      // one mock certificate and circuit root, and one mock outer verifier.
+      const rootRegistry = await (await ethers.getContractFactory('MockZKPassportRootRegistry', deployer)).deploy();
+      await rootRegistry.waitForDeployment();
+      const sub = await (await ethers.getContractFactory('MockZKPassportSubVerifier', deployer)).deploy(rootVerifier, ZKP_GLOBAL_OPRF_KEY_HASH);
+      await sub.waitForDeployment();
+      const outer = await (await ethers.getContractFactory('MockZKPassportProofVerifier', deployer)).deploy(ethers.id('mock-outer-verifier'));
+      await outer.waitForDeployment();
+      await (await sub.setProofVerifier(MOCK_OUTER_VKEY_HASH, outer)).wait();
+      await (await root.setSubVerifier(version, sub)).wait();
+      await (await root.setRootRegistry(rootRegistry)).wait();
+      for (const [id, label] of [[1, 'certificate'], [2, 'circuit']] as const) {
+        await (await rootRegistry.setRoot(ethers.toBeHex(id, 32), ethers.id(`mock-${label}-root`), 0, 2n ** 40n)).wait();
+      }
+      out.MockZKPassportRootRegistry = await rootRegistry.getAddress();
+      out.MockZKPassportSubVerifier = await sub.getAddress();
+      out.MockZKPassportProofVerifier = await outer.getAddress();
+    }
   } else {
     helper = await (await ethers.getContractAt('IZKPassportRootVerifier', rootVerifier)).getHelper(version);
   }
   console.log('Helper (pinned):', helper);
+  const pins = pepper ? await outerVerifierPins(rootVerifier, version, versionLabel, !!out.MockZKPassportSubVerifier) : [];
+  for (const [h, v] of pins) console.log(`Outer verifier (pinned): ${h} -> ${v}`);
 
   console.log({
     owner,
     scope,
     circuits: `${versionLabel} (${version})`,
     validity: validity.toString(),
+    adapter: adapterKind,
     identifierType: typeName,
     oprfKeyHash,
     minAge,
@@ -124,11 +192,34 @@ async function main() {
   });
 
   // From the deployer, never the node's first account (anvil's #0 on a fork).
-  const Adapter = await ethers.getContractFactory('ZKPassportEvidenceAdapter', deployer);
-  const adapter = await Adapter.deploy(rootVerifier, helper, version, scope, validity, identifierType, oprfKeyHash, minAge, expiryMargin);
+  const adapterName = pepper ? 'CofferdamZKPassportPepperAdapter' : 'ZKPassportEvidenceAdapter';
+  const adapter = pepper
+    ? await (await ethers.getContractFactory('CofferdamZKPassportPepperAdapter', deployer)).deploy(
+        rootVerifier,
+        helper,
+        version,
+        scope,
+        validity,
+        oprfKeyHash,
+        minAge,
+        expiryMargin,
+        pins.map(([h]) => h),
+        pins.map(([, v]) => v),
+      )
+    : await (await ethers.getContractFactory('ZKPassportEvidenceAdapter', deployer)).deploy(
+        rootVerifier,
+        helper,
+        version,
+        scope,
+        validity,
+        identifierType,
+        oprfKeyHash,
+        minAge,
+        expiryMargin,
+      );
   await adapter.waitForDeployment();
-  out.ZKPassportEvidenceAdapter = await adapter.getAddress();
-  console.log('ZKPassportEvidenceAdapter:', out.ZKPassportEvidenceAdapter);
+  out[adapterName] = await adapter.getAddress();
+  console.log(`${adapterName}:`, out[adapterName]);
 
   const kind = zkpIdentifierKind(identifierType, oprfKeyHash);
   const scopeId = zkpScopeId(scope);
@@ -142,7 +233,7 @@ async function main() {
     scopeId,
     rebindDelay,
     adapterDelay,
-    [out.ZKPassportEvidenceAdapter],
+    [out[adapterName]],
     allowlistOnly,
     testAccounts,
   );
@@ -153,6 +244,37 @@ async function main() {
   const file = writeDeployments(network.name, chainId, out);
   console.log('Wrote', file);
   if (mainnet) console.log('Next: the account layer pinned to this registry (deploy-auth.ts with the same GENERATION).');
+}
+
+/** The vkey hash the mock sub-verifier lists its one mock outer verifier under. */
+const MOCK_OUTER_VKEY_HASH = ethers.id('mock-outer-vkey');
+
+/**
+ * The outer verifiers the pepper adapter pins: ZKP_OUTER_VKEY_HASHES, else the
+ * 0.23.0 table (scripts/lib/identity.ts), else the mock's one; each verifier
+ * read from the version's sub-verifier, and a table entry checked against it.
+ */
+async function outerVerifierPins(rootVerifier: string, version: string, label: string, mocks: boolean): Promise<[string, string][]> {
+  const root = await ethers.getContractAt('IZKPassportRootVerifierState', rootVerifier);
+  const subAddress = await root.getSubVerifier(version);
+  if (subAddress === ethers.ZeroAddress) throw new Error(`RootVerifier has no sub-verifier for circuits ${label}`);
+  const sub = await ethers.getContractAt('IZKPassportSubVerifier', subAddress);
+  const listed = process.env.ZKP_OUTER_VKEY_HASHES?.split(',').map((h) => h.trim()).filter(Boolean);
+  const table = label === '0.23.0' ? ZKP_OUTER_VERIFIERS_0_23_0 : undefined;
+  const hashes = listed?.length ? listed : mocks ? [MOCK_OUTER_VKEY_HASH] : table ? Object.keys(table) : [];
+  if (hashes.length === 0) throw new Error(`Set ZKP_OUTER_VKEY_HASHES: no table of outer verifiers for circuits ${label}`);
+  const pins: [string, string][] = [];
+  for (const h of hashes) {
+    if (!/^0x[0-9a-fA-F]{64}$/.test(h)) throw new Error(`Not a vkey hash: ${h}`);
+    const v = await sub.proofVerifiers(h);
+    if (v === ethers.ZeroAddress) throw new Error(`The sub-verifier lists no outer verifier for ${h}`);
+    const recorded = table?.[h.toLowerCase()];
+    if (!mocks && recorded && recorded.toLowerCase() !== v.toLowerCase()) {
+      throw new Error(`The sub-verifier lists ${v} for ${h}, the table ${recorded}: ZKPassport swapped it; check before pinning`);
+    }
+    pins.push([h, v]);
+  }
+  return pins;
 }
 
 main().catch((error) => {

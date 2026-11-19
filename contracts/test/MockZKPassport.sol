@@ -35,6 +35,30 @@ contract MockZKPassportRootVerifier is IZKPassportRootVerifier {
         return helpers[version];
     }
 
+    // The state `CofferdamZKPassportPepperAdapter` reads instead of calling `verify`.
+    bool public paused;
+    address public rootRegistry;
+    mapping(bytes32 => address) public subVerifiers;
+
+    function setPaused(bool p) external {
+        require(msg.sender == owner, "owner");
+        paused = p;
+    }
+
+    function setRootRegistry(address r) external {
+        require(msg.sender == owner, "owner");
+        rootRegistry = r;
+    }
+
+    function setSubVerifier(bytes32 version, address sub) external {
+        require(msg.sender == owner, "owner");
+        subVerifiers[version] = sub;
+    }
+
+    function getSubVerifier(bytes32 version) external view returns (address) {
+        return subVerifiers[version];
+    }
+
     function verify(ProofVerificationParams calldata params)
         external
         view
