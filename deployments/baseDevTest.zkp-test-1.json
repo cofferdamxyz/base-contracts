@@ -45,5 +45,8 @@
   },
   "ZKPassportEvidenceAdapterV0_22_0": {
     "address": "0x2A0EEd2A0f0A4CaC7dCBF13c68BAC37D6Bac17E9"
+  },
+  "ZKPassportEvidenceAdapterV0_23_0": {
+    "address": "0x8D1B556FEb3B2633A6EBcfac05825802fE40bC63"
   }
 }
