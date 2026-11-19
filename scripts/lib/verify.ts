@@ -16,6 +16,7 @@ export const VERIFY_CONTRACTS: Record<string, string> = {
   CofferdamCeremonyAttesterRegistry: 'CofferdamCeremonyAttesterRegistry',
   CofferdamAccountFactory4337: 'CofferdamAccountFactory4337',
   CofferdamPaymaster: 'CofferdamPaymaster',
+  CofferdamHandleAnchor: 'CofferdamHandleAnchor',
 };
 
 /**
@@ -23,13 +24,14 @@ export const VERIFY_CONTRACTS: Record<string, string> = {
  * its authors) and the Safe (a proxy from Safe's own factory); the script
  * only reports whether Basescan shows their source.
  */
-export const VERIFY_NOT_OURS = ['EntryPoint', 'CofferdamSafe'] as const;
+export const VERIFY_NOT_OURS = ['EntryPoint', 'CofferdamSafe', 'CofferdamHandleAnchorSafe'] as const;
 
 /** Entries of a deployments file that are records, not contracts. */
 const RECORDS = ['devKeyException'];
 
 export interface VerifyPlan {
-  ours: { key: string; contract: string; address: string }[];
+  /** `txHash`: the creation transaction, when the deployments file records it. */
+  ours: { key: string; contract: string; address: string; txHash?: string }[];
   notOurs: { key: string; address: string }[];
 }
 
@@ -37,7 +39,7 @@ export interface VerifyPlan {
  * What to verify in a deployments file. An entry the script does not know
  * stops it, so nothing is skipped silently.
  */
-export function verifyPlan(recorded: Record<string, { address?: string } | undefined>): VerifyPlan {
+export function verifyPlan(recorded: Record<string, { address?: string; txHash?: string } | undefined>): VerifyPlan {
   const plan: VerifyPlan = { ours: [], notOurs: [] };
   const unknown: string[] = [];
   for (const [key, entry] of Object.entries(recorded)) {
@@ -45,12 +47,26 @@ export function verifyPlan(recorded: Record<string, { address?: string } | undef
     const address = entry?.address;
     if (!address) continue;
     if ((VERIFY_NOT_OURS as readonly string[]).includes(key)) plan.notOurs.push({ key, address });
-    else if (VERIFY_CONTRACTS[key]) plan.ours.push({ key, contract: VERIFY_CONTRACTS[key], address });
+    else if (VERIFY_CONTRACTS[key]) plan.ours.push({ key, contract: VERIFY_CONTRACTS[key], address, txHash: entry?.txHash });
     else if (/^ZKPassportEvidenceAdapterV\d+_\d+_\d+$/.test(key)) plan.ours.push({ key, contract: 'ZKPassportEvidenceAdapter', address });
     else unknown.push(key);
   }
   if (unknown.length > 0) throw new Error(`The deployments file records ${unknown.join(', ')}, which scripts/lib/verify.ts does not know: add it to VERIFY_CONTRACTS or VERIFY_NOT_OURS`);
   return plan;
+}
+
+/**
+ * The entries named by `keys` (VERIFY_KEYS, comma-separated), or all of them
+ * when `keys` is empty. Base Sepolia's single file mixes contracts of every
+ * era, most of which this script does not know, so a Sepolia run names its
+ * keys. A key the file does not record stops it.
+ */
+export function selectRecorded<T>(recorded: Record<string, T>, keys: string | undefined): Record<string, T> {
+  const wanted = (keys ?? '').split(',').map((k) => k.trim()).filter(Boolean);
+  if (wanted.length === 0) return recorded;
+  const missing = wanted.filter((k) => !(k in recorded));
+  if (missing.length > 0) throw new Error(`VERIFY_KEYS names ${missing.join(', ')}, which the deployments file does not record`);
+  return Object.fromEntries(wanted.map((k) => [k, recorded[k]]));
 }
 
 /**
