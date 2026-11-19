@@ -17,7 +17,7 @@
     "compile": "hardhat compile",
     "test": "hardhat test",
     "test:base-sepolia": "hardhat test --network baseSepolia",
-    "test:fork": "BASE_FORK=1 hardhat test test/fork/zkpassport-fork.test.ts",
+    "test:fork": "BASE_FORK=1 hardhat test test/fork/zkpassport-fork.test.ts test/fork/pepper-adapter-fork.test.ts",
     "deploy:auth:local": "hardhat run scripts/deploy-auth.ts --network localhost",
     "deploy:auth:sepolia": "hardhat run scripts/deploy-auth.ts --network baseSepolia",
     "deploy:auth:fork": "hardhat run scripts/deploy-auth.ts --network baseFork",
