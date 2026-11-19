@@ -65,6 +65,20 @@ export function createNonce(deployer: string, address: string, nonceNow: number)
 }
 
 /**
+ * The creation transaction was built from other sources or compiler settings
+ * than this checkout's: a contract deployed before a later change to its
+ * source. verify.ts accepts it only when Basescan already shows its source.
+ */
+export class BytecodeMismatchError extends Error {
+  constructor() {
+    super(
+      'The creation transaction does not start with the compiled bytecode: the sources or compiler settings differ from what was deployed (check out the deploy commit and compile)',
+    );
+    this.name = 'BytecodeMismatchError';
+  }
+}
+
+/**
  * The ABI-encoded constructor arguments: what follows the compiled creation
  * bytecode in the creation transaction's input. Refuses when the input does
  * not start with that bytecode, since Basescan would refuse the source too.
@@ -73,10 +87,6 @@ export function constructorArgsHex(input: string, bytecode: string): string {
   const tx = input.toLowerCase().replace(/^0x/, '');
   const code = bytecode.toLowerCase().replace(/^0x/, '');
   if (code.length === 0) throw new Error('The artifact has no creation bytecode');
-  if (!tx.startsWith(code)) {
-    throw new Error(
-      'The creation transaction does not start with the compiled bytecode: the sources or compiler settings differ from what was deployed (check out the deploy commit and compile)',
-    );
-  }
+  if (!tx.startsWith(code)) throw new BytecodeMismatchError();
   return '0x' + tx.slice(code.length);
 }

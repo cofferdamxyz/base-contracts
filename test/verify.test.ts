@@ -3,7 +3,7 @@ import { AbiCoder, Wallet, getCreateAddress } from 'ethers';
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { constructorArgsHex, createNonce, verifyPlan } from '../scripts/lib/verify';
+import { BytecodeMismatchError, constructorArgsHex, createNonce, verifyPlan } from '../scripts/lib/verify';
 
 // scripts/verify.ts's pure parts: what it verifies, how it finds a contract's
 // creation nonce, and how it splits a creation input into bytecode and
@@ -57,6 +57,8 @@ describe('verify (scripts/lib/verify.ts)', function () {
     expect(constructorArgsHex(bytecode + args.slice(2), bytecode)).to.equal(args.toLowerCase());
     expect(constructorArgsHex(bytecode, bytecode)).to.equal('0x');
     expect(() => constructorArgsHex('0x6080604052ffff' + args.slice(2), bytecode)).to.throw(/does not start with the compiled bytecode/);
+    // verify.ts tells this case apart, to accept a contract built from an earlier commit that Basescan already shows.
+    expect(() => constructorArgsHex('0x6080604052ffff' + args.slice(2), bytecode)).to.throw(BytecodeMismatchError);
     expect(() => constructorArgsHex(args, '0x')).to.throw(/no creation bytecode/);
   });
 });

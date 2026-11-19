@@ -2,7 +2,7 @@ import { artifacts, ethers, network, run } from 'hardhat';
 import { Etherscan } from '@nomicfoundation/hardhat-verify/etherscan';
 import { BASE_MAINNET_CHAIN_ID, chainId as nodeChainId, isLocalFork } from './lib/chain';
 import { readDeployments } from './lib/deployments';
-import { constructorArgsHex, createNonce, verifyPlan } from './lib/verify';
+import { BytecodeMismatchError, constructorArgsHex, createNonce, verifyPlan } from './lib/verify';
 
 // Basescan verification of a generation's contracts, from the chain itself:
 // for each contract the deployments file records, find its creation
@@ -18,6 +18,11 @@ import { constructorArgsHex, createNonce, verifyPlan } from './lib/verify';
 //   ETHERSCAN_API_KEY     in .env; without it, or with CHECK_ONLY=1, the checks
 //                         run and nothing is submitted
 //   CHECK_ONLY=1          the checks only
+//
+// A contract deployed before a later change to its source no longer matches
+// the bytecode compiled here. With an API key, one Basescan already shows the
+// source of is reported as verified from an earlier commit, not as a failure;
+// without a key it cannot be told apart from a wrong build, and fails.
 
 const BASE_CHAIN_CONFIG = {
   network: 'base',
@@ -68,7 +73,9 @@ async function main() {
   }
 
   const nonceNow = await ethers.provider.getTransactionCount(deployer, 'latest');
+  const etherscan = apiKey ? Etherscan.fromChainConfig(apiKey, BASE_CHAIN_CONFIG) : undefined;
   const failed: string[] = [];
+  const earlier: string[] = [];
   for (const { key, contract, address } of plan.ours) {
     try {
       const nonce = createNonce(deployer, address, nonceNow);
@@ -90,13 +97,17 @@ async function main() {
       if (!submit) continue;
       await run('verify:verify', { address, constructorArguments: args, contract: `${artifact.sourceName}:${contract}` });
     } catch (e) {
+      if (e instanceof BytecodeMismatchError && etherscan && (await etherscan.isVerified(address))) {
+        console.log(`\n${key} ${address}: built from an earlier commit's sources (this checkout compiles other bytecode); Basescan already shows its source (${etherscan.getContractUrl(address)})`);
+        earlier.push(key);
+        continue;
+      }
       console.error(`\n${key} ${address}: ${(e as Error).message}`);
       failed.push(key);
     }
   }
 
-  if (apiKey) {
-    const etherscan = Etherscan.fromChainConfig(apiKey, BASE_CHAIN_CONFIG);
+  if (etherscan) {
     for (const { key, address } of plan.notOurs) {
       const verified = await etherscan.isVerified(address);
       console.log(`\n${key} ${address}: not ours to verify; Basescan ${verified ? 'shows its source' : 'shows no source yet'} (${etherscan.getContractUrl(address)})`);
@@ -106,6 +117,7 @@ async function main() {
   }
 
   if (failed.length > 0) throw new Error(`Not verified: ${failed.join(', ')}`);
+  if (earlier.length > 0) console.log(`\nVerified on Basescan from an earlier commit: ${earlier.join(', ')}`);
   console.log(submit ? '\nAll submitted or already verified.' : '\nAll checks passed; nothing submitted.');
 }
 
