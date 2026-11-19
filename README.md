@@ -19,7 +19,8 @@ contracts/
   enterprise/   private submodule cofferdamxyz/enterprise-contracts (proprietary)
 scripts/        deploy-self, deploy-auth (lib/accountLayer), deploy-identity, move-paymaster-deposit, inspect-account,
                 rotate-self-attester, deploy-escrow, deploy-all (local only), create-safe, safe-exec, verify; lib/chain (mainnet guards),
-                lib/identity (digest and evidence encodings), lib/handleAnchor (the anchor's EIP-712 types and Safe actions);
+                lib/identity (digest and evidence encodings), lib/handleAnchor (the anchor's EIP-712 types and Safe actions),
+                lib/rpcRetry (every RPC network: a read answered with neither result nor error is asked again; sends never are);
                 spike/c1-one-time-account/measure.ts (local anvil fork only)
 deployments/    baseSepolia.json (source of truth for Sepolia addresses), localhost.json;
                 on Base mainnet one file per generation, <network>.<GENERATION>.json (base.<GENERATION>.json for a

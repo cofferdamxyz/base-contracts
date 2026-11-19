@@ -1,9 +1,10 @@
-import { HardhatUserConfig } from 'hardhat/config';
+import { extendProvider, HardhatUserConfig } from 'hardhat/config';
 import '@nomicfoundation/hardhat-toolbox';
 import '@nomicfoundation/hardhat-ledger';
 import 'dotenv/config';
 import { computeAddress } from 'ethers';
 import { assertNoMainnetKeys, devKeyAccounts } from './scripts/lib/devKeyException';
+import { RetryEmptyReadsProvider } from './scripts/lib/rpcRetry';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Cofferdam — Base contracts (ERC-4337 account abstraction)
@@ -134,5 +135,14 @@ const config: HardhatUserConfig = {
 // added later, except `baseDevTest` under the dev-key exception. The
 // in-process fork is exempt: it is local by construction.
 assertNoMainnetKeys(config.networks as Parameters<typeof assertNoMainnetKeys>[0]);
+
+// A public RPC's empty answer to a read (HH110) is asked again rather than
+// stopping a script after its transaction went out (scripts/lib/rpcRetry.ts).
+// Sends are never repeated. The in-process network has no RPC to retry.
+extendProvider(async (provider, _config, network) =>
+  // The cast: Hardhat's ProviderWrapper types listeners() as Function[], its
+  // EIP1193Provider as (...args) => void; the object is the same.
+  network === 'hardhat' ? provider : (new RetryEmptyReadsProvider(provider) as unknown as typeof provider),
+);
 
 export default config;

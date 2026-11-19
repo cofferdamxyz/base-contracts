@@ -28,6 +28,7 @@ describe('verify (scripts/lib/verify.ts)', function () {
       'ZKPassportEvidenceAdapterDrill',
       'ZKPassportEvidenceAdapterV0_21_0',
       'ZKPassportEvidenceAdapterV0_22_0',
+      'ZKPassportEvidenceAdapterV0_23_0',
     ]);
     expect(plan.ours.find((o) => o.key === 'ZKPassportEvidenceAdapterV0_22_0')?.contract).to.equal('ZKPassportEvidenceAdapter');
     expect(plan.ours.find((o) => o.key === 'SessionKeyAuthorityLowManaged')?.contract).to.equal('SessionKeyAuthority');
