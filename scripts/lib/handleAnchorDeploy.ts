@@ -189,6 +189,12 @@ export async function deployHandleAnchor(o: {
   /** The anchor the deployments file already records, if any. */
   recordedAnchor?: string;
   dryRun?: boolean;
+  /**
+   * Called once the deploy mines, before the read-back, so the anchor is
+   * recorded even when a read fails afterwards (and a rerun then meets the
+   * redeploy guard instead of deploying a second anchor).
+   */
+  onMined?: (d: HandleAnchorDeployment) => void;
   log?: (line: string) => void;
 }): Promise<HandleAnchorDeployment | null> {
   const log = o.log ?? (() => {});
@@ -241,14 +247,30 @@ export async function deployHandleAnchor(o: {
   if (!receipt || receipt.status !== 1 || !receipt.contractAddress) throw new Error(`The deploy ${sent.hash} did not create a contract`);
   const address = ethers.getAddress(receipt.contractAddress);
   log(`CofferdamHandleAnchor: ${address} (tx ${receipt.hash}, block ${receipt.blockNumber}, gas ${receipt.gasUsed})`);
+  const deployed: HandleAnchorDeployment = { chainId, address, txHash: receipt.hash, blockNumber: receipt.blockNumber, deployer, safe, registrar, delays };
+  o.onMined?.(deployed);
 
   // Read back at the block that mined it.
-  const anchor = new ethers.Contract(address, HANDLE_ANCHOR_DEPLOY_ABI, o.provider);
-  const at = { blockTag: receipt.blockNumber };
+  try {
+    await readBack(o.provider, deployed);
+  } catch (e) {
+    throw new Error(
+      `CofferdamHandleAnchor ${address} is deployed (tx ${receipt.hash}, block ${receipt.blockNumber}) but its read-back failed: ${(e as Error).message}`,
+    );
+  }
+  log('  read back: delays, owner = the Safe, no pending owner, the registrar listed, the deployer no role, the EIP-712 domain');
+  return deployed;
+}
+
+/** The deployed anchor, read at the block that mined it, against what the deploy asked for. */
+async function readBack(provider: ethers.Provider, d: HandleAnchorDeployment): Promise<void> {
+  const { address, delays, safe, registrar, deployer, chainId } = d;
+  const anchor = new ethers.Contract(address, HANDLE_ANCHOR_DEPLOY_ABI, provider);
+  const at = { blockTag: d.blockNumber };
   const expect = (what: string, actual: unknown, wanted: unknown) => {
     const a = typeof actual === 'string' ? actual.toLowerCase() : actual;
     const w = typeof wanted === 'string' ? wanted.toLowerCase() : wanted;
-    if (a !== w) throw new Error(`The deployed anchor ${address} reads ${what} ${actual}, expected ${wanted}`);
+    if (a !== w) throw new Error(`it reads ${what} ${actual}, expected ${wanted}`);
   };
   expect('CHANGE_DELAY', await anchor.CHANGE_DELAY(at), delays.changeDelay);
   expect('FREEZE_DURATION', await anchor.FREEZE_DURATION(at), delays.freezeDuration);
@@ -263,9 +285,6 @@ export async function deployHandleAnchor(o: {
   expect('the EIP-712 version', domain.version, HANDLE_ANCHOR_DOMAIN_VERSION);
   expect('the EIP-712 chainId', domain.chainId, chainId);
   expect('the EIP-712 verifyingContract', domain.verifyingContract, address);
-  log('  read back: delays, owner = the Safe, no pending owner, the registrar listed, the deployer no role, the EIP-712 domain');
-
-  return { chainId, address, txHash: receipt.hash, blockNumber: receipt.blockNumber, deployer, safe, registrar, delays };
 }
 
 /**

@@ -221,4 +221,27 @@ describe('deploy-handle-anchor (scripts/lib/handleAnchorDeploy.ts)', function ()
     const d = await run({ HANDLE_REGISTRAR_ADDRESS: REGISTRAR, HANDLE_ANCHOR_REDEPLOY: '1' }, { recordedAnchor: RELAYER });
     expect(d?.address).to.match(/^0x/);
   });
+
+  it('hands the mined anchor to onMined before the read-back, so a failed read still leaves it recorded', async function () {
+    const mined: string[] = [];
+    const d = await run({ HANDLE_REGISTRAR_ADDRESS: REGISTRAR }, { onMined: (m) => mined.push(m.address) });
+    expect(mined).to.deep.equal([d!.address]);
+
+    // A node that fails every eth_call after the deploy: onMined has fired, and the error names the live anchor.
+    const failingReads = new Proxy(ethers.provider, {
+      get(target, prop, receiver) {
+        if (prop === 'call') return async () => { throw new Error('header not found'); };
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+    const recorded: string[] = [];
+    let error: Error | undefined;
+    try {
+      await run({ HANDLE_REGISTRAR_ADDRESS: REGISTRAR }, { provider: failingReads, onMined: (m) => recorded.push(m.address) });
+    } catch (e) {
+      error = e as Error;
+    }
+    expect(recorded).to.have.length(1);
+    expect(error?.message).to.contain(`CofferdamHandleAnchor ${recorded[0]} is deployed`).and.to.match(/read-back failed: .*header not found/);
+  });
 });

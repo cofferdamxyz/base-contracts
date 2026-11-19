@@ -21,7 +21,7 @@ import { BytecodeMismatchError, constructorArgsHex, createNonce, selectRecorded,
 //   DEPLOYER              default the file's devKeyException deployer, else the
 //                         `deployer` the selected entries record
 //   VERIFY_KEYS           comma-separated entries to verify, default all;
-//                         required in practice on Base Sepolia
+//                         required on Base Sepolia
 //   ETHERSCAN_API_KEY     in .env; without it, or with CHECK_ONLY=1, the checks
 //                         run and nothing is submitted
 //   CHECK_ONLY=1          the checks only
@@ -48,13 +48,14 @@ async function main() {
   const known = chainId === BASE_MAINNET_CHAIN_ID || chainId === BASE_SEPOLIA_CHAIN_ID;
   if (!known || (await isLocalFork())) throw new Error(`Basescan verifies Base mainnet and Base Sepolia only; ${network.name} is chain ${chainId}${known ? ', a local fork' : ''}`);
   const fileNetwork = process.env.DEPLOYMENTS_NETWORK?.trim() || network.name;
-  const recorded = selectRecorded(
-    readDeployments(fileNetwork, chainId) as Record<string, { address?: string; deployer?: string; txHash?: string }>,
-    process.env.VERIFY_KEYS,
-  );
+  const file = readDeployments(fileNetwork, chainId) as Record<string, { address?: string; deployer?: string; txHash?: string }>;
+  if (chainId === BASE_SEPOLIA_CHAIN_ID && !process.env.VERIFY_KEYS?.trim()) {
+    throw new Error(`On Base Sepolia set VERIFY_KEYS (e.g. CofferdamHandleAnchor): ${fileNetwork}.json mixes contracts of every era`);
+  }
+  const recorded = selectRecorded(file, process.env.VERIFY_KEYS);
   if (Object.keys(recorded).length === 0) throw new Error(`No deployments recorded for ${fileNetwork} and GENERATION ${process.env.GENERATION}`);
   const entryDeployers = [...new Set(Object.values(recorded).map((e) => e?.deployer?.toLowerCase()).filter(Boolean))];
-  const deployerRaw = process.env.DEPLOYER?.trim() || recorded.devKeyException?.deployer || (entryDeployers.length === 1 ? entryDeployers[0] : undefined);
+  const deployerRaw = process.env.DEPLOYER?.trim() || file.devKeyException?.deployer || (entryDeployers.length === 1 ? entryDeployers[0] : undefined);
   if (!deployerRaw || !ethers.isAddress(deployerRaw)) throw new Error('No deployer: set DEPLOYER (the Ledger address for a Ledger generation)');
   const deployer = ethers.getAddress(deployerRaw);
   const apiKey = process.env.ETHERSCAN_API_KEY?.trim() || process.env.BASESCAN_API_KEY?.trim() || '';

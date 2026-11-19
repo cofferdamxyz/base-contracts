@@ -69,20 +69,23 @@ async function main() {
     relayers,
     recordedAnchor: recorded.CofferdamHandleAnchor?.address,
     dryRun,
+    // Recorded as soon as it mines, before the read-back.
+    onMined: (d) => {
+      const file = deploymentsPath(network.name, chainId);
+      recordHandleAnchor(file, d);
+      console.log('Wrote', file);
+      console.log('The plane (cofferdam-api, the Sepolia vars):');
+      for (const line of planeEnvLines(d)) console.log(`  ${line}`);
+    },
     log: (line) => console.log(line),
   });
   if (!deployed) return;
 
-  const file = deploymentsPath(network.name, chainId);
-  recordHandleAnchor(file, deployed);
-  console.log('Wrote', file);
-  console.log('\nThe plane (cofferdam-api, the Sepolia vars):');
-  for (const line of planeEnvLines(deployed)) console.log(`  ${line}`);
   console.log(
     [
       '\nNext:',
       `  verify:   DEPLOYER=${deployed.deployer} VERIFY_KEYS=CofferdamHandleAnchor yarn verify:sepolia`,
-      `  drill:    SAFE_ACTION=anchor-registrar-schedule REGISTRAR=<a second key> yarn safe:exec:sepolia, then anchor-registrar-add after ${deployed.delays.safeDelay} s, then anchor-registrar-remove`,
+      `  drill:    SAFE_ACTION=anchor-registrar-schedule REGISTRAR=<a throwaway EOA, never the relayer, the deployer or a Safe signer> yarn safe:exec:sepolia, then anchor-registrar-add after ${deployed.delays.safeDelay} s, then anchor-registrar-remove`,
       '  mirrors:  cofferdam-api src/chain/deployments.ts, docs/architecture/contracts.md (deployments table), the app env when it reads the anchor',
     ].join('\n'),
   );
