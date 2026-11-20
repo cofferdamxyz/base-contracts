@@ -64,6 +64,7 @@ export interface CofferdamIdentityRegistryInterface extends Interface {
       | "removeAdapter"
       | "requestRebind"
       | "retiredBy"
+      | "retiredClaims"
       | "ruleRetiredClaim"
       | "setAllowlistOnly"
       | "setPaused"
@@ -220,8 +221,12 @@ export interface CofferdamIdentityRegistryInterface extends Interface {
     values: [BytesLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "retiredClaims",
+    values: [BytesLike, AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "ruleRetiredClaim",
-    values: [BytesLike, boolean]
+    values: [BytesLike, AddressLike, boolean]
   ): string;
   encodeFunctionData(
     functionFragment: "setAllowlistOnly",
@@ -344,6 +349,10 @@ export interface CofferdamIdentityRegistryInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "retiredBy", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "retiredClaims",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "ruleRetiredClaim",
     data: BytesLike
@@ -828,8 +837,21 @@ export interface CofferdamIdentityRegistry extends BaseContract {
 
   retiredBy: TypedContractMethod<[arg0: BytesLike], [string], "view">;
 
+  retiredClaims: TypedContractMethod<
+    [arg0: BytesLike, arg1: AddressLike],
+    [
+      [string, string, bigint, string] & {
+        oldAccount: string;
+        newAccount: string;
+        readyAt: bigint;
+        adapter: string;
+      }
+    ],
+    "view"
+  >;
+
   ruleRetiredClaim: TypedContractMethod<
-    [identifier: BytesLike, award: boolean],
+    [identifier: BytesLike, claimant: AddressLike, award: boolean],
     [void],
     "nonpayable"
   >;
@@ -1009,9 +1031,23 @@ export interface CofferdamIdentityRegistry extends BaseContract {
     nameOrSignature: "retiredBy"
   ): TypedContractMethod<[arg0: BytesLike], [string], "view">;
   getFunction(
+    nameOrSignature: "retiredClaims"
+  ): TypedContractMethod<
+    [arg0: BytesLike, arg1: AddressLike],
+    [
+      [string, string, bigint, string] & {
+        oldAccount: string;
+        newAccount: string;
+        readyAt: bigint;
+        adapter: string;
+      }
+    ],
+    "view"
+  >;
+  getFunction(
     nameOrSignature: "ruleRetiredClaim"
   ): TypedContractMethod<
-    [identifier: BytesLike, award: boolean],
+    [identifier: BytesLike, claimant: AddressLike, award: boolean],
     [void],
     "nonpayable"
   >;

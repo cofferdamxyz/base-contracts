@@ -21,8 +21,9 @@ import {IIdentityEvidenceAdapter} from "./IIdentityEvidenceAdapter.sol";
 ///         - A retired identifier stays claimable (decision 0080 P4): its
 ///           holder may `requestRebind` it, and the claim waits for the
 ///           owner's `ruleRetiredClaim`, never a timer and never a veto: the
-///           account that retired it answers with evidence to the owner. One
-///           claim at a time. The contract cannot tell a
+///           account that retired it answers with evidence to the owner.
+///           Claims are kept per claimant, so none blocks or replaces another.
+///           The contract cannot tell a
 ///           holder whose passport someone else bound and then relinked away
 ///           from the same person claiming their own old passport for a second
 ///           account, so a person decides. Relink is refused while a rebind of
@@ -116,6 +117,10 @@ contract CofferdamIdentityRegistry {
 
     /// @notice The rebind of an identifier waiting for `REBIND_DELAY`, if any.
     mapping(bytes32 => PendingRebind) public pendingRebind;
+    /// @notice Claims on a retired identifier, one per claimant
+    ///         (`oldAccount` is the account that retired it), each waiting for
+    ///         the owner's `ruleRetiredClaim`. None blocks or replaces another.
+    mapping(bytes32 => mapping(address => PendingRebind)) public retiredClaims;
 
     // ── Events ───────────────────────────────────────────────────────────────
 
@@ -276,22 +281,26 @@ contract CofferdamIdentityRegistry {
     ///         is the account that retired it. The claim never applies at once,
     ///         never by `finalizeRebind` and is never vetoed: only the owner's
     ///         `ruleRetiredClaim` resolves it, an award after `REBIND_DELAY`.
-    ///         It is never replaced either: a second claim waits until the
-    ///         owner rules on the first (`RebindPending`), so nobody restarts a
+    ///         Each claimant's claim is kept apart (`retiredClaims`), so no
+    ///         claim blocks or replaces another's, and nobody restarts a
     ///         holder's clock.
     function requestRebind(address adapter, bytes calldata evidence) external {
         address newAccount = msg.sender;
         (bytes32 identifier, address oldAccount) = _check(REBIND, newAccount, adapter, evidence);
-        bool retired = isRetired[identifier];
-        if (retired && pendingRebind[identifier].newAccount != address(0)) revert RebindPending(identifier);
         uint256 nonce = nonces[newAccount]++;
-        if (REBIND_DELAY == 0 && !retired) {
+        uint48 readyAt = uint48(block.timestamp + REBIND_DELAY);
+        if (isRetired[identifier]) {
+            retiredClaims[identifier][newAccount] =
+                PendingRebind({oldAccount: oldAccount, newAccount: newAccount, readyAt: readyAt, adapter: adapter});
+            emit RebindRequested(oldAccount, newAccount, identifier, nonce, readyAt);
+            return;
+        }
+        if (REBIND_DELAY == 0) {
             delete pendingRebind[identifier];
             emit RebindRequested(oldAccount, newAccount, identifier, nonce, uint48(block.timestamp));
             _move(identifier, oldAccount, newAccount);
             return;
         }
-        uint48 readyAt = uint48(block.timestamp + REBIND_DELAY);
         pendingRebind[identifier] =
             PendingRebind({oldAccount: oldAccount, newAccount: newAccount, readyAt: readyAt, adapter: adapter});
         emit RebindRequested(oldAccount, newAccount, identifier, nonce, readyAt);
@@ -305,9 +314,9 @@ contract CofferdamIdentityRegistry {
     ///         retired identifier waits for `ruleRetiredClaim` instead.
     function finalizeRebind(bytes32 identifier) external {
         if (paused) revert Paused();
+        if (isRetired[identifier]) revert RetiredNeedsRuling(identifier);
         PendingRebind memory p = pendingRebind[identifier];
         if (p.newAccount == address(0)) revert NoPendingRebind(identifier);
-        if (isRetired[identifier]) revert RetiredNeedsRuling(identifier);
         if (block.timestamp < p.readyAt) revert RebindNotReady(p.readyAt);
         if (!isAdapter[p.adapter]) revert AdapterNotActive(p.adapter);
         if (allowlistOnly && !isTestAccount[p.newAccount]) revert NotTestAccount(p.newAccount);
@@ -440,9 +449,10 @@ contract CofferdamIdentityRegistry {
         emit AdapterRemoved(adapter);
     }
 
-    /// @notice Rule on a claim to a retired identifier (decision 0080 P4).
-    ///         Awarding binds the identifier to the claimant, who proved it in
-    ///         `requestRebind`, and lifts its retirement; the account that
+    /// @notice Rule on `claimant`'s claim to a retired identifier (decision
+    ///         0080 P4). Awarding binds the identifier to the claimant, who
+    ///         proved it in `requestRebind`, and lifts its retirement, which
+    ///         leaves every other claim on it unawardable; the account that
     ///         retired it keeps its current binding. Refusing drops the claim.
     ///         An award waits for `REBIND_DELAY`, the retiring account's time
     ///         to answer with its evidence, and the checks of
@@ -452,10 +462,10 @@ contract CofferdamIdentityRegistry {
     ///         It is the person the contract lacks: a holder locked out by a
     ///         relink, and a person claiming their own old passport for a
     ///         second account, look the same on chain.
-    function ruleRetiredClaim(bytes32 identifier, bool award) external onlyOwner {
-        PendingRebind memory p = pendingRebind[identifier];
+    function ruleRetiredClaim(bytes32 identifier, address claimant, bool award) external onlyOwner {
+        PendingRebind memory p = retiredClaims[identifier][claimant];
         if (p.newAccount == address(0)) revert NoPendingRebind(identifier);
-        if (!isRetired[identifier]) revert NotRetired(identifier);
+        if (award && !isRetired[identifier]) revert NotRetired(identifier);
         address retiring = retiredBy[identifier];
         if (award) {
             if (paused) revert Paused();
@@ -465,7 +475,7 @@ contract CofferdamIdentityRegistry {
             bytes32 existing = accountToIdentifier[p.newAccount];
             if (existing != bytes32(0)) revert AccountAlreadyBound(p.newAccount, existing);
         }
-        delete pendingRebind[identifier];
+        delete retiredClaims[identifier][claimant];
         if (award) {
             isRetired[identifier] = false;
             delete retiredBy[identifier];
