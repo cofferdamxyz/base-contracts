@@ -182,9 +182,61 @@
             }
           ]
         },
+        "RegistrarTransferOwner": {
+          "typeString": "RegistrarTransferOwner(bytes32 handleId,address previousOwner,address newOwner,bytes newMetaAddress,uint256 nonce,uint64 deadline)",
+          "typeHash": "0x1392ef991b224610a2fe4aff0344a4a2740c954f0d8b2c094eb3c472f5620576",
+          "fields": [
+            {
+              "name": "handleId",
+              "type": "bytes32"
+            },
+            {
+              "name": "previousOwner",
+              "type": "address"
+            },
+            {
+              "name": "newOwner",
+              "type": "address"
+            },
+            {
+              "name": "newMetaAddress",
+              "type": "bytes"
+            },
+            {
+              "name": "nonce",
+              "type": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint64"
+            }
+          ]
+        },
         "SetMetaAddress": {
           "typeString": "SetMetaAddress(bytes32 handleId,bytes newMetaAddress,uint256 nonce,uint64 deadline)",
           "typeHash": "0xd88d491733dd054c21fc8fbb383ee1e6ba4dbe28e70f04ec45b210129a4d0f29",
+          "fields": [
+            {
+              "name": "handleId",
+              "type": "bytes32"
+            },
+            {
+              "name": "newMetaAddress",
+              "type": "bytes"
+            },
+            {
+              "name": "nonce",
+              "type": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint64"
+            }
+          ]
+        },
+        "RegistrarSetMetaAddress": {
+          "typeString": "RegistrarSetMetaAddress(bytes32 handleId,bytes newMetaAddress,uint256 nonce,uint64 deadline)",
+          "typeHash": "0x6268e1d2f5315e02b76482d14dbd13461f3652cf099c0baf2b2c261db7f150c4",
           "fields": [
             {
               "name": "handleId",
@@ -225,6 +277,28 @@
         "Cancel": {
           "typeString": "Cancel(bytes32 handleId,uint256 pendingNonce,uint256 nonce,uint64 deadline)",
           "typeHash": "0xe8b0e8c5e6cbf35318e6e757ef0a3936f6a7886a6ddeb6ed50d551effbafcc99",
+          "fields": [
+            {
+              "name": "handleId",
+              "type": "bytes32"
+            },
+            {
+              "name": "pendingNonce",
+              "type": "uint256"
+            },
+            {
+              "name": "nonce",
+              "type": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint64"
+            }
+          ]
+        },
+        "RegistrarCancel": {
+          "typeString": "RegistrarCancel(bytes32 handleId,uint256 pendingNonce,uint256 nonce,uint64 deadline)",
+          "typeHash": "0x324e69e30cd5aca0fc16a13a3080db1f3630b1d6ff3fc2a36a0d462e3df0d7ab",
           "fields": [
             {
               "name": "handleId",
@@ -762,6 +836,23 @@
     },
     {
       "domain": "anchor",
+      "primaryType": "RegistrarTransferOwner",
+      "signer": "registrar",
+      "signerAddress": "0x4cB42EECDAf217a68865fcF1Cf63266B55809E45",
+      "message": {
+        "handleId": "0x5e86daf1c99f36f82a65adaa1402b04e43da13e329aae43aa512537dc783267c",
+        "previousOwner": "0x753B6549a04c7567C80500aCBF6B01555f005Aec",
+        "newOwner": "0x04BeAEd9FBAF351711F9E5CDa643d38426dc5beF",
+        "newMetaAddress": "0x028da50d41e6894957294f4ea07a8a9aead883c9427a1331064dedec3444660d75030173bd7c30c47892e6797700e9be1edf8981e60694d9c3bb3925b4fe145b1328",
+        "nonce": 1,
+        "deadline": 1900000000
+      },
+      "structHash": "0x32e65e3478e97098c23ba1675664575740505bc9f8cceb9ffbe74e7527bf92d3",
+      "digest": "0x0e5149a3b371abc37a6e78c841387e173db39a0da2b0fe9b51f43846dd145c7a",
+      "signature": "0x7313acc0d75146aa4e07ede9f281d129d655ec48f49e3ef632ac02f2725e1d1107e0b3df55088227989639d9a542a73268383ae91a2f324871cbc43aebd5fa0a1b"
+    },
+    {
+      "domain": "anchor",
       "primaryType": "SetMetaAddress",
       "signer": "owner",
       "signerAddress": "0x753B6549a04c7567C80500aCBF6B01555f005Aec",
@@ -774,6 +865,21 @@
       "structHash": "0x6fdb8075ba4ea921085a15c4939cb717ca28cfef114db44fab4594c764303d00",
       "digest": "0x50abfeaa175ff1423b33232a01609a272918122c2a01c555488ef6d52334bd99",
       "signature": "0xf154f0709888139ad8a36705f824099394ebdd520ad3329c231e0b6269a804ec35a6126d3756d41f7601a2f7c7b8fc638bfb84e6aa2c1de3dd320d4ed71e1a061b"
+    },
+    {
+      "domain": "anchor",
+      "primaryType": "RegistrarSetMetaAddress",
+      "signer": "registrar",
+      "signerAddress": "0x4cB42EECDAf217a68865fcF1Cf63266B55809E45",
+      "message": {
+        "handleId": "0x5e86daf1c99f36f82a65adaa1402b04e43da13e329aae43aa512537dc783267c",
+        "newMetaAddress": "0x028da50d41e6894957294f4ea07a8a9aead883c9427a1331064dedec3444660d75030173bd7c30c47892e6797700e9be1edf8981e60694d9c3bb3925b4fe145b1328",
+        "nonce": 1,
+        "deadline": 1900000000
+      },
+      "structHash": "0xe4405592fbd9850a6fa034b731bcfd6af32e39ed0aed00d25cc900fe450f08ae",
+      "digest": "0x9b890d3ef647b5fcf5508c358b2bf609dc048690ea874382562678c096865cee",
+      "signature": "0xe76cf3c6ed3ad735bb7d3938bbfd08f3cf970960fba775df0f1f90e78af5c03d533a1323c713baa1bf173605827b15442e9a6aebca89dfc942de284a946ed2811b"
     },
     {
       "domain": "anchor",
@@ -803,6 +909,21 @@
       "structHash": "0xb016fe8046e2a073995849ea0a57cda28160b696d4dcf146e71d258fa869aaa6",
       "digest": "0x4ea6c92d2569358ef507d697a9a222f5ecadbef26744df0f7b58dd5b5f7b4bbc",
       "signature": "0xec0807c73712767f33a633f8de39062ae81cb10996f3d17ab457eaa4551a1d20399daf592c4433f7217afc0af03ec08be24a49ac14fe1b826e594b5ddf9f481f1b"
+    },
+    {
+      "domain": "anchor",
+      "primaryType": "RegistrarCancel",
+      "signer": "registrar",
+      "signerAddress": "0x4cB42EECDAf217a68865fcF1Cf63266B55809E45",
+      "message": {
+        "handleId": "0x5e86daf1c99f36f82a65adaa1402b04e43da13e329aae43aa512537dc783267c",
+        "pendingNonce": 1,
+        "nonce": 2,
+        "deadline": 1900000000
+      },
+      "structHash": "0x6bfb454d431ad678d66254db8f9761b24772ccb65f8b359095aaa6c9aef627b7",
+      "digest": "0xecc2c3a8a61c9f1e3f250b26e333e8ca61398baaa79c68c6be1806dad716561f",
+      "signature": "0xfe9be9515bdb1bcc1d258abfaedac319d365b396231f7dc57b74e7e0e166b51e483e681b8a28fb4eb0091cc41b5101dffe1fbe3550697470262382125c01ea8e1b"
     },
     {
       "domain": "anchor",

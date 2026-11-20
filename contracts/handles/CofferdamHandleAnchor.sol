@@ -15,14 +15,20 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 ///           at least `QUARANTINE` ago (or by a `forceRelease` that waived
 ///           it), is claimed with a registrar's and the new owner's EIP-712
 ///           signatures; anyone may submit.
-///         - **Owner changes** (`transferOwner` co-signed by the new key,
-///           `setMetaAddress`, `release`), signed by the owner, wait
-///           `CHANGE_DELAY`; one is pending at a time and the owner may
-///           `cancel` it.
+///         - **Owner changes**, signed by the owner, wait `CHANGE_DELAY`, one
+///           pending at a time: `transferOwner` (co-signed by the new key and
+///           a registrar) and `setMetaAddress` (co-signed by a registrar),
+///           and `release` (the owner alone). `cancel` withdraws the pending
+///           change at once, signed by the owner and a registrar. So the
+///           handle key alone can only queue a release, never move the
+///           record, and cannot raise the nonce again while that release is
+///           pending, so a `veto` signed after the release was queued lands
+///           (0086 rule 3; the review of 2026-11-19, H1 and M1).
 ///         - **`advance`** (owner, new owner and a registrar together) applies
 ///           at once and clears any pending change; it does not clear a freeze.
 ///         - **The registrar** (hot keys on a Safe-owned list) claims unowned
-///           labels and may `hold` (freeze) a record, `renewHold`, or `veto`
+///           labels, co-signs the owner's `transferOwner`, `setMetaAddress`,
+///           `cancel`, `advance` and `unfreeze`, and may `hold` (freeze) a record, `renewHold`, or `veto`
 ///           its pending change (cancel and freeze), each for
 ///           `FREEZE_DURATION`. A frozen record has no pending change and
 ///           refuses every owner change except `advance`, and the Safe's
@@ -77,18 +83,29 @@ contract CofferdamHandleAnchor is EIP712 {
         keccak256("RegistrarClaim(bytes32 handleId,address owner,uint64 serial,uint256 nonce,uint64 deadline)");
     /// @dev The claiming handle key, for the same `serial`.
     bytes32 public constant OWNER_CLAIM_TYPEHASH = keccak256("OwnerClaim(bytes32 handleId,bytes metaAddress,uint64 serial)");
-    /// @dev The owner; the new key co-signs `TransferOwnerAccept`.
+    /// @dev The owner; the new key co-signs `TransferOwnerAccept`, a registrar
+    ///      `RegistrarTransferOwner`.
     bytes32 public constant TRANSFER_OWNER_TYPEHASH =
         keccak256("TransferOwner(bytes32 handleId,address newOwner,bytes newMetaAddress,uint256 nonce,uint64 deadline)");
     bytes32 public constant TRANSFER_OWNER_ACCEPT_TYPEHASH = keccak256(
         "TransferOwnerAccept(bytes32 handleId,address previousOwner,bytes newMetaAddress,uint256 nonce,uint64 deadline)"
     );
+    bytes32 public constant REGISTRAR_TRANSFER_OWNER_TYPEHASH = keccak256(
+        "RegistrarTransferOwner(bytes32 handleId,address previousOwner,address newOwner,bytes newMetaAddress,uint256 nonce,uint64 deadline)"
+    );
+    /// @dev The owner; a registrar co-signs `RegistrarSetMetaAddress`.
     bytes32 public constant SET_META_ADDRESS_TYPEHASH =
         keccak256("SetMetaAddress(bytes32 handleId,bytes newMetaAddress,uint256 nonce,uint64 deadline)");
+    bytes32 public constant REGISTRAR_SET_META_ADDRESS_TYPEHASH =
+        keccak256("RegistrarSetMetaAddress(bytes32 handleId,bytes newMetaAddress,uint256 nonce,uint64 deadline)");
+    /// @dev The owner alone.
     bytes32 public constant RELEASE_TYPEHASH = keccak256("Release(bytes32 handleId,uint256 nonce,uint64 deadline)");
-    /// @dev The owner; `pendingNonce` names the change it withdraws.
+    /// @dev The owner; `pendingNonce` names the change it withdraws. A
+    ///      registrar co-signs `RegistrarCancel`.
     bytes32 public constant CANCEL_TYPEHASH =
         keccak256("Cancel(bytes32 handleId,uint256 pendingNonce,uint256 nonce,uint64 deadline)");
+    bytes32 public constant REGISTRAR_CANCEL_TYPEHASH =
+        keccak256("RegistrarCancel(bytes32 handleId,uint256 pendingNonce,uint256 nonce,uint64 deadline)");
     /// @dev The owner; the new key signs `AdvanceAccept`, a registrar `RegistrarAdvance`.
     bytes32 public constant ADVANCE_TYPEHASH =
         keccak256("Advance(bytes32 handleId,address newOwner,bytes newMetaAddress,uint256 nonce,uint64 deadline)");
@@ -325,15 +342,22 @@ contract CofferdamHandleAnchor is EIP712 {
     // ── Owner changes (queued, `CHANGE_DELAY`) ───────────────────────────────
 
     /// @notice Queue a move of the record to `newOwner` and `newMetaAddress`
-    ///         (the slow path), signed by the owner (`TransferOwner`) and the
-    ///         new key (`TransferOwnerAccept`).
+    ///         (the slow path), signed by the owner (`TransferOwner`), the
+    ///         new key (`TransferOwnerAccept`) and a registrar
+    ///         (`RegistrarTransferOwner`).
+    /// @dev    The registrar's signature is what keeps a handle key alone (a
+    ///         removed or stolen linked phone) from moving the record after
+    ///         `CHANGE_DELAY` when nobody holds a High to veto: the plane signs
+    ///         it on `advance`'s terms (a High ceremony, and the pinned
+    ///         locator's signature, 0086 question 19).
     function transferOwner(
         bytes32 handleId,
         address newOwner,
         bytes calldata newMetaAddress,
         uint64 deadline,
         bytes calldata ownerSig,
-        bytes calldata newOwnerSig
+        bytes calldata newOwnerSig,
+        bytes calldata registrarSig
     ) external {
         Record storage r = _queueable(handleId, deadline);
         if (newOwner == address(0)) revert ZeroAddress();
@@ -350,39 +374,75 @@ contract CofferdamHandleAnchor is EIP712 {
             keccak256(abi.encode(TRANSFER_OWNER_ACCEPT_TYPEHASH, handleId, r.owner, metaHash, r.nonce, deadline)),
             newOwnerSig
         );
+        _registrar(
+            keccak256(
+                abi.encode(REGISTRAR_TRANSFER_OWNER_TYPEHASH, handleId, r.owner, newOwner, metaHash, r.nonce, deadline)
+            ),
+            registrarSig
+        );
         _queue(handleId, r, ChangeKind.TransferOwner, newOwner, newMetaAddress);
     }
 
-    /// @notice Queue a new meta-address under the same handle key.
-    function setMetaAddress(bytes32 handleId, bytes calldata newMetaAddress, uint64 deadline, bytes calldata ownerSig)
-        external
-    {
+    /// @notice Queue a new meta-address under the same handle key, signed by
+    ///         the owner (`SetMetaAddress`) and a registrar
+    ///         (`RegistrarSetMetaAddress`), on the same terms as `transferOwner`:
+    ///         a new meta-address redirects future payments as surely as a new
+    ///         owner does.
+    function setMetaAddress(
+        bytes32 handleId,
+        bytes calldata newMetaAddress,
+        uint64 deadline,
+        bytes calldata ownerSig,
+        bytes calldata registrarSig
+    ) external {
         Record storage r = _queueable(handleId, deadline);
         _checkMetaAddress(newMetaAddress);
-        _expect(
-            r.owner,
-            keccak256(abi.encode(SET_META_ADDRESS_TYPEHASH, handleId, keccak256(newMetaAddress), r.nonce, deadline)),
-            ownerSig
+        bytes32 metaHash = keccak256(newMetaAddress);
+        _expect(r.owner, keccak256(abi.encode(SET_META_ADDRESS_TYPEHASH, handleId, metaHash, r.nonce, deadline)), ownerSig);
+        _registrar(
+            keccak256(abi.encode(REGISTRAR_SET_META_ADDRESS_TYPEHASH, handleId, metaHash, r.nonce, deadline)), registrarSig
         );
         _queue(handleId, r, ChangeKind.SetMetaAddress, address(0), newMetaAddress);
     }
 
     /// @notice Queue the release of the label. Once applied the record has no
     ///         owner and the label is quarantined for `QUARANTINE`.
+    /// @dev    The owner alone: the plane relays the owner's own release for a
+    ///         rename and an account deletion. A thief's release is public,
+    ///         waits `CHANGE_DELAY` and is vetoed; while it is pending the owner
+    ///         alone can neither queue another change nor cancel it, so the
+    ///         record's nonce stays where the registrar's `veto` was signed.
+    ///         Unvetoed, it frees the label into quarantine, which no thief can
+    ///         claim without a registrar: a denial, never a move.
     function release(bytes32 handleId, uint64 deadline, bytes calldata ownerSig) external {
         Record storage r = _queueable(handleId, deadline);
         _expect(r.owner, keccak256(abi.encode(RELEASE_TYPEHASH, handleId, r.nonce, deadline)), ownerSig);
         _queue(handleId, r, ChangeKind.Release, address(0), "");
     }
 
-    /// @notice The owner withdraws the pending change named by `pendingNonce`, at once.
+    /// @notice The owner and a registrar withdraw the pending change named by
+    ///         `pendingNonce`, at once.
     /// @dev    A frozen record has no pending change (`hold` refuses one, `veto`
-    ///         clears it), so a cancel never meets a freeze.
-    function cancel(bytes32 handleId, uint256 pendingNonce, uint64 deadline, bytes calldata ownerSig) external {
+    ///         clears it), so a cancel never meets a freeze. The registrar's
+    ///         `RegistrarCancel` keeps the handle key alone from alternating a
+    ///         queue and a cancel to keep raising the nonce, which would leave
+    ///         every registrar signature stale by inclusion (review of
+    ///         2026-11-19, M1).
+    function cancel(
+        bytes32 handleId,
+        uint256 pendingNonce,
+        uint64 deadline,
+        bytes calldata ownerSig,
+        bytes calldata registrarSig
+    ) external {
         _checkDeadline(deadline);
         Record storage r = _owned(handleId);
         _namedChange(handleId, r, pendingNonce);
-        _expect(r.owner, keccak256(abi.encode(CANCEL_TYPEHASH, handleId, pendingNonce, r.nonce, deadline)), ownerSig);
+        uint256 nonce = r.nonce;
+        _expect(r.owner, keccak256(abi.encode(CANCEL_TYPEHASH, handleId, pendingNonce, nonce, deadline)), ownerSig);
+        _registrar(
+            keccak256(abi.encode(REGISTRAR_CANCEL_TYPEHASH, handleId, pendingNonce, nonce, deadline)), registrarSig
+        );
         r.nonce++;
         _clearPending(r);
         emit ChangeCancelled(handleId, pendingNonce);
@@ -455,7 +515,7 @@ contract CofferdamHandleAnchor is EIP712 {
         }
         r.owner = newOwner;
         r.metaAddress = newMetaAddress;
-        // ASSUMPTION(0086 q15): `advance` does not clear a freeze; only
+        // 0086 q15 (ruled 2026-11-19 as recommended): `advance` does not clear a freeze; only
         // `unfreeze` (owner and registrar), the Safe's `liftFreeze` or `rekey`,
         // or the freeze's lapse does.
         emit Advanced(handleId, previous, newOwner, newMetaAddress, registrar);
@@ -511,7 +571,7 @@ contract CofferdamHandleAnchor is EIP712 {
 
     /// @notice Lift the freeze that ends at `frozenUntil`, with the owner's
     ///         `Unfreeze` and a registrar's `RegistrarUnfreeze`.
-    /// @dev    ASSUMPTION(0086 q15): `unfreeze` exists, signed by the owner and
+    /// @dev    0086 q15 (ruled 2026-11-19 as recommended): `unfreeze` exists, signed by the owner and
     ///         a registrar. When the plane may sign it (at the end of a rotation
     ///         to a new phrase, or for a hold with no veto, never after a veto
     ///         under the same phrase) is the plane's rule: the contract cannot
@@ -666,7 +726,7 @@ contract CofferdamHandleAnchor is EIP712 {
 
     /// @notice Schedule a move of `handleId` to `newOwner` and `newMetaAddress`,
     ///         also for a frozen or released record (0086 rule 3, question 3).
-    /// @dev    ASSUMPTION(0086 q16): no owner brake: the record's owner cannot
+    /// @dev    0086 q16 (ruled 2026-11-19 as recommended): no owner brake: the record's owner cannot
     ///         cancel a scheduled rekey, since a phrase thief would use one to
     ///         block recovery. Its control is the Safe's signers and this
     ///         timelock; the event is what the owner's app shows.
