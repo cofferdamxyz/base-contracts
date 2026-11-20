@@ -89,7 +89,10 @@ export interface CofferdamHandleAnchorInterface extends Interface {
       | "OWNER_CLAIM_TYPEHASH"
       | "QUARANTINE"
       | "REGISTRAR_ADVANCE_TYPEHASH"
+      | "REGISTRAR_CANCEL_TYPEHASH"
       | "REGISTRAR_CLAIM_TYPEHASH"
+      | "REGISTRAR_SET_META_ADDRESS_TYPEHASH"
+      | "REGISTRAR_TRANSFER_OWNER_TYPEHASH"
       | "REGISTRAR_UNFREEZE_TYPEHASH"
       | "RELEASE_TYPEHASH"
       | "RENEW_HOLD_TYPEHASH"
@@ -235,7 +238,19 @@ export interface CofferdamHandleAnchorInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "REGISTRAR_CANCEL_TYPEHASH",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "REGISTRAR_CLAIM_TYPEHASH",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "REGISTRAR_SET_META_ADDRESS_TYPEHASH",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "REGISTRAR_TRANSFER_OWNER_TYPEHASH",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -305,7 +320,7 @@ export interface CofferdamHandleAnchorInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "cancel",
-    values: [BytesLike, BigNumberish, BigNumberish, BytesLike]
+    values: [BytesLike, BigNumberish, BigNumberish, BytesLike, BytesLike]
   ): string;
   encodeFunctionData(
     functionFragment: "cancelOwnershipTransfer",
@@ -409,7 +424,7 @@ export interface CofferdamHandleAnchorInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "setMetaAddress",
-    values: [BytesLike, BytesLike, BigNumberish, BytesLike]
+    values: [BytesLike, BytesLike, BigNumberish, BytesLike, BytesLike]
   ): string;
   encodeFunctionData(
     functionFragment: "stealthMetaAddressOf",
@@ -422,6 +437,7 @@ export interface CofferdamHandleAnchorInterface extends Interface {
       AddressLike,
       BytesLike,
       BigNumberish,
+      BytesLike,
       BytesLike,
       BytesLike
     ]
@@ -506,7 +522,19 @@ export interface CofferdamHandleAnchorInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "REGISTRAR_CANCEL_TYPEHASH",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "REGISTRAR_CLAIM_TYPEHASH",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "REGISTRAR_SET_META_ADDRESS_TYPEHASH",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "REGISTRAR_TRANSFER_OWNER_TYPEHASH",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -1113,7 +1141,17 @@ export interface CofferdamHandleAnchor extends BaseContract {
 
   REGISTRAR_ADVANCE_TYPEHASH: TypedContractMethod<[], [string], "view">;
 
+  REGISTRAR_CANCEL_TYPEHASH: TypedContractMethod<[], [string], "view">;
+
   REGISTRAR_CLAIM_TYPEHASH: TypedContractMethod<[], [string], "view">;
+
+  REGISTRAR_SET_META_ADDRESS_TYPEHASH: TypedContractMethod<
+    [],
+    [string],
+    "view"
+  >;
+
+  REGISTRAR_TRANSFER_OWNER_TYPEHASH: TypedContractMethod<[], [string], "view">;
 
   REGISTRAR_UNFREEZE_TYPEHASH: TypedContractMethod<[], [string], "view">;
 
@@ -1166,7 +1204,8 @@ export interface CofferdamHandleAnchor extends BaseContract {
       handleId: BytesLike,
       pendingNonce: BigNumberish,
       deadline: BigNumberish,
-      ownerSig: BytesLike
+      ownerSig: BytesLike,
+      registrarSig: BytesLike
     ],
     [void],
     "nonpayable"
@@ -1324,7 +1363,8 @@ export interface CofferdamHandleAnchor extends BaseContract {
       handleId: BytesLike,
       newMetaAddress: BytesLike,
       deadline: BigNumberish,
-      ownerSig: BytesLike
+      ownerSig: BytesLike,
+      registrarSig: BytesLike
     ],
     [void],
     "nonpayable"
@@ -1343,7 +1383,8 @@ export interface CofferdamHandleAnchor extends BaseContract {
       newMetaAddress: BytesLike,
       deadline: BigNumberish,
       ownerSig: BytesLike,
-      newOwnerSig: BytesLike
+      newOwnerSig: BytesLike,
+      registrarSig: BytesLike
     ],
     [void],
     "nonpayable"
@@ -1437,7 +1478,16 @@ export interface CofferdamHandleAnchor extends BaseContract {
     nameOrSignature: "REGISTRAR_ADVANCE_TYPEHASH"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "REGISTRAR_CANCEL_TYPEHASH"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "REGISTRAR_CLAIM_TYPEHASH"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "REGISTRAR_SET_META_ADDRESS_TYPEHASH"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "REGISTRAR_TRANSFER_OWNER_TYPEHASH"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "REGISTRAR_UNFREEZE_TYPEHASH"
@@ -1503,7 +1553,8 @@ export interface CofferdamHandleAnchor extends BaseContract {
       handleId: BytesLike,
       pendingNonce: BigNumberish,
       deadline: BigNumberish,
-      ownerSig: BytesLike
+      ownerSig: BytesLike,
+      registrarSig: BytesLike
     ],
     [void],
     "nonpayable"
@@ -1677,7 +1728,8 @@ export interface CofferdamHandleAnchor extends BaseContract {
       handleId: BytesLike,
       newMetaAddress: BytesLike,
       deadline: BigNumberish,
-      ownerSig: BytesLike
+      ownerSig: BytesLike,
+      registrarSig: BytesLike
     ],
     [void],
     "nonpayable"
@@ -1698,7 +1750,8 @@ export interface CofferdamHandleAnchor extends BaseContract {
       newMetaAddress: BytesLike,
       deadline: BigNumberish,
       ownerSig: BytesLike,
-      newOwnerSig: BytesLike
+      newOwnerSig: BytesLike,
+      registrarSig: BytesLike
     ],
     [void],
     "nonpayable"

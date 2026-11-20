@@ -42,9 +42,19 @@ export const HANDLE_ANCHOR_TYPES = {
   OwnerClaim: [f('handleId', 'bytes32'), f('metaAddress', 'bytes'), f('serial', 'uint64')],
   TransferOwner: [f('handleId', 'bytes32'), f('newOwner', 'address'), f('newMetaAddress', 'bytes'), f('nonce', 'uint256'), f('deadline', 'uint64')],
   TransferOwnerAccept: [f('handleId', 'bytes32'), f('previousOwner', 'address'), f('newMetaAddress', 'bytes'), f('nonce', 'uint256'), f('deadline', 'uint64')],
+  RegistrarTransferOwner: [
+    f('handleId', 'bytes32'),
+    f('previousOwner', 'address'),
+    f('newOwner', 'address'),
+    f('newMetaAddress', 'bytes'),
+    f('nonce', 'uint256'),
+    f('deadline', 'uint64'),
+  ],
   SetMetaAddress: [f('handleId', 'bytes32'), f('newMetaAddress', 'bytes'), f('nonce', 'uint256'), f('deadline', 'uint64')],
+  RegistrarSetMetaAddress: [f('handleId', 'bytes32'), f('newMetaAddress', 'bytes'), f('nonce', 'uint256'), f('deadline', 'uint64')],
   Release: [f('handleId', 'bytes32'), f('nonce', 'uint256'), f('deadline', 'uint64')],
   Cancel: [f('handleId', 'bytes32'), f('pendingNonce', 'uint256'), f('nonce', 'uint256'), f('deadline', 'uint64')],
+  RegistrarCancel: [f('handleId', 'bytes32'), f('pendingNonce', 'uint256'), f('nonce', 'uint256'), f('deadline', 'uint64')],
   Advance: [f('handleId', 'bytes32'), f('newOwner', 'address'), f('newMetaAddress', 'bytes'), f('nonce', 'uint256'), f('deadline', 'uint64')],
   AdvanceAccept: [f('handleId', 'bytes32'), f('previousOwner', 'address'), f('newMetaAddress', 'bytes'), f('nonce', 'uint256'), f('deadline', 'uint64')],
   RegistrarAdvance: [
@@ -58,7 +68,7 @@ export const HANDLE_ANCHOR_TYPES = {
   Hold: [f('handleId', 'bytes32'), f('nonce', 'uint256'), f('deadline', 'uint64')],
   RenewHold: [f('handleId', 'bytes32'), f('frozenUntil', 'uint64'), f('nonce', 'uint256'), f('deadline', 'uint64')],
   Veto: [f('handleId', 'bytes32'), f('pendingNonce', 'uint256'), f('nonce', 'uint256'), f('deadline', 'uint64')],
-  // ASSUMPTION(0086 q15): unfreeze exists, signed by the owner and a registrar.
+  // 0086 q15 (ruled 2026-11-19 as recommended): unfreeze exists, signed by the owner and a registrar.
   Unfreeze: [f('handleId', 'bytes32'), f('frozenUntil', 'uint64'), f('nonce', 'uint256'), f('deadline', 'uint64')],
   RegistrarUnfreeze: [f('handleId', 'bytes32'), f('frozenUntil', 'uint64'), f('nonce', 'uint256'), f('deadline', 'uint64')],
 } as const;

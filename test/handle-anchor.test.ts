@@ -94,7 +94,10 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
     return ctx;
   }
 
-  async function queueTransfer(ctx: Ctx, o: { from?: Wallet; to?: Wallet; meta?: string; coSigner?: Wallet; deadline?: bigint } = {}) {
+  async function queueTransfer(
+    ctx: Ctx,
+    o: { from?: Wallet; to?: Wallet; meta?: string; coSigner?: Wallet; registrar?: Wallet; deadline?: bigint } = {},
+  ) {
     const from = o.from ?? OWNER_E0;
     const to = o.to ?? OWNER_E1;
     const meta = o.meta ?? META_E1;
@@ -103,13 +106,23 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
     const previousOwner = (await ctx.anchor.recordOf(ID)).owner;
     const ownerSig = await sign(ctx, from, 'TransferOwner', { handleId: ID, newOwner: to.address, newMetaAddress: meta, nonce, deadline });
     const acceptSig = await sign(ctx, o.coSigner ?? to, 'TransferOwnerAccept', { handleId: ID, previousOwner, newMetaAddress: meta, nonce, deadline });
-    return ctx.anchor.connect(ctx.relayer).transferOwner(ID, to.address, meta, deadline, ownerSig, acceptSig);
+    const registrarSig = await sign(ctx, o.registrar ?? REGISTRAR, 'RegistrarTransferOwner', {
+      handleId: ID,
+      previousOwner,
+      newOwner: to.address,
+      newMetaAddress: meta,
+      nonce,
+      deadline,
+    });
+    return ctx.anchor.connect(ctx.relayer).transferOwner(ID, to.address, meta, deadline, ownerSig, acceptSig, registrarSig);
   }
 
-  async function queueSetMeta(ctx: Ctx, o: { by?: Wallet; meta?: string } = {}) {
+  async function queueSetMeta(ctx: Ctx, o: { by?: Wallet; meta?: string; registrar?: Wallet } = {}) {
     const meta = o.meta ?? META_E1;
     const msg = { handleId: ID, newMetaAddress: meta, nonce: await nonceOf(ctx), deadline: FAR };
-    return ctx.anchor.connect(ctx.relayer).setMetaAddress(ID, meta, FAR, await sign(ctx, o.by ?? OWNER_E0, 'SetMetaAddress', msg));
+    return ctx.anchor
+      .connect(ctx.relayer)
+      .setMetaAddress(ID, meta, FAR, await sign(ctx, o.by ?? OWNER_E0, 'SetMetaAddress', msg), await sign(ctx, o.registrar ?? REGISTRAR, 'RegistrarSetMetaAddress', msg));
   }
 
   async function queueRelease(ctx: Ctx, o: { by?: Wallet; id?: string } = {}) {
@@ -118,10 +131,12 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
     return ctx.anchor.connect(ctx.relayer).release(id, FAR, await sign(ctx, o.by ?? OWNER_E0, 'Release', msg));
   }
 
-  async function cancelBy(ctx: Ctx, by: Wallet, pendingNonce?: bigint) {
+  async function cancelBy(ctx: Ctx, by: Wallet, pendingNonce?: bigint, o: { registrar?: Wallet } = {}) {
     const pending = pendingNonce ?? (await ctx.anchor.recordOf(ID)).pendingNonce;
     const msg = { handleId: ID, pendingNonce: pending, nonce: await nonceOf(ctx), deadline: FAR };
-    return ctx.anchor.connect(ctx.relayer).cancel(ID, pending, FAR, await sign(ctx, by, 'Cancel', msg));
+    return ctx.anchor
+      .connect(ctx.relayer)
+      .cancel(ID, pending, FAR, await sign(ctx, by, 'Cancel', msg), await sign(ctx, o.registrar ?? REGISTRAR, 'RegistrarCancel', msg));
   }
 
   async function advance(
@@ -189,9 +204,12 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
         OwnerClaim: await anchor.OWNER_CLAIM_TYPEHASH(),
         TransferOwner: await anchor.TRANSFER_OWNER_TYPEHASH(),
         TransferOwnerAccept: await anchor.TRANSFER_OWNER_ACCEPT_TYPEHASH(),
+        RegistrarTransferOwner: await anchor.REGISTRAR_TRANSFER_OWNER_TYPEHASH(),
         SetMetaAddress: await anchor.SET_META_ADDRESS_TYPEHASH(),
+        RegistrarSetMetaAddress: await anchor.REGISTRAR_SET_META_ADDRESS_TYPEHASH(),
         Release: await anchor.RELEASE_TYPEHASH(),
         Cancel: await anchor.CANCEL_TYPEHASH(),
+        RegistrarCancel: await anchor.REGISTRAR_CANCEL_TYPEHASH(),
         Advance: await anchor.ADVANCE_TYPEHASH(),
         AdvanceAccept: await anchor.ADVANCE_ACCEPT_TYPEHASH(),
         RegistrarAdvance: await anchor.REGISTRAR_ADVANCE_TYPEHASH(),
@@ -401,7 +419,11 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
       const msg = { handleId: ID, newOwner: OWNER_E1.address, newMetaAddress: META_E1, nonce: 1n, deadline: FAR };
       const ownerSig = await sign(ctx, OWNER_E0, 'TransferOwner', msg);
       const wrongType = await sign(ctx, OWNER_E1, 'TransferOwner', msg);
-      await expect(ctx.anchor.transferOwner(ID, OWNER_E1.address, META_E1, FAR, ownerSig, wrongType)).to.be.revertedWithCustomError(ctx.anchor, 'WrongSigner');
+      const registrarSig = await sign(ctx, REGISTRAR, 'RegistrarTransferOwner', { ...msg, previousOwner: OWNER_E0.address });
+      await expect(ctx.anchor.transferOwner(ID, OWNER_E1.address, META_E1, FAR, ownerSig, wrongType, registrarSig)).to.be.revertedWithCustomError(
+        ctx.anchor,
+        'WrongSigner',
+      );
     });
 
     it('stealthMetaAddressOf answers empty while a change is pending or the record is frozen (rule 3)', async function () {
@@ -426,7 +448,7 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
       expect((await ctx.anchor.resolve(ID)).handleOwner).to.equal(OWNER_E0.address);
     });
 
-    it('keeps one change pending at a time; the owner may cancel it, named, at once; a stranger may not', async function () {
+    it('keeps one change pending at a time; the owner and a registrar may cancel it, named, at once; a stranger may not', async function () {
       const ctx = await loadFixture(claimed);
       await queueRelease(ctx);
       const pending = (await ctx.anchor.recordOf(ID)).pendingNonce;
@@ -440,6 +462,78 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
       await expect(ctx.anchor.applyChange(ID)).to.be.revertedWithCustomError(ctx.anchor, 'NoPendingChange');
       await expect(cancelBy(ctx, OWNER_E0, pending)).to.be.revertedWithCustomError(ctx.anchor, 'NoPendingChange');
       await expect(queueSetMeta(ctx)).to.emit(ctx.anchor, 'ChangeQueued');
+    });
+
+    // The review of 2026-11-19, H1: a linked phone holds the handle key, so a
+    // thief with one must not move the record on the slow path either.
+    it('refuses a transferOwner or a setMetaAddress without a registrar, whatever the handle key and the new key sign (H1)', async function () {
+      const ctx = await loadFixture(claimed);
+      // The thief holds the owner key and a new key of their own, but no registrar.
+      await expect(queueTransfer(ctx, { to: THIEF, meta: META_E2, registrar: THIEF })).to.be.revertedWithCustomError(ctx.anchor, 'NotRegistrar').withArgs(THIEF.address);
+      await expect(queueTransfer(ctx, { to: THIEF, meta: META_E2, registrar: OWNER_E0 })).to.be.revertedWithCustomError(ctx.anchor, 'NotRegistrar');
+      await expect(queueSetMeta(ctx, { meta: META_E2, registrar: THIEF })).to.be.revertedWithCustomError(ctx.anchor, 'NotRegistrar').withArgs(THIEF.address);
+      // A registrar's RegistrarAdvance (the same fields) is not a RegistrarTransferOwner.
+      const nonce = await nonceOf(ctx);
+      const base = { handleId: ID, newMetaAddress: META_E1, nonce, deadline: FAR };
+      const ownerSig = await sign(ctx, OWNER_E0, 'TransferOwner', { ...base, newOwner: OWNER_E1.address });
+      const acceptSig = await sign(ctx, OWNER_E1, 'TransferOwnerAccept', { ...base, previousOwner: OWNER_E0.address });
+      const advanceSig = await sign(ctx, REGISTRAR, 'RegistrarAdvance', { ...base, previousOwner: OWNER_E0.address, newOwner: OWNER_E1.address });
+      await expect(ctx.anchor.transferOwner(ID, OWNER_E1.address, META_E1, FAR, ownerSig, acceptSig, advanceSig)).to.be.revertedWithCustomError(
+        ctx.anchor,
+        'NotRegistrar',
+      );
+      // The registrar's RegistrarSetMetaAddress for one meta-address does not serve another.
+      const setSig = await sign(ctx, OWNER_E0, 'SetMetaAddress', { ...base, newMetaAddress: META_E2 });
+      const regForE1 = await sign(ctx, REGISTRAR, 'RegistrarSetMetaAddress', base);
+      await expect(ctx.anchor.setMetaAddress(ID, META_E2, FAR, setSig, regForE1)).to.be.revertedWithCustomError(ctx.anchor, 'NotRegistrar');
+      expect((await ctx.anchor.recordOf(ID)).pendingKind).to.equal(0n);
+      expect(await nonceOf(ctx)).to.equal(nonce);
+      // With the registrar both queue as before.
+      await expect(queueSetMeta(ctx)).to.emit(ctx.anchor, 'ChangeQueued');
+    });
+
+    it("refuses a cancel without a registrar; a registrar's Veto is not a RegistrarCancel (M1)", async function () {
+      const ctx = await loadFixture(claimed);
+      await queueRelease(ctx);
+      const pending = (await ctx.anchor.recordOf(ID)).pendingNonce;
+      await expect(cancelBy(ctx, OWNER_E0, pending, { registrar: THIEF })).to.be.revertedWithCustomError(ctx.anchor, 'NotRegistrar').withArgs(THIEF.address);
+      const msg = { handleId: ID, pendingNonce: pending, nonce: await nonceOf(ctx), deadline: FAR };
+      const vetoSig = await sign(ctx, REGISTRAR, 'Veto', msg);
+      await expect(ctx.anchor.cancel(ID, pending, FAR, await sign(ctx, OWNER_E0, 'Cancel', msg), vetoSig)).to.be.revertedWithCustomError(ctx.anchor, 'NotRegistrar');
+      // Nor is the registrar's RegistrarCancel a Veto.
+      const regCancel = await sign(ctx, REGISTRAR, 'RegistrarCancel', msg);
+      await expect(ctx.anchor.veto(ID, pending, FAR, regCancel)).to.be.revertedWithCustomError(ctx.anchor, 'NotRegistrar');
+    });
+
+    // The review of 2026-11-19, M1: the handle key alone must not keep raising
+    // the nonce, or every registrar signature is stale by inclusion.
+    it('after a queued release the handle key alone cannot move the nonce again, and the veto lands (M1)', async function () {
+      const ctx = await loadFixture(claimed);
+      // The plane signs a hold at the current nonce; the thief's release lands first.
+      const holdSig = await sign(ctx, REGISTRAR, 'Hold', { handleId: ID, nonce: await nonceOf(ctx), deadline: FAR });
+      await queueRelease(ctx);
+      await expect(ctx.anchor.hold(ID, FAR, holdSig)).to.be.revertedWithCustomError(ctx.anchor, 'ChangePending');
+      const pending = (await ctx.anchor.recordOf(ID)).pendingNonce;
+      const nonce = await nonceOf(ctx);
+      // The plane now signs a veto at this nonce.
+      const vetoSig = await sign(ctx, REGISTRAR, 'Veto', { handleId: ID, pendingNonce: pending, nonce, deadline: FAR });
+      // Everything the handle key (and any key of the thief's) can do alone is refused.
+      await expect(queueRelease(ctx)).to.be.revertedWithCustomError(ctx.anchor, 'ChangePending').withArgs(pending);
+      await expect(queueSetMeta(ctx, { meta: META_E2, registrar: THIEF })).to.be.revertedWithCustomError(ctx.anchor, 'ChangePending');
+      await expect(queueTransfer(ctx, { to: THIEF, meta: META_E2, registrar: THIEF })).to.be.revertedWithCustomError(ctx.anchor, 'ChangePending');
+      await expect(cancelBy(ctx, OWNER_E0, pending, { registrar: THIEF })).to.be.revertedWithCustomError(ctx.anchor, 'NotRegistrar');
+      await expect(cancelBy(ctx, OWNER_E0, pending, { registrar: OWNER_E0 })).to.be.revertedWithCustomError(ctx.anchor, 'NotRegistrar');
+      await expect(advance(ctx, { to: THIEF, meta: META_E2, registrar: THIEF })).to.be.revertedWithCustomError(ctx.anchor, 'NotRegistrar');
+      await expect(ctx.anchor.applyChange(ID)).to.be.revertedWithCustomError(ctx.anchor, 'ChangeNotReady');
+      expect(await nonceOf(ctx)).to.equal(nonce);
+      // The veto signed before all that still lands, and freezes the record.
+      await expect(ctx.anchor.connect(ctx.stranger).veto(ID, pending, FAR, vetoSig))
+        .to.emit(ctx.anchor, 'ChangeVetoed')
+        .withArgs(ID, pending, REGISTRAR.address)
+        .and.to.emit(ctx.anchor, 'Frozen');
+      expect((await ctx.anchor.recordOf(ID)).owner).to.equal(OWNER_E0.address);
+      // Frozen: the handle key alone can queue nothing until the freeze ends.
+      await expect(queueRelease(ctx)).to.be.revertedWithCustomError(ctx.anchor, 'RecordFrozen');
     });
 
     it('refuses an owner signature replayed with a used nonce, or past its deadline', async function () {
@@ -510,7 +604,7 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
       await expect(ctx.anchor.advance(ID, OWNER_E2.address, META_E2, FAR, ...sigs)).to.be.revertedWithCustomError(ctx.anchor, 'WrongSigner');
     });
 
-    it('is accepted on a frozen record, and leaves the freeze in place (ASSUMPTION q15)', async function () {
+    it('is accepted on a frozen record, and leaves the freeze in place (0086 q15, ruled 2026-11-19)', async function () {
       const ctx = await loadFixture(claimed);
       await holdBy(ctx);
       const frozenUntil = await frozenUntilOf(ctx);
@@ -599,7 +693,7 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
       await expect(holdBy(ctx, { registrar: THIEF })).to.be.revertedWithCustomError(ctx.anchor, 'NotRegistrar');
     });
 
-    it('unfreeze (ASSUMPTION q15) lifts the named freeze with the owner and a registrar, and is refused without either', async function () {
+    it('unfreeze (0086 q15, ruled 2026-11-19) lifts the named freeze with the owner and a registrar, and is refused without either', async function () {
       const ctx = await loadFixture(claimed);
       await expect(unfreezeBy(ctx, { frozenUntil: 1n })).to.be.revertedWithCustomError(ctx.anchor, 'NotFrozen');
       await holdBy(ctx);
@@ -705,7 +799,7 @@ describe('CofferdamHandleAnchor (decision 0086, rule 3)', function () {
       await expect(safe.scheduleAddRegistrar(REGISTRAR_2.address)).to.emit(ctx.anchor, 'SafeOpScheduled');
     });
 
-    it('rekeys a frozen record after 72 hours, clearing the freeze; the owner cannot stop it (ASSUMPTION q16)', async function () {
+    it('rekeys a frozen record after 72 hours, clearing the freeze; the owner cannot stop it (0086 q16, ruled 2026-11-19)', async function () {
       const ctx = await loadFixture(claimed);
       await holdBy(ctx);
       const nonceBefore = await nonceOf(ctx);
