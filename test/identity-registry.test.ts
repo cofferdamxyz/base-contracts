@@ -593,15 +593,25 @@ describe('CofferdamIdentityRegistry + ZKPassportEvidenceAdapter', () => {
       expect(await d.registry.isRetired(ID_A)).to.equal(false);
     });
 
-    it('once the bound account answers the contest, it may relink', async () => {
+    it('a squatter that vetoes the contest and relinks away still faces the claim, with no veto left', async () => {
       const d = await deploy({ rebindDelay: 3 * DAY });
       await d.registry.connect(alice).bind(d.adapter, await evidence(d));
       await d.registry.connect(bob).requestRebind(d.adapter, await evidence(d, { account: bob.address, action: 'rebind' }));
+      // This registry's bare veto on a bound identifier (P4 replaces it in production), then the relink.
       await d.registry.connect(alice).cancelRebind(ID_A);
       await expect(d.registry.connect(alice).relink(d.adapter, await evidence(d, { action: 'relink', identifier: ID_B }))).to.emit(
         d.registry,
         'Relinked',
       );
+      // The holder claims the retired identifier; the squatter cannot veto it, before or after the delay.
+      await d.registry.connect(bob).requestRebind(d.adapter, await evidence(d, { account: bob.address, action: 'rebind' }));
+      await expect(d.registry.connect(alice).cancelRebind(ID_A)).to.be.revertedWithCustomError(d.registry, 'RetiredNeedsRuling').withArgs(ID_A);
+      await time.increase(3 * DAY);
+      await expect(d.registry.connect(alice).cancelRebind(ID_A)).to.be.revertedWithCustomError(d.registry, 'RetiredNeedsRuling');
+      await expect(d.registry.connect(owner).ruleRetiredClaim(ID_A, true))
+        .to.emit(d.registry, 'RetiredClaimRuled')
+        .withArgs(ID_A, alice.address, bob.address, true);
+      expect(await d.registry.identifierToAccount(ID_A)).to.equal(bob.address);
     });
 
     it('the squatter: whoever bound a passport first and relinked away cannot lock its holder out', async () => {
@@ -618,10 +628,10 @@ describe('CofferdamIdentityRegistry + ZKPassportEvidenceAdapter', () => {
       await expect(d.registry.connect(bob).requestRebind(d.adapter, claim))
         .to.emit(d.registry, 'RebindRequested')
         .withArgs(alice.address, bob.address, ID_A, 0n, anyValue);
-      // Only the account that retired it may veto; nobody finalizes it; the owner rules after the delay.
-      await expect(d.registry.connect(carol).cancelRebind(ID_A))
-        .to.be.revertedWithCustomError(d.registry, 'NotBoundAccount')
-        .withArgs(carol.address, alice.address);
+      // Nobody vetoes it, the squatter included; nobody finalizes it; the owner rules after the delay.
+      for (const who of [alice, carol]) {
+        await expect(d.registry.connect(who).cancelRebind(ID_A)).to.be.revertedWithCustomError(d.registry, 'RetiredNeedsRuling');
+      }
       await expect(d.registry.connect(alice).ruleRetiredClaim(ID_A, true)).to.be.revertedWithCustomError(d.registry, 'NotOwner');
       await expect(d.registry.connect(owner).ruleRetiredClaim(ID_A, true)).to.be.revertedWithCustomError(d.registry, 'RebindNotReady');
       await time.increase(3 * DAY);
@@ -641,16 +651,24 @@ describe('CofferdamIdentityRegistry + ZKPassportEvidenceAdapter', () => {
         .withArgs(ID_A, bob.address);
     });
 
-    it('the account that retired an identifier may veto a claim on it, paused or not', async () => {
+    it('a claim on a retired identifier is never replaced: a second waits until the owner rules on the first', async () => {
       const d = await deploy({ rebindDelay: 3 * DAY });
       await d.registry.connect(alice).bind(d.adapter, await evidence(d));
       await d.registry.connect(alice).relink(d.adapter, await evidence(d, { action: 'relink', identifier: ID_B }));
       await d.registry.connect(bob).requestRebind(d.adapter, await evidence(d, { account: bob.address, action: 'rebind' }));
+      const second = await evidence(d, { account: carol.address, action: 'rebind' });
+      await expect(d.registry.connect(carol).requestRebind(d.adapter, second))
+        .to.be.revertedWithCustomError(d.registry, 'RebindPending')
+        .withArgs(ID_A);
+      // A refusal, paused or not, frees the identifier for the next claim.
       await d.registry.connect(owner).setPaused(true);
-      await expect(d.registry.connect(alice).cancelRebind(ID_A))
-        .to.emit(d.registry, 'RebindCancelled')
-        .withArgs(alice.address, ID_A, bob.address);
-      await expect(d.registry.connect(owner).ruleRetiredClaim(ID_A, false)).to.be.revertedWithCustomError(d.registry, 'NoPendingRebind');
+      await expect(d.registry.connect(owner).ruleRetiredClaim(ID_A, false))
+        .to.emit(d.registry, 'RetiredClaimRuled')
+        .withArgs(ID_A, alice.address, bob.address, false);
+      await d.registry.connect(owner).setPaused(false);
+      await expect(d.registry.connect(carol).requestRebind(d.adapter, await evidence(d, { account: carol.address, action: 'rebind' })))
+        .to.emit(d.registry, 'RebindRequested')
+        .withArgs(alice.address, carol.address, ID_A, anyValue, anyValue);
     });
 
     it('a claim on a retired identifier never applies at once, even with no rebind delay', async () => {

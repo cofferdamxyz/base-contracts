@@ -57,8 +57,9 @@ import {
 //   ZKP_VALIDITY_SECONDS    default 3600, at most 86400
 //   ZKP_IDENTIFIER_TYPE     non-salted (default off chain 8453) or salted.
 //                           Required on chain 8453, a fork included; Base
-//                           mainnet itself refuses non-salted outside
-//                           GENERATION=zkp-test-1 (decision 0080, T2, rule 4)
+//                           mainnet itself refuses non-salted outright, since
+//                           zkp-test-1, the one T2 accepted, is deployed
+//                           (decision 0080, rule 4)
 //   ZKP_OPRF_KEY_HASH       required for salted
 //   ZKP_MIN_AGE             default 18; mainnet refuses less. The proof's age
 //                           bound must be exactly this

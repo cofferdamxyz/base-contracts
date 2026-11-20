@@ -122,16 +122,15 @@ describe('identifierTypeFor (deploy-identity.ts)', () => {
   const off = { mainnet: false, fork: false, pepper: false };
 
   it('on chain 8453 the type must be named, a fork included', () => {
-    expect(() => identifierTypeFor({ GENERATION: 'zkp-prod-1' }, real)).to.throw(/set ZKP_IDENTIFIER_TYPE/);
+    expect(() => identifierTypeFor({}, real)).to.throw(/set ZKP_IDENTIFIER_TYPE/);
     expect(() => identifierTypeFor({}, fork)).to.throw(/set ZKP_IDENTIFIER_TYPE/);
     expect(() => identifierTypeFor({}, { ...real, pepper: true })).to.throw(/set ZKP_IDENTIFIER_TYPE/);
   });
 
-  it('Base mainnet refuses non-salted outside zkp-test-1; a fork rehearsal may run it', () => {
-    expect(() => identifierTypeFor({ ZKP_IDENTIFIER_TYPE: 'non-salted', GENERATION: 'cofferdam-id-v1' }, real)).to.throw(/only in zkp-test-1/);
-    expect(identifierTypeFor({ ZKP_IDENTIFIER_TYPE: 'non-salted', GENERATION: 'zkp-test-1' }, real)).to.equal('non-salted');
-    expect(identifierTypeFor({ ZKP_IDENTIFIER_TYPE: 'non-salted', GENERATION: 'zkp-dryrun-1' }, fork)).to.equal('non-salted');
-    expect(identifierTypeFor({ ZKP_IDENTIFIER_TYPE: 'salted', GENERATION: 'cofferdam-id-v1' }, real)).to.equal('salted');
+  it('Base mainnet refuses non-salted outright, zkp-test-1 included (it is deployed); a fork rehearsal may run it', () => {
+    expect(() => identifierTypeFor({ ZKP_IDENTIFIER_TYPE: 'non-salted' }, real)).to.throw(/never reach Base mainnet again/);
+    expect(identifierTypeFor({ ZKP_IDENTIFIER_TYPE: 'non-salted' }, fork)).to.equal('non-salted');
+    expect(identifierTypeFor({ ZKP_IDENTIFIER_TYPE: 'salted' }, real)).to.equal('salted');
   });
 
   it('off mainnet the defaults stand; the pepper is salted only', () => {

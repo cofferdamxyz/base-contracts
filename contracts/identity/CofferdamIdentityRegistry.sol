@@ -19,9 +19,10 @@ import {IIdentityEvidenceAdapter} from "./IIdentityEvidenceAdapter.sol";
 ///           identifier to a new account (decision 0022) after `REBIND_DELAY`,
 ///           which the bound account may veto with `cancelRebind`.
 ///         - A retired identifier stays claimable (decision 0080 P4): its
-///           holder may `requestRebind` it, the account that retired it may
-///           veto, and an unvetoed claim waits for the owner's
-///           `ruleRetiredClaim`, never a timer. The contract cannot tell a
+///           holder may `requestRebind` it, and the claim waits for the
+///           owner's `ruleRetiredClaim`, never a timer and never a veto: the
+///           account that retired it answers with evidence to the owner. One
+///           claim at a time. The contract cannot tell a
 ///           holder whose passport someone else bound and then relinked away
 ///           from the same person claiming their own old passport for a second
 ///           account, so a person decides. Relink is refused while a rebind of
@@ -98,8 +99,8 @@ contract CofferdamIdentityRegistry {
     ///         again; claimable only through `requestRebind` and the owner's
     ///         `ruleRetiredClaim`.
     mapping(bytes32 => bool) public isRetired;
-    /// @notice The account whose `relink` retired an identifier; it may veto a
-    ///         claim on it with `cancelRebind`.
+    /// @notice The account whose `relink` retired an identifier: the party a
+    ///         claim on it is ruled against (`ruleRetiredClaim`).
     mapping(bytes32 => address) public retiredBy;
     /// @notice The nonce the account's next proof must be bound to.
     mapping(address => uint256) public nonces;
@@ -272,14 +273,19 @@ contract CofferdamIdentityRegistry {
     ///         for `finalizeRebind`, and the bound account may `cancelRebind`
     ///         meanwhile. A later request replaces a pending one.
     ///         A retired identifier may be claimed the same way: `oldAccount`
-    ///         is the account that retired it, which may `cancelRebind`; the
-    ///         claim never applies at once and never by `finalizeRebind`, only
-    ///         by the owner's `ruleRetiredClaim` after `REBIND_DELAY`.
+    ///         is the account that retired it. The claim never applies at once,
+    ///         never by `finalizeRebind` and is never vetoed: only the owner's
+    ///         `ruleRetiredClaim` resolves it, an award after `REBIND_DELAY`.
+    ///         It is never replaced either: a second claim waits until the
+    ///         owner rules on the first (`RebindPending`), so nobody restarts a
+    ///         holder's clock.
     function requestRebind(address adapter, bytes calldata evidence) external {
         address newAccount = msg.sender;
         (bytes32 identifier, address oldAccount) = _check(REBIND, newAccount, adapter, evidence);
+        bool retired = isRetired[identifier];
+        if (retired && pendingRebind[identifier].newAccount != address(0)) revert RebindPending(identifier);
         uint256 nonce = nonces[newAccount]++;
-        if (REBIND_DELAY == 0 && !isRetired[identifier]) {
+        if (REBIND_DELAY == 0 && !retired) {
             delete pendingRebind[identifier];
             emit RebindRequested(oldAccount, newAccount, identifier, nonce, uint48(block.timestamp));
             _move(identifier, oldAccount, newAccount);
@@ -313,14 +319,15 @@ contract CofferdamIdentityRegistry {
     }
 
     /// @notice The bound account vetoes a pending rebind of its identifier
-    ///         (an `execute` self-call signed by its High authority), or the
-    ///         account that retired an identifier vetoes a claim on it. Open
-    ///         while paused.
+    ///         (an `execute` self-call signed by its High authority). Open while
+    ///         paused. A claim on a retired identifier has no veto: the owner
+    ///         rules on it (`RetiredNeedsRuling`).
     /// @dev    A bare veto here; decision 0080 P4 replaces it in the
     ///         production registry with an answer that carries a fresh proof
     ///         of the same passport.
     function cancelRebind(bytes32 identifier) external {
-        address bound = isRetired[identifier] ? retiredBy[identifier] : identifierToAccount[identifier];
+        if (isRetired[identifier]) revert RetiredNeedsRuling(identifier);
+        address bound = identifierToAccount[identifier];
         if (msg.sender != bound) revert NotBoundAccount(msg.sender, bound);
         PendingRebind memory p = pendingRebind[identifier];
         if (p.newAccount == address(0)) revert NoPendingRebind(identifier);
@@ -438,8 +445,8 @@ contract CofferdamIdentityRegistry {
     ///         `requestRebind`, and lifts its retirement; the account that
     ///         retired it keeps its current binding. Refusing drops the claim.
     ///         An award waits for `REBIND_DELAY`, the retiring account's time
-    ///         to veto, and the checks of `finalizeRebind`; a refusal may come
-    ///         at any time, paused or not.
+    ///         to answer with its evidence, and the checks of
+    ///         `finalizeRebind`; a refusal may come at any time, paused or not.
     /// @dev    The owner cannot bind an identifier nobody proved: only the
     ///         claimant of a pending request, through an adapter still active.
     ///         It is the person the contract lacks: a holder locked out by a
