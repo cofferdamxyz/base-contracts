@@ -316,9 +316,9 @@ contract CofferdamIdentityRegistry {
     ///         (an `execute` self-call signed by its High authority), or the
     ///         account that retired an identifier vetoes a claim on it. Open
     ///         while paused.
-    /// @dev    A bare veto, as in this generation's tests; decision 0080 P4
-    ///         replaces it in the production registry with an answer that
-    ///         carries a fresh proof of the same passport.
+    /// @dev    A bare veto here; decision 0080 P4 replaces it in the
+    ///         production registry with an answer that carries a fresh proof
+    ///         of the same passport.
     function cancelRebind(bytes32 identifier) external {
         address bound = isRetired[identifier] ? retiredBy[identifier] : identifierToAccount[identifier];
         if (msg.sender != bound) revert NotBoundAccount(msg.sender, bound);
