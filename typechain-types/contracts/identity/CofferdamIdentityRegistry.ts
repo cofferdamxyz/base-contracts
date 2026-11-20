@@ -63,6 +63,8 @@ export interface CofferdamIdentityRegistryInterface extends Interface {
       | "relink"
       | "removeAdapter"
       | "requestRebind"
+      | "retiredBy"
+      | "ruleRetiredClaim"
       | "setAllowlistOnly"
       | "setPaused"
       | "setTestAccount"
@@ -85,6 +87,7 @@ export interface CofferdamIdentityRegistryInterface extends Interface {
       | "RebindRequested"
       | "Rebound"
       | "Relinked"
+      | "RetiredClaimRuled"
       | "TestAccountSet"
   ): EventFragment;
 
@@ -213,6 +216,14 @@ export interface CofferdamIdentityRegistryInterface extends Interface {
     values: [AddressLike, BytesLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "retiredBy",
+    values: [BytesLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "ruleRetiredClaim",
+    values: [BytesLike, boolean]
+  ): string;
+  encodeFunctionData(
     functionFragment: "setAllowlistOnly",
     values: [boolean]
   ): string;
@@ -330,6 +341,11 @@ export interface CofferdamIdentityRegistryInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "requestRebind",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "retiredBy", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "ruleRetiredClaim",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -583,6 +599,31 @@ export namespace RelinkedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace RetiredClaimRuledEvent {
+  export type InputTuple = [
+    identifier: BytesLike,
+    retiredBy: AddressLike,
+    claimant: AddressLike,
+    awarded: boolean
+  ];
+  export type OutputTuple = [
+    identifier: string,
+    retiredBy: string,
+    claimant: string,
+    awarded: boolean
+  ];
+  export interface OutputObject {
+    identifier: string;
+    retiredBy: string;
+    claimant: string;
+    awarded: boolean;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace TestAccountSetEvent {
   export type InputTuple = [account: AddressLike, allowed: boolean];
   export type OutputTuple = [account: string, allowed: boolean];
@@ -785,6 +826,14 @@ export interface CofferdamIdentityRegistry extends BaseContract {
     "nonpayable"
   >;
 
+  retiredBy: TypedContractMethod<[arg0: BytesLike], [string], "view">;
+
+  ruleRetiredClaim: TypedContractMethod<
+    [identifier: BytesLike, award: boolean],
+    [void],
+    "nonpayable"
+  >;
+
   setAllowlistOnly: TypedContractMethod<
     [_allowlistOnly: boolean],
     [void],
@@ -957,6 +1006,16 @@ export interface CofferdamIdentityRegistry extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "retiredBy"
+  ): TypedContractMethod<[arg0: BytesLike], [string], "view">;
+  getFunction(
+    nameOrSignature: "ruleRetiredClaim"
+  ): TypedContractMethod<
+    [identifier: BytesLike, award: boolean],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "setAllowlistOnly"
   ): TypedContractMethod<[_allowlistOnly: boolean], [void], "nonpayable">;
   getFunction(
@@ -1070,6 +1129,13 @@ export interface CofferdamIdentityRegistry extends BaseContract {
     RelinkedEvent.InputTuple,
     RelinkedEvent.OutputTuple,
     RelinkedEvent.OutputObject
+  >;
+  getEvent(
+    key: "RetiredClaimRuled"
+  ): TypedContractEvent<
+    RetiredClaimRuledEvent.InputTuple,
+    RetiredClaimRuledEvent.OutputTuple,
+    RetiredClaimRuledEvent.OutputObject
   >;
   getEvent(
     key: "TestAccountSet"
@@ -1232,6 +1298,17 @@ export interface CofferdamIdentityRegistry extends BaseContract {
       RelinkedEvent.InputTuple,
       RelinkedEvent.OutputTuple,
       RelinkedEvent.OutputObject
+    >;
+
+    "RetiredClaimRuled(bytes32,address,address,bool)": TypedContractEvent<
+      RetiredClaimRuledEvent.InputTuple,
+      RetiredClaimRuledEvent.OutputTuple,
+      RetiredClaimRuledEvent.OutputObject
+    >;
+    RetiredClaimRuled: TypedContractEvent<
+      RetiredClaimRuledEvent.InputTuple,
+      RetiredClaimRuledEvent.OutputTuple,
+      RetiredClaimRuledEvent.OutputObject
     >;
 
     "TestAccountSet(address,bool)": TypedContractEvent<

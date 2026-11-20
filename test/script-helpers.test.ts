@@ -2,7 +2,7 @@ import { expect } from 'chai';
 
 import { forkReceipt, isForkTransportError } from '../scripts/lib/chain';
 import { CofferdamIdentityRegistry__factory, ZKPassportEvidenceAdapter__factory } from '../typechain-types';
-import { describeCustomError, revertReason, withholdWords } from '../scripts/lib/identity';
+import { describeCustomError, identifierTypeFor, revertReason, withholdWords } from '../scripts/lib/identity';
 
 // Script helpers. forkReceipt: a fork's receipt waited for through the forked RPC's refusals
 // (scripts/identity-bind.ts; publicnode refused anvil's receipt lookup on
@@ -113,5 +113,31 @@ describe('revertReason', () => {
   it('withholds the hex of an error it cannot decode', () => {
     const message = `execution reverted: custom error 0xdeadbeef: ${'ab'.repeat(32)}`;
     expect(revertReason(iface, new Error(message))).to.equal('execution reverted: custom error 0xdeadbeef: <32 bytes withheld>');
+  });
+});
+
+describe('identifierTypeFor (deploy-identity.ts)', () => {
+  const real = { mainnet: true, fork: false, pepper: false };
+  const fork = { mainnet: true, fork: true, pepper: false };
+  const off = { mainnet: false, fork: false, pepper: false };
+
+  it('on chain 8453 the type must be named, a fork included', () => {
+    expect(() => identifierTypeFor({ GENERATION: 'zkp-prod-1' }, real)).to.throw(/set ZKP_IDENTIFIER_TYPE/);
+    expect(() => identifierTypeFor({}, fork)).to.throw(/set ZKP_IDENTIFIER_TYPE/);
+    expect(() => identifierTypeFor({}, { ...real, pepper: true })).to.throw(/set ZKP_IDENTIFIER_TYPE/);
+  });
+
+  it('Base mainnet refuses non-salted outside zkp-test-1; a fork rehearsal may run it', () => {
+    expect(() => identifierTypeFor({ ZKP_IDENTIFIER_TYPE: 'non-salted', GENERATION: 'cofferdam-id-v1' }, real)).to.throw(/only in zkp-test-1/);
+    expect(identifierTypeFor({ ZKP_IDENTIFIER_TYPE: 'non-salted', GENERATION: 'zkp-test-1' }, real)).to.equal('non-salted');
+    expect(identifierTypeFor({ ZKP_IDENTIFIER_TYPE: 'non-salted', GENERATION: 'zkp-dryrun-1' }, fork)).to.equal('non-salted');
+    expect(identifierTypeFor({ ZKP_IDENTIFIER_TYPE: 'salted', GENERATION: 'cofferdam-id-v1' }, real)).to.equal('salted');
+  });
+
+  it('off mainnet the defaults stand; the pepper is salted only', () => {
+    expect(identifierTypeFor({}, off)).to.equal('non-salted');
+    expect(identifierTypeFor({}, { ...off, pepper: true })).to.equal('salted');
+    expect(() => identifierTypeFor({ ZKP_IDENTIFIER_TYPE: 'non-salted' }, { ...off, pepper: true })).to.throw(/salted identifiers only/);
+    expect(() => identifierTypeFor({ ZKP_IDENTIFIER_TYPE: 'unsalted' }, off)).to.throw(/non-salted or salted/);
   });
 });

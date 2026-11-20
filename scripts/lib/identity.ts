@@ -59,6 +59,36 @@ export function zkpIdentifierKind(identifierType: number, oprfKeyHash = '0x' + '
 }
 
 /** `ZKPassportEvidenceAdapter.scopeId()` for a scope under cofferdam.xyz. */
+/** The one generation on Base mainnet whose identifiers are unsalted (T2, accepted in writing 2026-11-15). */
+export const UNSALTED_MAINNET_GENERATION = 'zkp-test-1';
+
+/**
+ * The identifier type `deploy-identity.ts` deploys. On chain 8453 it must be
+ * named (`ZKP_IDENTIFIER_TYPE`), never defaulted, and on Base mainnet itself
+ * (not a local fork) `non-salted` is refused outside `zkp-test-1`: decision
+ * 0080 rule 4 keeps every real user's unsalted identifier off the chain, and
+ * the registry pins its kind for good. Elsewhere the default is `salted` for
+ * the pepper adapter and `non-salted` otherwise.
+ */
+export function identifierTypeFor(
+  env: { ZKP_IDENTIFIER_TYPE?: string; GENERATION?: string },
+  o: { mainnet: boolean; fork: boolean; pepper: boolean },
+): 'salted' | 'non-salted' {
+  const named = env.ZKP_IDENTIFIER_TYPE?.trim();
+  if (o.mainnet && !named) {
+    throw new Error('On chain 8453 set ZKP_IDENTIFIER_TYPE (salted, or non-salted for zkp-test-1 and fork rehearsals): it is pinned for the generation');
+  }
+  const typeName = named || (o.pepper ? 'salted' : 'non-salted');
+  if (typeName !== 'non-salted' && typeName !== 'salted') throw new Error('ZKP_IDENTIFIER_TYPE is non-salted or salted');
+  if (o.pepper && typeName !== 'salted') throw new Error('The pepper adapter takes salted identifiers only');
+  if (o.mainnet && !o.fork && typeName === 'non-salted' && env.GENERATION?.trim() !== UNSALTED_MAINNET_GENERATION) {
+    throw new Error(
+      `non-salted identifiers reach Base mainnet only in ${UNSALTED_MAINNET_GENERATION} (decision 0080, T2 and rule 4): deploy salted`,
+    );
+  }
+  return typeName;
+}
+
 export function zkpScopeId(scope: string): string {
   return keccak256(abi.encode(['string', 'string'], [ZKP_DOMAIN, scope]));
 }

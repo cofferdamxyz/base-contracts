@@ -16,6 +16,7 @@ import {
   ZKP_IDENTIFIER_TYPE,
   ZKP_OUTER_VERIFIERS_0_23_0,
   ZKP_ROOT_VERIFIER,
+  identifierTypeFor,
   zkpCircuitsVersion,
   zkpIdentifierKind,
   zkpScopeId,
@@ -46,14 +47,18 @@ import {
 //                           deploys and owns the generation instead of the
 //                           Ledger (scripts/lib/devKeyException.ts)
 //   REGISTRY_OWNER          owner of the registry; required on mainnet (the
-//                           founder's Ledger for the test generation, T3; the
-//                           Safe for production). Under the dev-key exception
+//                           Safe for production; for the test generation T3
+//                           said the founder's Ledger, replaced by the M2
+//                           dev-key exception below). Under the dev-key exception
 //                           the CofferdamDev wallet by default, or a Safe v1.4.1
 //                           it signs for (create-safe.ts), checked on chain
 //   ZKP_SCOPE               required; T1's test scope is cofferdam-zkp-test-1
 //   ZKP_CIRCUITS_VERSION    default 0.21.1
 //   ZKP_VALIDITY_SECONDS    default 3600, at most 86400
-//   ZKP_IDENTIFIER_TYPE     non-salted (default) or salted
+//   ZKP_IDENTIFIER_TYPE     non-salted (default off chain 8453) or salted.
+//                           Required on chain 8453, a fork included; Base
+//                           mainnet itself refuses non-salted outside
+//                           GENERATION=zkp-test-1 (decision 0080, T2, rule 4)
 //   ZKP_OPRF_KEY_HASH       required for salted
 //   ZKP_MIN_AGE             default 18; mainnet refuses less. The proof's age
 //                           bound must be exactly this
@@ -96,9 +101,7 @@ async function main() {
   const versionLabel = process.env.ZKP_CIRCUITS_VERSION?.trim() || (pepper ? '0.23.0' : '0.21.1');
   const version = zkpCircuitsVersion(versionLabel);
   const validity = BigInt(process.env.ZKP_VALIDITY_SECONDS?.trim() || '3600');
-  const typeName = process.env.ZKP_IDENTIFIER_TYPE?.trim() || (pepper ? 'salted' : 'non-salted');
-  if (typeName !== 'non-salted' && typeName !== 'salted') throw new Error('ZKP_IDENTIFIER_TYPE is non-salted or salted');
-  if (pepper && typeName !== 'salted') throw new Error('The pepper adapter takes salted identifiers only');
+  const typeName = identifierTypeFor(process.env, { mainnet, fork: await isLocalFork(), pepper });
   const identifierType = typeName === 'salted' ? ZKP_IDENTIFIER_TYPE.salted : ZKP_IDENTIFIER_TYPE.nonSalted;
   const oprfKeyHash = process.env.ZKP_OPRF_KEY_HASH?.trim() || ethers.ZeroHash;
   if (pepper) {
