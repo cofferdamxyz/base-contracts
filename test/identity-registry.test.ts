@@ -688,6 +688,29 @@ describe('CofferdamIdentityRegistry + ZKPassportEvidenceAdapter', () => {
       await expect(d.registry.connect(owner).ruleRetiredClaim(ID_A, squatter3.address, false)).to.emit(d.registry, 'RetiredClaimRuled');
     });
 
+    it('a claim left from an earlier retirement never reopens when the holder renews and retires the identifier again', async () => {
+      const d = await deploy({ rebindDelay: 3 * DAY });
+      const [, , , , , , squatter2] = await ethers.getSigners();
+      const ID_C = ethers.id('passport-c');
+      await d.registry.connect(alice).bind(d.adapter, await evidence(d));
+      await d.registry.connect(alice).relink(d.adapter, await evidence(d, { action: 'relink', identifier: ID_B }));
+      await d.registry.connect(squatter2).requestRebind(d.adapter, await evidence(d, { account: squatter2.address, action: 'rebind' }));
+      await d.registry.connect(bob).requestRebind(d.adapter, await evidence(d, { account: bob.address, action: 'rebind' }));
+      await time.increase(3 * DAY);
+      await d.registry.connect(owner).ruleRetiredClaim(ID_A, bob.address, true);
+      // The holder renews: ID_A is retired again, now by Bob.
+      await d.registry.connect(bob).relink(d.adapter, await evidence(d, { account: bob.address, action: 'relink', identifier: ID_C }));
+      expect(await d.registry.retiredBy(ID_A)).to.equal(bob.address);
+      // The stale claim, made against Alice's retirement, cannot be awarded; it can be refused, naming Alice.
+      await expect(d.registry.connect(owner).ruleRetiredClaim(ID_A, squatter2.address, true))
+        .to.be.revertedWithCustomError(d.registry, 'RebindStale')
+        .withArgs(ID_A);
+      await expect(d.registry.connect(owner).ruleRetiredClaim(ID_A, squatter2.address, false))
+        .to.emit(d.registry, 'RetiredClaimRuled')
+        .withArgs(ID_A, alice.address, squatter2.address, false);
+      expect(await d.registry.accountToIdentifier(bob.address)).to.equal(ID_C);
+    });
+
     it('a claim on a retired identifier never applies at once, even with no rebind delay', async () => {
       const d = await deploy();
       await d.registry.connect(alice).bind(d.adapter, await evidence(d));

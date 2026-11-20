@@ -452,8 +452,9 @@ contract CofferdamIdentityRegistry {
     /// @notice Rule on `claimant`'s claim to a retired identifier (decision
     ///         0080 P4). Awarding binds the identifier to the claimant, who
     ///         proved it in `requestRebind`, and lifts its retirement, which
-    ///         leaves every other claim on it unawardable; the account that
-    ///         retired it keeps its current binding. Refusing drops the claim.
+    ///         leaves every other claim on it unawardable, also after a later
+    ///         retirement (`RebindStale`); the account that retired it keeps
+    ///         its current binding. Refusing drops the claim.
     ///         An award waits for `REBIND_DELAY`, the retiring account's time
     ///         to answer with its evidence, and the checks of
     ///         `finalizeRebind`; a refusal may come at any time, paused or not.
@@ -466,8 +467,11 @@ contract CofferdamIdentityRegistry {
         PendingRebind memory p = retiredClaims[identifier][claimant];
         if (p.newAccount == address(0)) revert NoPendingRebind(identifier);
         if (award && !isRetired[identifier]) revert NotRetired(identifier);
-        address retiring = retiredBy[identifier];
         if (award) {
+            // A claim holds only against the retirement it was made under: a
+            // claim left from an earlier one never reopens when the identifier
+            // is retired again (the new retiring account gets its own delay).
+            if (p.oldAccount != retiredBy[identifier]) revert RebindStale(identifier);
             if (paused) revert Paused();
             if (block.timestamp < p.readyAt) revert RebindNotReady(p.readyAt);
             if (!isAdapter[p.adapter]) revert AdapterNotActive(p.adapter);
@@ -482,7 +486,7 @@ contract CofferdamIdentityRegistry {
             identifierToAccount[identifier] = p.newAccount;
             accountToIdentifier[p.newAccount] = identifier;
         }
-        emit RetiredClaimRuled(identifier, retiring, p.newAccount, award);
+        emit RetiredClaimRuled(identifier, p.oldAccount, p.newAccount, award);
     }
 
     // ── Internals ────────────────────────────────────────────────────────────
