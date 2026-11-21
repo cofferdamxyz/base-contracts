@@ -451,8 +451,12 @@ contract CofferdamIdentityRegistry {
 
     /// @notice Stop accepting an adapter's evidence at once: a removal only
     ///         narrows what binds, so it needs no timelock. Bindings it made
-    ///         stay; rebinds it authorised that are still pending can no longer
-    ///         be finalized.
+    ///         stay; rebinds and claims it authorised that are still pending
+    ///         can no longer be finalized or awarded while it stays removed. A
+    ///         later re-activation would revive them (no activation count is
+    ///         kept), so the owner re-activates an adapter only once every
+    ///         rebind it authorised is finished, cancelled or replaced, and
+    ///         refuses its claims first (decision 0080 P4, support runbook).
     function removeAdapter(address adapter) external onlyOwner {
         if (!isAdapter[adapter]) revert AdapterNotActive(adapter);
         isAdapter[adapter] = false;
