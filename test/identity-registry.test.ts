@@ -711,6 +711,61 @@ describe('CofferdamIdentityRegistry + ZKPassportEvidenceAdapter', () => {
       expect(await d.registry.accountToIdentifier(bob.address)).to.equal(ID_C);
     });
 
+    it('a claim left from an earlier retirement never revives when the same account retires the identifier again (the review of 2026-11-21)', async () => {
+      const d = await deploy({ rebindDelay: 3 * DAY });
+      const [, , , , , , squatter2] = await ethers.getSigners();
+      const ID_C = ethers.id('passport-c');
+      // Alice retires ID_A by relinking to ID_B; a squatter and Bob claim it; the Safe awards Bob.
+      await d.registry.connect(alice).bind(d.adapter, await evidence(d));
+      await d.registry.connect(alice).relink(d.adapter, await evidence(d, { action: 'relink', identifier: ID_B }));
+      expect(await d.registry.retirements(ID_A)).to.equal(1n);
+      await d.registry.connect(squatter2).requestRebind(d.adapter, await evidence(d, { account: squatter2.address, action: 'rebind' }));
+      await d.registry.connect(bob).requestRebind(d.adapter, await evidence(d, { account: bob.address, action: 'rebind' }));
+      await time.increase(3 * DAY);
+      await d.registry.connect(owner).ruleRetiredClaim(ID_A, bob.address, true);
+      // Carol takes ID_B from Alice by an unanswered rebind, leaving Alice unbound.
+      await d.registry.connect(carol).requestRebind(d.adapter, await evidence(d, { account: carol.address, action: 'rebind', identifier: ID_B }));
+      await time.increase(3 * DAY);
+      await d.registry.finalizeRebind(ID_B);
+      expect(await d.registry.accountToIdentifier(alice.address)).to.equal(ZERO32);
+      // Alice takes ID_A back from Bob the same way, then retires it again by relinking to ID_C.
+      await d.registry.connect(alice).requestRebind(d.adapter, await evidence(d, { action: 'rebind' }));
+      await time.increase(3 * DAY);
+      await d.registry.finalizeRebind(ID_A);
+      await d.registry.connect(alice).relink(d.adapter, await evidence(d, { action: 'relink', identifier: ID_C }));
+      expect(await d.registry.retiredBy(ID_A)).to.equal(alice.address);
+      expect(await d.registry.retirements(ID_A)).to.equal(2n);
+      // The squatter's claim names Alice and its clock ran out long ago, but it was made under the first retirement.
+      await expect(d.registry.connect(owner).ruleRetiredClaim(ID_A, squatter2.address, true))
+        .to.be.revertedWithCustomError(d.registry, 'RebindStale')
+        .withArgs(ID_A);
+      // Claiming again starts a new clock under the current retirement, which an award then honours.
+      await d.registry.connect(squatter2).requestRebind(d.adapter, await evidence(d, { account: squatter2.address, action: 'rebind' }));
+      expect(await d.registry.retiredClaimRetirement(ID_A, squatter2.address)).to.equal(2n);
+      await expect(d.registry.connect(owner).ruleRetiredClaim(ID_A, squatter2.address, true))
+        .to.be.revertedWithCustomError(d.registry, 'RebindNotReady');
+      await time.increase(3 * DAY);
+      await expect(d.registry.connect(owner).ruleRetiredClaim(ID_A, squatter2.address, true))
+        .to.emit(d.registry, 'RetiredClaimRuled')
+        .withArgs(ID_A, alice.address, squatter2.address, true);
+      expect(await d.registry.retiredClaimRetirement(ID_A, squatter2.address)).to.equal(0n);
+    });
+
+    it('refusing a claim after another was awarded names the retiring account in its event', async () => {
+      const d = await deploy({ rebindDelay: 3 * DAY });
+      await d.registry.connect(alice).bind(d.adapter, await evidence(d));
+      await d.registry.connect(alice).relink(d.adapter, await evidence(d, { action: 'relink', identifier: ID_B }));
+      await d.registry.connect(bob).requestRebind(d.adapter, await evidence(d, { account: bob.address, action: 'rebind' }));
+      await d.registry.connect(carol).requestRebind(d.adapter, await evidence(d, { account: carol.address, action: 'rebind' }));
+      await time.increase(3 * DAY);
+      await d.registry.connect(owner).ruleRetiredClaim(ID_A, bob.address, true);
+      await expect(d.registry.connect(owner).ruleRetiredClaim(ID_A, carol.address, true))
+        .to.be.revertedWithCustomError(d.registry, 'NotRetired');
+      await expect(d.registry.connect(owner).ruleRetiredClaim(ID_A, carol.address, false))
+        .to.emit(d.registry, 'RetiredClaimRuled')
+        .withArgs(ID_A, alice.address, carol.address, false);
+    });
+
     it('a claim on a retired identifier never applies at once, even with no rebind delay', async () => {
       const d = await deploy();
       await d.registry.connect(alice).bind(d.adapter, await evidence(d));

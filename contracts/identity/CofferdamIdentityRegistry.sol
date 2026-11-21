@@ -103,6 +103,11 @@ contract CofferdamIdentityRegistry {
     /// @notice The account whose `relink` retired an identifier: the party a
     ///         claim on it is ruled against (`ruleRetiredClaim`).
     mapping(bytes32 => address) public retiredBy;
+    /// @notice How many times an identifier has been retired. A claim records
+    ///         the count it was made under (`retiredClaimRetirement`), so a
+    ///         claim left from an earlier retirement never revives, even when
+    ///         the same account retires the identifier again.
+    mapping(bytes32 => uint256) public retirements;
     /// @notice The nonce the account's next proof must be bound to.
     mapping(address => uint256) public nonces;
 
@@ -121,6 +126,9 @@ contract CofferdamIdentityRegistry {
     ///         (`oldAccount` is the account that retired it), each waiting for
     ///         the owner's `ruleRetiredClaim`. None blocks or replaces another.
     mapping(bytes32 => mapping(address => PendingRebind)) public retiredClaims;
+    /// @notice The retirement (`retirements`) a claim on a retired identifier
+    ///         was made under; an award needs it to be the current one.
+    mapping(bytes32 => mapping(address => uint256)) public retiredClaimRetirement;
 
     // ── Events ───────────────────────────────────────────────────────────────
 
@@ -264,6 +272,7 @@ contract CofferdamIdentityRegistry {
         uint256 nonce = nonces[account]++;
         isRetired[oldIdentifier] = true;
         retiredBy[oldIdentifier] = account;
+        retirements[oldIdentifier]++;
         delete identifierToAccount[oldIdentifier];
         identifierToAccount[newIdentifier] = account;
         accountToIdentifier[account] = newIdentifier;
@@ -292,6 +301,7 @@ contract CofferdamIdentityRegistry {
         if (isRetired[identifier]) {
             retiredClaims[identifier][newAccount] =
                 PendingRebind({oldAccount: oldAccount, newAccount: newAccount, readyAt: readyAt, adapter: adapter});
+            retiredClaimRetirement[identifier][newAccount] = retirements[identifier];
             emit RebindRequested(oldAccount, newAccount, identifier, nonce, readyAt);
             return;
         }
@@ -470,8 +480,9 @@ contract CofferdamIdentityRegistry {
         if (award) {
             // A claim holds only against the retirement it was made under: a
             // claim left from an earlier one never reopens when the identifier
-            // is retired again (the new retiring account gets its own delay).
-            if (p.oldAccount != retiredBy[identifier]) revert RebindStale(identifier);
+            // is retired again, by another account or the same one (the new
+            // retirement gets its own delay). Compared by count, not address.
+            if (retiredClaimRetirement[identifier][claimant] != retirements[identifier]) revert RebindStale(identifier);
             if (paused) revert Paused();
             if (block.timestamp < p.readyAt) revert RebindNotReady(p.readyAt);
             if (!isAdapter[p.adapter]) revert AdapterNotActive(p.adapter);
@@ -480,6 +491,7 @@ contract CofferdamIdentityRegistry {
             if (existing != bytes32(0)) revert AccountAlreadyBound(p.newAccount, existing);
         }
         delete retiredClaims[identifier][claimant];
+        delete retiredClaimRetirement[identifier][claimant];
         if (award) {
             isRetired[identifier] = false;
             delete retiredBy[identifier];

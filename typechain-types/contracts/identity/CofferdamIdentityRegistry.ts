@@ -64,7 +64,9 @@ export interface CofferdamIdentityRegistryInterface extends Interface {
       | "removeAdapter"
       | "requestRebind"
       | "retiredBy"
+      | "retiredClaimRetirement"
       | "retiredClaims"
+      | "retirements"
       | "ruleRetiredClaim"
       | "setAllowlistOnly"
       | "setPaused"
@@ -221,8 +223,16 @@ export interface CofferdamIdentityRegistryInterface extends Interface {
     values: [BytesLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "retiredClaimRetirement",
+    values: [BytesLike, AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "retiredClaims",
     values: [BytesLike, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "retirements",
+    values: [BytesLike]
   ): string;
   encodeFunctionData(
     functionFragment: "ruleRetiredClaim",
@@ -350,7 +360,15 @@ export interface CofferdamIdentityRegistryInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "retiredBy", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "retiredClaimRetirement",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "retiredClaims",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "retirements",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -837,6 +855,12 @@ export interface CofferdamIdentityRegistry extends BaseContract {
 
   retiredBy: TypedContractMethod<[arg0: BytesLike], [string], "view">;
 
+  retiredClaimRetirement: TypedContractMethod<
+    [arg0: BytesLike, arg1: AddressLike],
+    [bigint],
+    "view"
+  >;
+
   retiredClaims: TypedContractMethod<
     [arg0: BytesLike, arg1: AddressLike],
     [
@@ -849,6 +873,8 @@ export interface CofferdamIdentityRegistry extends BaseContract {
     ],
     "view"
   >;
+
+  retirements: TypedContractMethod<[arg0: BytesLike], [bigint], "view">;
 
   ruleRetiredClaim: TypedContractMethod<
     [identifier: BytesLike, claimant: AddressLike, award: boolean],
@@ -1031,6 +1057,13 @@ export interface CofferdamIdentityRegistry extends BaseContract {
     nameOrSignature: "retiredBy"
   ): TypedContractMethod<[arg0: BytesLike], [string], "view">;
   getFunction(
+    nameOrSignature: "retiredClaimRetirement"
+  ): TypedContractMethod<
+    [arg0: BytesLike, arg1: AddressLike],
+    [bigint],
+    "view"
+  >;
+  getFunction(
     nameOrSignature: "retiredClaims"
   ): TypedContractMethod<
     [arg0: BytesLike, arg1: AddressLike],
@@ -1044,6 +1077,9 @@ export interface CofferdamIdentityRegistry extends BaseContract {
     ],
     "view"
   >;
+  getFunction(
+    nameOrSignature: "retirements"
+  ): TypedContractMethod<[arg0: BytesLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "ruleRetiredClaim"
   ): TypedContractMethod<
