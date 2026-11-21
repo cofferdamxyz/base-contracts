@@ -46,5 +46,17 @@
   },
   "CofferdamCeremonyAttesterRegistry": {
     "address": "0x44A2B59d5D39f773C2e65469e0Dd3217E53823Af"
+  },
+  "CofferdamSafe": {
+    "address": "0x48fDe2B5aF92BF4BE2Cc82DE71e7a87774CFF735"
+  },
+  "CofferdamHandleAnchor": {
+    "address": "0x8b346614EBC7eE242eCB2Bb5F04D9CBF91ed1aA8",
+    "txHash": "0x6d704f856c60a347dbbe0428a01b4816a39cfb2c475d5a8b937db487fb6c56ae",
+    "blockNumber": 61532195,
+    "deployer": "0x2c8A01e971d7C51B3B78f9F08c57c45584D96AB2"
+  },
+  "CofferdamHandleAnchorSafe": {
+    "address": "0x48fDe2B5aF92BF4BE2Cc82DE71e7a87774CFF735"
   }
 }
