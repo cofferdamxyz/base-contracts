@@ -3,8 +3,17 @@ import { ethers, network } from 'hardhat';
 import { forkReceipt, chainId as nodeChainId, isLocalFork } from './lib/chain';
 import { readDeployments } from './lib/deployments';
 import { IDENTITY_ACTIONS, ZKP_IDENTIFIER_TYPE, ZkpSolidityParams, revertReason, withholdWords, zkpCustomData, zkpEvidenceFromParams } from './lib/identity';
-import { CofferdamIdentityRegistry__factory, ZKPassportEvidenceAdapter__factory } from '../typechain-types';
-import type { CofferdamIdentityRegistry, ZKPassportExampleConsumer } from '../typechain-types';
+import {
+  CofferdamIdentityRegistry__factory,
+  CofferdamZKPassportPepperAdapter__factory,
+  ZKPassportEvidenceAdapter__factory,
+} from '../typechain-types';
+import type {
+  CofferdamIdentityRegistry,
+  CofferdamZKPassportPepperAdapter,
+  ZKPassportEvidenceAdapter,
+  ZKPassportExampleConsumer,
+} from '../typechain-types';
 
 // Decision 0080: a real bound proof against a generation's registry on a local
 // fork of Base mainnet. Fork only; it refuses any other node, so nothing it
@@ -38,16 +47,34 @@ import type { CofferdamIdentityRegistry, ZKPassportExampleConsumer } from '../ty
 //
 // ZKP_PARAMS_FILE is the proof's Solidity parameters
 // (`zkpassport-test.mjs --solidity-params`), kept outside this repository.
+//
+// The pepper (decision 0080, P1): a generation deployed with ZKP_ADAPTER=pepper
+// records CofferdamZKPassportPepperAdapter, which verifies the outer proof
+// itself because RootVerifier refuses any OPRF key but ZKPassport's own. The
+// script takes whichever adapter the generation recorded (ZKP_ADAPTER picks
+// one when both are). Its cross-checks then are: the adapter accepts the
+// proof; the proof's verification key is still listed by ZKPassport's
+// sub-verifier, at the address the adapter pinned; ZKPassport's outer verifier,
+// called directly, accepts the outer proof; RootVerifier.verify refuses it only
+// with "Invalid OPRF public key", after its roots, date, scopes and
+// commitments; and the helper's verifyScopes agrees under the adapter's scope
+// and refuses another domain. The proof is requested from Cofferdam's in-app
+// prover (cofferdam-app modules/zk-prover), salted under the adapter's key.
 
 /** The dashboard policy's name, which a request made through the policy would use as its scope. */
 const POLICY_SCOPE = 'zkp-test-1';
 
 const ERRORS = [CofferdamIdentityRegistry__factory.createInterface(), ZKPassportEvidenceAdapter__factory.createInterface()];
 
-// The reason only, the identifier withheld (./lib/identity revertReason).
-function reasonOf(e: unknown): string {
-  return revertReason(ERRORS, e);
-}
+const ERRORS_PEPPER = [CofferdamIdentityRegistry__factory.createInterface(), CofferdamZKPassportPepperAdapter__factory.createInterface()];
+
+/** The getters both adapters share, with the same signatures. */
+type AdapterConfig = Pick<
+  ZKPassportEvidenceAdapter,
+  'scope' | 'DOMAIN' | 'EXPIRY_MARGIN' | 'MIN_AGE' | 'VALIDITY' | 'OPRF_KEY_HASH' | 'VERSION' | 'ROOT_VERIFIER'
+>;
+
+type Report = (what: string, ok: boolean, detail?: string) => void;
 
 async function main() {
   if ((await nodeChainId()) !== 8453n || !(await isLocalFork())) {
@@ -56,10 +83,24 @@ async function main() {
   const fileNetwork = process.env.DEPLOYMENTS_NETWORK?.trim() || network.name;
   const recorded = readDeployments(fileNetwork, 8453n);
   const registryAddr = recorded.CofferdamIdentityRegistry?.address;
-  const adapterAddr = recorded.ZKPassportEvidenceAdapter?.address;
-  if (!registryAddr || !adapterAddr) throw new Error(`No identity registry recorded for ${fileNetwork}.${process.env.GENERATION}: deploy one, or name a generation`);
+  const rootVerifierAdapterAddr = recorded.ZKPassportEvidenceAdapter?.address;
+  const pepperAdapterAddr = recorded.CofferdamZKPassportPepperAdapter?.address;
+  const choice = process.env.ZKP_ADAPTER?.trim();
+  if (choice && choice !== 'root-verifier' && choice !== 'pepper') throw new Error('ZKP_ADAPTER is root-verifier or pepper');
+  if (!choice && rootVerifierAdapterAddr && pepperAdapterAddr) throw new Error('This generation records both adapters: set ZKP_ADAPTER=root-verifier or pepper');
+  const pepper = choice ? choice === 'pepper' : !!pepperAdapterAddr && !rootVerifierAdapterAddr;
+  const adapterAddr = pepper ? pepperAdapterAddr : rootVerifierAdapterAddr;
+  if (!registryAddr || !adapterAddr) {
+    throw new Error(`No identity registry and ${pepper ? 'pepper ' : ''}adapter recorded for ${fileNetwork}.${process.env.GENERATION}: deploy one, or name a generation`);
+  }
   const registry = (await ethers.getContractAt('CofferdamIdentityRegistry', registryAddr)) as unknown as CofferdamIdentityRegistry;
-  const adapter = await ethers.getContractAt('ZKPassportEvidenceAdapter', adapterAddr);
+  const pepperAdapter = pepper
+    ? ((await ethers.getContractAt('CofferdamZKPassportPepperAdapter', adapterAddr)) as unknown as CofferdamZKPassportPepperAdapter)
+    : null;
+  const rootAdapter = pepper ? null : ((await ethers.getContractAt('ZKPassportEvidenceAdapter', adapterAddr)) as unknown as ZKPassportEvidenceAdapter);
+  const adapter: AdapterConfig = (pepperAdapter ?? rootAdapter)!;
+  // The reason only, the identifier withheld (./lib/identity revertReason).
+  const reasonOf = (e: unknown) => revertReason(pepper ? ERRORS_PEPPER : ERRORS, e);
   if ((await ethers.provider.getCode(registryAddr)) === '0x') throw new Error(`No contract at ${registryAddr} on this fork`);
   const account = ethers.getAddress(process.env.ACCOUNT?.trim() || '0x70997970C51812dc3A010C7d01b50e0d17dc79C8');
 
@@ -98,10 +139,12 @@ async function main() {
   // the day after now + margin + validity: at least the validity of headroom.
   const fromTime = Math.max(Math.floor(Date.now() / 1000), (await ethers.provider.getBlock('latest'))!.timestamp);
   const expiryAfter = new Date((fromTime + Number(margin) + Number(validity) + 86_400) * 1000).toISOString().slice(0, 10);
-  const salted = Number(await adapter.IDENTIFIER_TYPE()) === ZKP_IDENTIFIER_TYPE.salted;
+  // The pepper adapter takes salted proofs only (its constant SALTED); the other pins a type.
+  const salted = pepper || Number(await rootAdapter!.IDENTIFIER_TYPE()) === ZKP_IDENTIFIER_TYPE.salted;
+  const label = (v: string) => [2, 6, 10].map((i) => parseInt(v.slice(i, i + 4), 16)).join('.');
   console.log({
     registry: registryAddr,
-    adapter: adapterAddr,
+    adapter: `${adapterAddr} (${pepper ? 'CofferdamZKPassportPepperAdapter' : 'ZKPassportEvidenceAdapter'}, circuits ${label(await adapter.VERSION())})`,
     account,
     domain,
     scope,
@@ -113,6 +156,19 @@ async function main() {
   console.log(`digest (custom_data): ${zkpCustomData(digest)}`);
 
   const file = process.env.ZKP_PARAMS_FILE?.trim();
+  if (!file && pepper) {
+    const key = await adapter.OPRF_KEY_HASH();
+    console.log(`\nRequest the proof from Cofferdam's in-app prover (cofferdam-app, modules/zk-prover/scripts; the key holder for ${key} answering the phone); it stays valid for ${Number(validity) / 60} minutes:`);
+    console.log(
+      `  node bind-request.mjs <request.json> --account ${account} --custom-data ${zkpCustomData(digest)} --circuits ${label(await adapter.VERSION())} --domain ${domain} --scope ${scope} --min-age ${Number(minAge)} --expiry-margin-days ${Number(margin) / 86_400} --rpc ${'url' in network.config ? network.config.url : '<this fork\'s RPC>'} --oprf-key-hash ${key}`,
+    );
+    console.log('  node oprf-evaluator.mjs serve <node_modules> <key.json> [--ios <device>]');
+    console.log('Then stream the proof result through proof-to-params.mjs into a named pipe, so no copy lands on disk, into this script again:');
+    console.log('  mkfifo -m 600 /tmp/zkp.fifo');
+    console.log(`  (node proof-to-params.mjs <node_modules> <ProofResult> /tmp/zkp.fifo --domain ${domain} --scope ${scope} --validity ${Number(validity)} &)`);
+    console.log(`  ZKP_PARAMS_FILE=/tmp/zkp.fifo yarn ${process.env.npm_lifecycle_event ?? 'identity:bind:fork'} && rm /tmp/zkp.fifo`);
+    return;
+  }
   if (!file) {
     console.log(`\nRequest the proof (cofferdam-app worktree on branch zkpassport-test); it stays valid for ${Number(validity) / 60} minutes:`);
     console.log(
@@ -134,118 +190,124 @@ async function main() {
 
   // Cross-checks, all read-only except the fork-only adapter swap below.
   const failures: string[] = [];
-  const report = (what: string, ok: boolean, detail = '') => {
+  const report: Report = (what, ok, detail = '') => {
     console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}${detail ? `: ${detail}` : ''}`);
     if (!ok) failures.push(what);
   };
-  const label = (v: string) => [2, 6, 10].map((i) => parseInt(v.slice(i, i + 4), 16)).join('.');
-  const rootAddr = await adapter.ROOT_VERIFIER();
-  const root = await ethers.getContractAt('IZKPassportRootVerifier', rootAddr);
+  if (pepper) {
+    for (const v of ['ZKP_FORK_ADAPTER_VERSION', 'ZKP_COMPARE_PARAMS_FILE']) {
+      if (process.env[v]?.trim()) console.log(`NOTE ${v} applies to the RootVerifier adapter only: ignored`);
+    }
+    await pepperCrossChecks(pepperAdapter!, params, { account, digest, evidence, domain, scope, validity: Number(validity) }, report, reasonOf, label);
+  } else {
+    const rootAddr = await adapter.ROOT_VERIFIER();
+    const root = await ethers.getContractAt('IZKPassportRootVerifier', rootAddr);
 
-  // The phone's ZKPassport app proves in its own circuits version; the adapter
-  // pins one. A registry takes one adapter per version (added through the
-  // owner's timelock); ZKP_FORK_ADAPTER_VERSION=proof stands one in on the
-  // fork: the live adapter's code is replaced by a copy compiled here and
-  // pinned to the proof's version, its storage (the scope) and the registry
-  // untouched, so the digest still matches. It also replaces a stand-in an
-  // earlier run left with other code (an adapter change since).
-  const proofVersion = params.version;
-  const adapterVersion: string = await adapter.VERSION();
-  const otherVersion = proofVersion.toLowerCase() !== adapterVersion.toLowerCase();
-  const helperForProof: string = await root.getHelper(proofVersion);
-  if (otherVersion) {
-    console.log(`NOTE the proof is circuits ${label(proofVersion)}; the adapter pins ${label(adapterVersion)}. RootVerifier's helper for ${label(proofVersion)}: ${helperForProof}`);
-    if (helperForProof === ethers.ZeroAddress) report(`RootVerifier knows circuits ${label(proofVersion)}`, false);
-    else if (process.env.ZKP_FORK_ADAPTER_VERSION !== 'proof') {
-      console.log(`  (ZKP_FORK_ADAPTER_VERSION=proof stands a ${label(proofVersion)} adapter in on the fork)`);
+    // The phone's ZKPassport app proves in its own circuits version; the adapter
+    // pins one. A registry takes one adapter per version (added through the
+    // owner's timelock); ZKP_FORK_ADAPTER_VERSION=proof stands one in on the
+    // fork: the live adapter's code is replaced by a copy compiled here and
+    // pinned to the proof's version, its storage (the scope) and the registry
+    // untouched, so the digest still matches. It also replaces a stand-in an
+    // earlier run left with other code (an adapter change since).
+    const proofVersion = params.version;
+    const adapterVersion: string = await adapter.VERSION();
+    const otherVersion = proofVersion.toLowerCase() !== adapterVersion.toLowerCase();
+    const helperForProof: string = await root.getHelper(proofVersion);
+    if (otherVersion) {
+      console.log(`NOTE the proof is circuits ${label(proofVersion)}; the adapter pins ${label(adapterVersion)}. RootVerifier's helper for ${label(proofVersion)}: ${helperForProof}`);
+      if (helperForProof === ethers.ZeroAddress) report(`RootVerifier knows circuits ${label(proofVersion)}`, false);
+      else if (process.env.ZKP_FORK_ADAPTER_VERSION !== 'proof') {
+        console.log(`  (ZKP_FORK_ADAPTER_VERSION=proof stands a ${label(proofVersion)} adapter in on the fork)`);
+      }
     }
-  }
-  if (process.env.ZKP_FORK_ADAPTER_VERSION === 'proof' && helperForProof !== ethers.ZeroAddress) {
-    const Adapter = await ethers.getContractFactory('ZKPassportEvidenceAdapter');
-    const sent = await Adapter.deploy(rootAddr, helperForProof, proofVersion, scope, validity, await adapter.IDENTIFIER_TYPE(), await adapter.OPRF_KEY_HASH(), minAge, margin);
-    const copy = await forkReceipt(() => sent.waitForDeployment());
-    const code: string = await ethers.provider.getCode(await copy.getAddress());
-    if (code !== (await ethers.provider.getCode(adapterAddr))) {
-      await ethers.provider.send('anvil_setCode', [adapterAddr, code]);
-      console.log(`Fork only: the live adapter's code is now this checkout's, pinning circuits ${label(await adapter.VERSION())} (a copy, as a ${label(proofVersion)} adapter added through the timelock would)`);
+    if (process.env.ZKP_FORK_ADAPTER_VERSION === 'proof' && helperForProof !== ethers.ZeroAddress) {
+      const Adapter = await ethers.getContractFactory('ZKPassportEvidenceAdapter');
+      const sent = await Adapter.deploy(rootAddr, helperForProof, proofVersion, scope, validity, await rootAdapter!.IDENTIFIER_TYPE(), await adapter.OPRF_KEY_HASH(), minAge, margin);
+      const copy = await forkReceipt(() => sent.waitForDeployment());
+      const code: string = await ethers.provider.getCode(await copy.getAddress());
+      if (code !== (await ethers.provider.getCode(adapterAddr))) {
+        await ethers.provider.send('anvil_setCode', [adapterAddr, code]);
+        console.log(`Fork only: the live adapter's code is now this checkout's, pinning circuits ${label(await adapter.VERSION())} (a copy, as a ${label(proofVersion)} adapter added through the timelock would)`);
+      }
     }
-  }
 
-  // ZKPassport's side under the proof's own version, with the adapter's configuration.
-  const pinned = {
-    version: proofVersion,
-    proofVerificationData: params.proofVerificationData,
-    committedInputs: params.committedInputs,
-    serviceConfig: { validityPeriodInSeconds: validity, domain, scope, devMode: false },
-  };
-  const helper = new ethers.Contract(
-    await root.getHelper(proofVersion),
-    ['function verifyScopes(bytes32[] publicInputs, string domain, string scope) view returns (bool)'],
-    ethers.provider,
-  );
-  const verifies = async (serviceConfig: typeof pinned.serviceConfig) => {
-    try {
-      const [valid] = await root.verify({ ...pinned, serviceConfig });
-      return valid as boolean;
-    } catch {
-      return false;
-    }
-  };
-  const scopes = async (d: string, s: string) => {
-    try {
-      return (await helper.verifyScopes(params.proofVerificationData.publicInputs, d, s)) as boolean;
-    } catch {
-      return false;
-    }
-  };
+    // ZKPassport's side under the proof's own version, with the adapter's configuration.
+    const pinned = {
+      version: proofVersion,
+      proofVerificationData: params.proofVerificationData,
+      committedInputs: params.committedInputs,
+      serviceConfig: { validityPeriodInSeconds: validity, domain, scope, devMode: false },
+    };
+    const helper = new ethers.Contract(
+      await root.getHelper(proofVersion),
+      ['function verifyScopes(bytes32[] publicInputs, string domain, string scope) view returns (bool)'],
+      ethers.provider,
+    );
+    const verifies = async (serviceConfig: typeof pinned.serviceConfig) => {
+      try {
+        const [valid] = await root.verify({ ...pinned, serviceConfig });
+        return valid as boolean;
+      } catch {
+        return false;
+      }
+    };
+    const scopes = async (d: string, s: string) => {
+      try {
+        return (await helper.verifyScopes(params.proofVerificationData.publicInputs, d, s)) as boolean;
+      } catch {
+        return false;
+      }
+    };
 
-  let adapterId: string | null = null;
-  try {
-    adapterId = await adapter.verify(account, digest, evidence);
-    report('the adapter accepts it', true);
-  } catch (e) {
-    report('the adapter accepts it', false, reasonOf(e));
-  }
-  const Example = await ethers.getContractFactory('ZKPassportExampleConsumer');
-  const exampleSent = await Example.deploy(rootAddr, domain, scope, validity, minAge);
-  const example = (await forkReceipt(() => exampleSent.waitForDeployment())) as unknown as ZKPassportExampleConsumer;
-  try {
-    // The example wants the bound address as msg.sender.
-    const exampleId: string = await as(account, async (s) => example.connect(s).verify(pinned));
-    report("ZKPassport's example consumer accepts it", true);
-    if (adapterId) report('with the same identifier as the adapter', exampleId === adapterId);
-  } catch (e) {
-    report("ZKPassport's example consumer accepts it", false, reasonOf(e));
-  }
-  const takes = await verifies(pinned.serviceConfig);
-  report(`RootVerifier.verify takes it under ${domain} × ${scope}`, takes);
-  if (takes) {
-    // Meaningful only once it is taken: a refusal of a proof refused everywhere proves nothing.
-    report(`RootVerifier.verify refuses it under the policy's name ${POLICY_SCOPE}`, !(await verifies({ ...pinned.serviceConfig, scope: POLICY_SCOPE })));
-    report('RootVerifier.verify refuses it under another domain', !(await verifies({ ...pinned.serviceConfig, domain: 'example.com' })));
-  }
-  report(`the helper's verifyScopes agrees under ${scope}`, await scopes(domain, scope));
-  report(`the helper's verifyScopes refuses ${POLICY_SCOPE}`, !(await scopes(domain, POLICY_SCOPE)));
-  // One identifier across circuits versions (decision 0080, 8): an earlier
-  // proof of the same passport, in another version, must give the identifier
-  // this one does. It is older than VALIDITY, so RootVerifier gets a validity
-  // that covers its age; a read, never a bind. Prints only same or different.
-  const earlierFile = process.env.ZKP_COMPARE_PARAMS_FILE?.trim();
-  if (earlierFile && adapterId) {
-    const earlier = JSON.parse(await fs.promises.readFile(earlierFile, 'utf8')) as ZkpSolidityParams;
-    const label2 = label(earlier.version);
+    let adapterId: string | null = null;
     try {
-      const [valid, earlierId] = await root.verify({
-        version: earlier.version,
-        proofVerificationData: earlier.proofVerificationData,
-        committedInputs: earlier.committedInputs,
-        serviceConfig: { validityPeriodInSeconds: 30 * 86_400, domain, scope, devMode: false },
-      });
-      // Not taking a stale proof says nothing about this one: a note, not a failure.
-      if (!valid) console.log(`NOTE RootVerifier.verify does not take the earlier ${label2} proof: no comparison`);
-      else report(`the earlier ${label2} proof gives the same identifier as this ${label(proofVersion)} one`, earlierId === adapterId, earlierId === adapterId ? 'same' : 'different');
+      adapterId = await rootAdapter!.verify(account, digest, evidence);
+      report('the adapter accepts it', true);
     } catch (e) {
-      console.log(`NOTE RootVerifier.verify does not take the earlier ${label2} proof (${reasonOf(e)}): no comparison`);
+      report('the adapter accepts it', false, reasonOf(e));
+    }
+    const Example = await ethers.getContractFactory('ZKPassportExampleConsumer');
+    const exampleSent = await Example.deploy(rootAddr, domain, scope, validity, minAge);
+    const example = (await forkReceipt(() => exampleSent.waitForDeployment())) as unknown as ZKPassportExampleConsumer;
+    try {
+      // The example wants the bound address as msg.sender.
+      const exampleId: string = await as(account, async (s) => example.connect(s).verify(pinned));
+      report("ZKPassport's example consumer accepts it", true);
+      if (adapterId) report('with the same identifier as the adapter', exampleId === adapterId);
+    } catch (e) {
+      report("ZKPassport's example consumer accepts it", false, reasonOf(e));
+    }
+    const takes = await verifies(pinned.serviceConfig);
+    report(`RootVerifier.verify takes it under ${domain} × ${scope}`, takes);
+    if (takes) {
+      // Meaningful only once it is taken: a refusal of a proof refused everywhere proves nothing.
+      report(`RootVerifier.verify refuses it under the policy's name ${POLICY_SCOPE}`, !(await verifies({ ...pinned.serviceConfig, scope: POLICY_SCOPE })));
+      report('RootVerifier.verify refuses it under another domain', !(await verifies({ ...pinned.serviceConfig, domain: 'example.com' })));
+    }
+    report(`the helper's verifyScopes agrees under ${scope}`, await scopes(domain, scope));
+    report(`the helper's verifyScopes refuses ${POLICY_SCOPE}`, !(await scopes(domain, POLICY_SCOPE)));
+    // One identifier across circuits versions (decision 0080, 8): an earlier
+    // proof of the same passport, in another version, must give the identifier
+    // this one does. It is older than VALIDITY, so RootVerifier gets a validity
+    // that covers its age; a read, never a bind. Prints only same or different.
+    const earlierFile = process.env.ZKP_COMPARE_PARAMS_FILE?.trim();
+    if (earlierFile && adapterId) {
+      const earlier = JSON.parse(await fs.promises.readFile(earlierFile, 'utf8')) as ZkpSolidityParams;
+      const label2 = label(earlier.version);
+      try {
+        const [valid, earlierId] = await root.verify({
+          version: earlier.version,
+          proofVerificationData: earlier.proofVerificationData,
+          committedInputs: earlier.committedInputs,
+          serviceConfig: { validityPeriodInSeconds: 30 * 86_400, domain, scope, devMode: false },
+        });
+        // Not taking a stale proof says nothing about this one: a note, not a failure.
+        if (!valid) console.log(`NOTE RootVerifier.verify does not take the earlier ${label2} proof: no comparison`);
+        else report(`the earlier ${label2} proof gives the same identifier as this ${label(proofVersion)} one`, earlierId === adapterId, earlierId === adapterId ? 'same' : 'different');
+      } catch (e) {
+        console.log(`NOTE RootVerifier.verify does not take the earlier ${label2} proof (${reasonOf(e)}): no comparison`);
+      }
     }
   }
   if (failures.length > 0) {
@@ -267,6 +329,82 @@ async function main() {
     return forkReceipt(() => tx.wait());
   });
   console.log(`bind(): mined on the fork, gas used ${receipt!.gasUsed}; isAccountBound = ${await registry.isAccountBound(account)}`);
+}
+
+/**
+ * The pepper adapter's cross-checks (decision 0080, P1), all read-only: the
+ * proof's version is the adapter's; the adapter accepts it; ZKPassport's
+ * sub-verifier for that version still lists the proof's verification key, at
+ * the outer verifier the adapter pinned; that outer verifier, called directly,
+ * accepts the outer proof; RootVerifier refuses only with "Invalid OPRF public
+ * key", which it checks after the roots, date, scopes and commitments (the
+ * adapter's port of those checks agrees with ZKPassport's own); and the
+ * helper's verifyScopes agrees under the adapter's scope and refuses another
+ * domain. Nothing printed carries the proof, a public input or the identifier.
+ */
+async function pepperCrossChecks(
+  adapter: CofferdamZKPassportPepperAdapter,
+  params: ZkpSolidityParams,
+  bind: { account: string; digest: string; evidence: string; domain: string; scope: string; validity: number },
+  report: Report,
+  reasonOf: (e: unknown) => string,
+  label: (v: string) => string,
+) {
+  const adapterVersion: string = await adapter.VERSION();
+  const sameVersion = params.version.toLowerCase() === adapterVersion.toLowerCase();
+  // No stand-in as for the RootVerifier adapter: another version has other outer verifiers to pin.
+  report(`the proof is circuits ${label(adapterVersion)}, the adapter's`, sameVersion, sameVersion ? '' : `it is ${label(params.version)}`);
+  try {
+    await adapter.verify(bind.account, bind.digest, bind.evidence);
+    report('the adapter accepts it', true);
+  } catch (e) {
+    report('the adapter accepts it', false, reasonOf(e));
+  }
+
+  const { vkeyHash, proof, publicInputs } = params.proofVerificationData;
+  const root = await ethers.getContractAt('IZKPassportRootVerifierState', await adapter.ROOT_VERIFIER());
+  const subAddress = await root.getSubVerifier(params.version);
+  const sub = await ethers.getContractAt('IZKPassportSubVerifier', subAddress);
+  const listed = subAddress === ethers.ZeroAddress ? ethers.ZeroAddress : await sub.proofVerifiers(vkeyHash);
+  const pinnedVerifier = await adapter.outerVerifier(vkeyHash);
+  report(
+    "ZKPassport's sub-verifier lists the proof's verification key, at the adapter's pin",
+    listed !== ethers.ZeroAddress && listed === pinnedVerifier,
+    listed === pinnedVerifier ? listed : `listed ${listed}, pinned ${pinnedVerifier}`,
+  );
+  if (listed !== ethers.ZeroAddress) {
+    const verifier = await ethers.getContractAt('IZKPassportProofVerifier', listed);
+    try {
+      report("ZKPassport's outer verifier, called directly, accepts the outer proof", await verifier.verify(proof, publicInputs));
+    } catch (e) {
+      report("ZKPassport's outer verifier, called directly, accepts the outer proof", false, reasonOf(e));
+    }
+  }
+
+  const live = await ethers.getContractAt('IZKPassportRootVerifier', await adapter.ROOT_VERIFIER());
+  const serviceConfig = { validityPeriodInSeconds: bind.validity, domain: bind.domain, scope: bind.scope, devMode: false };
+  try {
+    await live.verify.staticCall({ version: params.version, proofVerificationData: params.proofVerificationData, committedInputs: params.committedInputs, serviceConfig });
+    report('RootVerifier.verify refuses the key only', false, 'it accepted a key that is not its own');
+  } catch (e) {
+    const reason = reasonOf(e);
+    report('RootVerifier.verify refuses the key only ("Invalid OPRF public key")', /Invalid OPRF public key/.test(reason), reason);
+  }
+
+  const helper = new ethers.Contract(
+    await adapter.HELPER(),
+    ['function verifyScopes(bytes32[] publicInputs, string domain, string scope) view returns (bool)'],
+    ethers.provider,
+  );
+  const scopes = async (d: string, s: string) => {
+    try {
+      return (await helper.verifyScopes(publicInputs, d, s)) as boolean;
+    } catch {
+      return false;
+    }
+  };
+  report(`the helper's verifyScopes agrees under ${bind.domain} × ${bind.scope}`, await scopes(bind.domain, bind.scope));
+  report("the helper's verifyScopes refuses another domain", !(await scopes('example.com', bind.scope)));
 }
 
 main().catch((error) => {
