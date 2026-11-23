@@ -14,13 +14,13 @@ import {
   ZKP_DOMAIN,
   ZKP_GLOBAL_OPRF_KEY_HASH,
   ZKP_IDENTIFIER_TYPE,
-  ZKP_OUTER_VERIFIERS_0_23_0,
   ZKP_ROOT_VERIFIER,
   identifierTypeFor,
   zkpCircuitsVersion,
   zkpIdentifierKind,
   zkpScopeId,
 } from './lib/identity';
+import { MOCK_OUTER_VKEY_HASH, outerVerifierPins } from './lib/zkpOuterPins';
 
 // Deploys decision 0080's identity registry with its first evidence adapter:
 // ZKPassport's RootVerifier checked on-chain (ruling T5), or, with
@@ -248,37 +248,6 @@ async function main() {
   const file = writeDeployments(network.name, chainId, out);
   console.log('Wrote', file);
   if (mainnet) console.log('Next: the account layer pinned to this registry (deploy-auth.ts with the same GENERATION).');
-}
-
-/** The vkey hash the mock sub-verifier lists its one mock outer verifier under. */
-const MOCK_OUTER_VKEY_HASH = ethers.id('mock-outer-vkey');
-
-/**
- * The outer verifiers the pepper adapter pins: ZKP_OUTER_VKEY_HASHES, else the
- * 0.23.0 table (scripts/lib/identity.ts), else the mock's one; each verifier
- * read from the version's sub-verifier, and a table entry checked against it.
- */
-async function outerVerifierPins(rootVerifier: string, version: string, label: string, mocks: boolean): Promise<[string, string][]> {
-  const root = await ethers.getContractAt('IZKPassportRootVerifierState', rootVerifier);
-  const subAddress = await root.getSubVerifier(version);
-  if (subAddress === ethers.ZeroAddress) throw new Error(`RootVerifier has no sub-verifier for circuits ${label}`);
-  const sub = await ethers.getContractAt('IZKPassportSubVerifier', subAddress);
-  const listed = process.env.ZKP_OUTER_VKEY_HASHES?.split(',').map((h) => h.trim()).filter(Boolean);
-  const table = label === '0.23.0' ? ZKP_OUTER_VERIFIERS_0_23_0 : undefined;
-  const hashes = listed?.length ? listed : mocks ? [MOCK_OUTER_VKEY_HASH] : table ? Object.keys(table) : [];
-  if (hashes.length === 0) throw new Error(`Set ZKP_OUTER_VKEY_HASHES: no table of outer verifiers for circuits ${label}`);
-  const pins: [string, string][] = [];
-  for (const h of hashes) {
-    if (!/^0x[0-9a-fA-F]{64}$/.test(h)) throw new Error(`Not a vkey hash: ${h}`);
-    const v = await sub.proofVerifiers(h);
-    if (v === ethers.ZeroAddress) throw new Error(`The sub-verifier lists no outer verifier for ${h}`);
-    const recorded = table?.[h.toLowerCase()];
-    if (!mocks && recorded && recorded.toLowerCase() !== v.toLowerCase()) {
-      throw new Error(`The sub-verifier lists ${v} for ${h}, the table ${recorded}: ZKPassport swapped it; check before pinning`);
-    }
-    pins.push([h, v]);
-  }
-  return pins;
 }
 
 main().catch((error) => {

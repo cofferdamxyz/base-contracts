@@ -58,15 +58,43 @@ export function safeExecRefusal(address: string, safe: SafeFacts | null, signer:
   return null;
 }
 
+/** The two adapter contracts a generation's registry can run (decision 0080): through RootVerifier, or the pepper's. */
+export type AdapterKind = 'root-verifier' | 'pepper';
+export const ADAPTER_CONTRACT = {
+  'root-verifier': 'ZKPassportEvidenceAdapter',
+  pepper: 'CofferdamZKPassportPepperAdapter',
+} as const satisfies Record<AdapterKind, string>;
+
 /**
  * The deployments-file key of the adapter for a ZKPassport circuits version,
- * e.g. `ZKPassportEvidenceAdapterV0_22_0` for 0.22.0. The generation's first
- * adapter keeps the plain `ZKPassportEvidenceAdapter`.
+ * e.g. `ZKPassportEvidenceAdapterV0_22_0` for 0.22.0, or
+ * `CofferdamZKPassportPepperAdapterV0_24_0` for a pepper generation's. The
+ * generation's first adapter keeps its plain contract name.
  */
-export function adapterKeyForVersion(version: string | undefined): string {
+export function adapterKeyForVersion(version: string | undefined, kind: AdapterKind = 'root-verifier'): string {
   const v = version?.trim();
   if (!v || !/^\d{1,5}\.\d{1,5}\.\d{1,5}$/.test(v)) throw new Error(`ZKP_CIRCUITS_VERSION is a circuits version such as 0.22.0; got ${v || 'nothing'}`);
-  return `ZKPassportEvidenceAdapterV${v.replace(/\./g, '_')}`;
+  return `${ADAPTER_CONTRACT[kind]}V${v.replace(/\./g, '_')}`;
+}
+
+/** The deployments-file key of adapter-drill's never-activated copy, one per kind. */
+export function adapterDrillKey(kind: AdapterKind): string {
+  return `${ADAPTER_CONTRACT[kind]}Drill`;
+}
+
+/**
+ * The live adapter safe-exec copies: `IDENTITY_ADAPTER`, else the one adapter
+ * the generation recorded. A generation that records both must name one.
+ */
+export function liveAdapterAddress(fromEnv: string | undefined, recorded: Record<string, { address: string } | undefined>): string {
+  const env = fromEnv?.trim();
+  if (env) return env;
+  const root = recorded[ADAPTER_CONTRACT['root-verifier']]?.address;
+  const pepper = recorded[ADAPTER_CONTRACT.pepper]?.address;
+  if (root && pepper) throw new Error('This generation records both adapters: set IDENTITY_ADAPTER to the live one');
+  const live = root || pepper;
+  if (!live) throw new Error('No live adapter to copy: set IDENTITY_ADAPTER');
+  return live;
 }
 
 /** Why a proposed adapter may not be activated at `now`, or null (the registry's own rule). */

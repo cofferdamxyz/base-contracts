@@ -2,9 +2,13 @@ import { ethers, network } from 'hardhat';
 import { assertMainnetSigner, chainId as nodeChainId, getDeployer, isLocalFork, readSafe } from './lib/chain';
 import { readDeployments, writeDeployments } from './lib/deployments';
 import {
+  ADAPTER_CONTRACT,
   SAFE_EXEC_ABI,
+  type AdapterKind,
   activationRefusal,
+  adapterDrillKey,
   adapterKeyForVersion,
+  liveAdapterAddress,
   parseAllowed,
   parseSafeAction,
   reproposalRefusal,
@@ -12,6 +16,8 @@ import {
   senderOwnerSignature,
 } from './lib/safe';
 import { zkpCircuitsVersion } from './lib/identity';
+import { outerVerifierPins } from './lib/zkpOuterPins';
+import { CofferdamZKPassportPepperAdapter__factory, ZKPassportEvidenceAdapter__factory, type ZKPassportEvidenceAdapter } from '../typechain-types';
 import { isAnchorSafeAction } from './lib/handleAnchor';
 import { runAnchorSafeAction } from './lib/handleAnchorExec';
 
@@ -25,11 +31,13 @@ import { runAnchorSafeAction } from './lib/handleAnchorExec';
 //   SAFE_ACTION        pause-drill    setPaused(true), then setPaused(false)
 //                      adapter-drill  proposeAdapter, then cancelAdapterProposal, on a
 //                                     second copy of the live adapter (deployed once,
-//                                     recorded as ZKPassportEvidenceAdapterDrill); it
-//                                     never becomes active
+//                                     recorded as ZKPassportEvidenceAdapterDrill, or
+//                                     CofferdamZKPassportPepperAdapterDrill for the pepper's);
+//                                     it never becomes active
 //                      adapter-propose   ZKP_CIRCUITS_VERSION (e.g. 0.22.0): deploys once a copy of
 //                                     the live adapter pinned to that version and RootVerifier's
-//                                     helper for it (recorded as ZKPassportEvidenceAdapterV0_22_0),
+//                                     helper for it (recorded as ZKPassportEvidenceAdapterV0_22_0,
+//                                     or CofferdamZKPassportPepperAdapterV0_24_0 for the pepper's),
 //                                     then proposeAdapter; the timelock starts. A live proposal
 //                                     is refused; an expired one is proposed again (the clock restarts)
 //                      adapter-activate  ZKP_CIRCUITS_VERSION: activateAdapter, after the timelock
@@ -41,12 +49,24 @@ import { runAnchorSafeAction } from './lib/handleAnchorExec';
 //   DRILL_CANCEL_LEFTOVER  adapter-drill: 1 cancels a drill proposal an earlier run left, then drills
 //   SAFE_ADDRESS       default the generation's recorded CofferdamSafe
 //   IDENTITY_REGISTRY  default the generation's recorded CofferdamIdentityRegistry
-//   IDENTITY_ADAPTER   the adapter copied, default the generation's recorded ZKPassportEvidenceAdapter
+//   IDENTITY_ADAPTER   the adapter copied, default the one the generation recorded
+//                      (ZKPassportEvidenceAdapter or CofferdamZKPassportPepperAdapter;
+//                      a generation that records both must set it)
+//   ZKP_OUTER_VKEY_HASHES  adapter-propose of a pepper adapter: the new version's outer
+//                      verification-key hashes to pin, comma-separated (0.23.0 has a
+//                      table in scripts/lib/identity.ts); each verifier is read from
+//                      ZKPassport's sub-verifier for that version
+//
+// A copy is of the live adapter's own kind: a pepper generation's copies are
+// CofferdamZKPassportPepperAdapter (decision 0080, P1), with the same OPRF key
+// hash, scope, validity, minimum age and expiry margin. The drill's copy pins
+// the live adapter's outer verifiers; a per-version copy pins the new version's.
 //
 // A per-version adapter is proposed or activated only while it pins that
-// version and the helper RootVerifier names for it now: after a helper swap it
-// would refuse every proof. adapter-cancel checks neither, so it withdraws
-// such an adapter.
+// version and the helper RootVerifier names for it now, and, for the pepper's,
+// only while ZKPassport's sub-verifier for that version still lists every
+// outer verifier it pinned: after a swap it would refuse those proofs.
+// adapter-cancel checks none of this, so it withdraws such an adapter.
 //
 // On Base mainnet the generation's variables are the deploy's
 // (MAINNET_DEV_KEY_EXCEPTION, GENERATION); a fork dry run passes SAFE_ADDRESS
@@ -250,25 +270,42 @@ async function main() {
     // A second adapter built from what the live one reports: the same kind,
     // scope, validity, identifier type, minimum age and expiry margin, so the
     // registry takes the proposal; only the circuits version and its helper
-    // may differ.
-    const live = process.env.IDENTITY_ADAPTER?.trim() || recorded.ZKPassportEvidenceAdapter?.address;
-    if (!live) throw new Error('No live adapter to copy: set IDENTITY_ADAPTER');
+    // (and, for the pepper's, the outer verifiers pinned) may differ.
+    const live = ethers.getAddress(liveAdapterAddress(process.env.IDENTITY_ADAPTER, recorded));
     if (!(await registry.isAdapter(live))) throw new Error(`${live} is not an active adapter of ${registryAddress}`);
-    const a = await ethers.getContractAt('ZKPassportEvidenceAdapter', live);
+    const kind = await adapterKindOf(live);
+    for (const k of ['root-verifier', 'pepper'] as const) {
+      if (k !== kind && recorded[ADAPTER_CONTRACT[k]]?.address?.toLowerCase() === live.toLowerCase()) {
+        throw new Error(`${live} is recorded as ${ADAPTER_CONTRACT[k]} but is a ${ADAPTER_CONTRACT[kind]}`);
+      }
+    }
+    console.log(`Live adapter ${live} (${ADAPTER_CONTRACT[kind]})`);
+    const a = adapterAt(kind, live);
     const label = (v: string) => [2, 6, 10].map((i) => parseInt(v.slice(i, i + 4), 16)).join('.');
-    const deployCopy = async (version: string, helper: string): Promise<string> => {
-      const Adapter = await ethers.getContractFactory('ZKPassportEvidenceAdapter', signer);
-      const copy = await Adapter.deploy(
-        await a.ROOT_VERIFIER(),
-        helper,
-        version,
-        await a.scope(),
-        await a.VALIDITY(),
-        await a.IDENTIFIER_TYPE(),
-        await a.OPRF_KEY_HASH(),
-        await a.MIN_AGE(),
-        await a.EXPIRY_MARGIN(),
-      );
+    /** The live pepper adapter's own pins, as the drill's copy takes them. */
+    const livePins = async (): Promise<[string, string][]> => {
+      const p = pepperAt(live);
+      return Promise.all((await p.vkeyHashes()).map(async (h: string): Promise<[string, string]> => [h, await p.outerVerifier(h)]));
+    };
+    const deployCopy = async (version: string, helper: string, pins: [string, string][]): Promise<string> => {
+      const common = [await a.ROOT_VERIFIER(), helper, version, await a.scope(), await a.VALIDITY()] as const;
+      const copy =
+        kind === 'pepper'
+          ? await (await ethers.getContractFactory('CofferdamZKPassportPepperAdapter', signer)).deploy(
+              ...common,
+              await a.OPRF_KEY_HASH(),
+              await a.MIN_AGE(),
+              await a.EXPIRY_MARGIN(),
+              pins.map(([h]) => h),
+              pins.map(([, v]) => v),
+            )
+          : await (await ethers.getContractFactory('ZKPassportEvidenceAdapter', signer)).deploy(
+              ...common,
+              await (await ethers.getContractAt('ZKPassportEvidenceAdapter', live)).IDENTIFIER_TYPE(),
+              await a.OPRF_KEY_HASH(),
+              await a.MIN_AGE(),
+              await a.EXPIRY_MARGIN(),
+            );
       await copy.waitForDeployment();
       const address = await copy.getAddress();
       if ((await copy.identifierKind()) !== (await registry.IDENTIFIER_KIND()) || (await copy.scopeId()) !== (await registry.SCOPE_ID())) {
@@ -282,11 +319,12 @@ async function main() {
     const iso = (t: bigint) => new Date(Number(t) * 1000).toISOString();
 
     if (action === 'adapter-drill') {
-      let drill = recorded.ZKPassportEvidenceAdapterDrill?.address;
+      const drillKey = adapterDrillKey(kind);
+      let drill = recorded[drillKey]?.address;
       if (!drill) {
-        drill = await deployCopy(await a.VERSION(), await a.HELPER());
-        console.log('ZKPassportEvidenceAdapterDrill:', drill, '(deployed; never activated)');
-        console.log('Wrote', writeDeployments(network.name, chainId, { ZKPassportEvidenceAdapterDrill: drill }));
+        drill = await deployCopy(await a.VERSION(), await a.HELPER(), kind === 'pepper' ? await livePins() : []);
+        console.log(`${drillKey}:`, drill, '(deployed; never activated)');
+        console.log('Wrote', writeDeployments(network.name, chainId, { [drillKey]: drill }));
       }
       if (await registry.isAdapter(drill)) throw new Error(`The drill adapter ${drill} is active: remove it through the Safe, not with this drill`);
       if ((await registry.adapterReadyAt(drill)) !== 0n) {
@@ -310,15 +348,19 @@ async function main() {
       // One adapter per ZKPassport circuits version: ZKPassport's app chooses
       // the version it proves in, and RootVerifier checks a proof under its own.
       const versionLabel = process.env.ZKP_CIRCUITS_VERSION?.trim();
-      const key = adapterKeyForVersion(versionLabel);
+      const key = adapterKeyForVersion(versionLabel, kind);
       const version = zkpCircuitsVersion(versionLabel!);
       let adapterAddr = recorded[key]?.address;
       /** RootVerifier's helper for this version now (propose and activate only: cancel never depends on it). */
       const currentHelper = async (): Promise<string> =>
         (await ethers.getContractAt('IZKPassportRootVerifier', await a.ROOT_VERIFIER())).getHelper(version);
-      /** The recorded adapter pins this version and RootVerifier's helper for it now, or it would refuse every proof. */
+      /**
+       * The recorded adapter pins this version and RootVerifier's helper for it
+       * now, or it would refuse every proof; a pepper adapter's outer verifiers
+       * must all still be the ones ZKPassport's sub-verifier lists.
+       */
       const checkRecorded = async (address: string, helper: string) => {
-        const recordedAdapter = await ethers.getContractAt('ZKPassportEvidenceAdapter', address);
+        const recordedAdapter = adapterAt(kind, address);
         const recordedVersion: string = await recordedAdapter.VERSION();
         if (recordedVersion !== version) throw new Error(`${key} ${address} pins circuits ${label(recordedVersion)}, not ${versionLabel}`);
         const recordedHelper: string = await recordedAdapter.HELPER();
@@ -328,14 +370,35 @@ async function main() {
               'it would refuse every proof. Cancel its proposal (SAFE_ACTION=adapter-cancel); a replacement needs its own deployments key',
           );
         }
+        if (kind === 'pepper') {
+          const p = pepperAt(address);
+          const root = await ethers.getContractAt('IZKPassportRootVerifierState', await a.ROOT_VERIFIER());
+          const sub = await ethers.getContractAt('IZKPassportSubVerifier', await root.getSubVerifier(version));
+          for (const h of await p.vkeyHashes()) {
+            const pinned = await p.outerVerifier(h);
+            const listed = await sub.proofVerifiers(h);
+            if (listed.toLowerCase() !== pinned.toLowerCase()) {
+              throw new Error(
+                `${key} ${address} pins the outer verifier ${pinned} for ${h}, but ZKPassport's sub-verifier lists ${listed} now: ` +
+                  'it would refuse those proofs. Cancel its proposal (SAFE_ACTION=adapter-cancel); a replacement needs its own deployments key',
+              );
+            }
+          }
+        }
       };
 
       if (action === 'adapter-propose') {
         if ((await a.VERSION()) === version) throw new Error(`The live adapter ${live} pins circuits ${versionLabel} already`);
+        if (kind === 'pepper') {
+          const min: string = await pepperAt(live).MIN_VERSION();
+          if (BigInt(version) < BigInt(min)) throw new Error(`The pepper adapter reads circuits ${label(min)} or later; ${versionLabel} is older`);
+        }
         const helper = await currentHelper();
         if (helper === ethers.ZeroAddress) throw new Error(`ZKPassport's RootVerifier has no helper for circuits ${versionLabel}: it does not verify that version yet`);
         if (!adapterAddr) {
-          adapterAddr = await deployCopy(version, helper);
+          const pins = kind === 'pepper' ? await outerVerifierPins(await a.ROOT_VERIFIER(), version, versionLabel!, false) : [];
+          for (const [h, v] of pins) console.log(`  Outer verifier (pinned): ${h} -> ${v}`);
+          adapterAddr = await deployCopy(version, helper, pins);
           console.log(`${key}: ${adapterAddr} (circuits ${versionLabel}, helper ${helper})`);
           console.log('Wrote', writeDeployments(network.name, chainId, { [key]: adapterAddr }));
         } else {
@@ -361,7 +424,7 @@ async function main() {
         expect('isAdapter', await at(block, (o) => registry.isAdapter(adapterAddr!, o)), true);
         expect('adapterReadyAt', await at(block, (o) => registry.adapterReadyAt(adapterAddr!, o)), 0n);
       } else {
-        // adapter-cancel: by version only, so it never touches the live adapter or the drill.
+        // adapter-cancel: by version and kind only, so it never touches the live adapter or the drill.
         if (!adapterAddr) throw new Error(`No ${key} recorded: nothing to cancel`);
         if (await registry.isAdapter(adapterAddr)) throw new Error(`${key} ${adapterAddr} is active: a cancel cannot undo that (removeAdapter is not this script's)`);
         if ((await registry.adapterReadyAt(adapterAddr)) === 0n) throw new Error(`${key} ${adapterAddr} is not proposed`);
@@ -372,6 +435,36 @@ async function main() {
     }
   }
   console.log('Safe nonce now', (await safe.nonce()).toString());
+}
+
+/** The getters both adapter contracts share, the ones a copy is built from. */
+type AdapterCommon = Pick<
+  ZKPassportEvidenceAdapter,
+  'ROOT_VERIFIER' | 'HELPER' | 'VERSION' | 'scope' | 'VALIDITY' | 'OPRF_KEY_HASH' | 'MIN_AGE' | 'EXPIRY_MARGIN'
+>;
+
+/** An adapter of `kind` at `address`, as the getters both contracts share. */
+function adapterAt(kind: AdapterKind, address: string): AdapterCommon {
+  return kind === 'pepper' ? pepperAt(address) : ZKPassportEvidenceAdapter__factory.connect(address, ethers.provider);
+}
+
+const pepperAt = (address: string) => CofferdamZKPassportPepperAdapter__factory.connect(address, ethers.provider);
+
+/**
+ * Which adapter contract is at `address`: the pepper's answers `vkeyHashes()`,
+ * which ZKPassportEvidenceAdapter does not have, so the call reverts (ethers
+ * reports CALL_EXCEPTION, Hardhat's provider "execution reverted"). Any other
+ * failure, a timeout say, is thrown.
+ */
+async function adapterKindOf(address: string): Promise<AdapterKind> {
+  try {
+    await pepperAt(address).vkeyHashes();
+    return 'pepper';
+  } catch (e) {
+    const { code, message } = e as { code?: string; message?: string };
+    if (code === 'CALL_EXCEPTION' || code === 'BAD_DATA' || /execution reverted/i.test(message ?? '')) return 'root-verifier';
+    throw e;
+  }
 }
 
 main().catch((error) => {

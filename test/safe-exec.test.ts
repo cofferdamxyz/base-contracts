@@ -5,7 +5,9 @@ import { DEV_KEY_EXCEPTION, SAFE_V141 } from '../scripts/lib/devKeyException';
 import {
   SAFE_ACTIONS,
   activationRefusal,
+  adapterDrillKey,
   adapterKeyForVersion,
+  liveAdapterAddress,
   parseAllowed,
   parseSafeAction,
   reproposalRefusal,
@@ -57,6 +59,24 @@ describe('safe-exec (scripts/lib/safe.ts)', function () {
     for (const bad of [undefined, '', '0.22', 'v0.22.0', '0.22.0; rm', '0.22.0.1']) {
       expect(() => adapterKeyForVersion(bad)).to.throw(/ZKP_CIRCUITS_VERSION/);
     }
+  });
+
+  it("keys a pepper generation's copies under the pepper adapter's name", function () {
+    expect(adapterKeyForVersion('0.24.0', 'pepper')).to.equal('CofferdamZKPassportPepperAdapterV0_24_0');
+    expect(adapterKeyForVersion('0.24.0', 'root-verifier')).to.equal('ZKPassportEvidenceAdapterV0_24_0');
+    expect(() => adapterKeyForVersion('0.24', 'pepper')).to.throw(/ZKP_CIRCUITS_VERSION/);
+    expect(adapterDrillKey('root-verifier')).to.equal('ZKPassportEvidenceAdapterDrill');
+    expect(adapterDrillKey('pepper')).to.equal('CofferdamZKPassportPepperAdapterDrill');
+  });
+
+  it('copies IDENTITY_ADAPTER, else the one adapter the generation recorded', function () {
+    const root = { ZKPassportEvidenceAdapter: { address: SAFE } };
+    const pepper = { CofferdamZKPassportPepperAdapter: { address: OTHER } };
+    expect(liveAdapterAddress(undefined, root)).to.equal(SAFE);
+    expect(liveAdapterAddress('  ', pepper)).to.equal(OTHER);
+    expect(liveAdapterAddress(` ${DEV} `, { ...root, ...pepper })).to.equal(DEV);
+    expect(() => liveAdapterAddress(undefined, { ...root, ...pepper })).to.throw(/records both adapters/);
+    expect(() => liveAdapterAddress(undefined, {})).to.throw(/No live adapter/);
   });
 
   it("activates only after the timelock and within the grace, the registry's rule", function () {
