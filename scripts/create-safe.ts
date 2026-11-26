@@ -1,7 +1,8 @@
 import { ethers, network } from 'hardhat';
-import { assertMainnetSigner, chainId as nodeChainId, getDeployer, readSafe } from './lib/chain';
+import { BASE_MAINNET_CHAIN_ID, assertMainnetSigner, chainId as nodeChainId, getDeployer, readSafe } from './lib/chain';
 import { refuseRecordedGeneration, writeDeployments } from './lib/deployments';
-import { SAFE_V141 } from './lib/devKeyException';
+import { SAFE_V141, devKeyExceptionRequested } from './lib/devKeyException';
+import { productionOwnerRefusal, productionSafeSetupRefusal } from './lib/productionSafe';
 
 // Creates the Safe that owns a generation's registries from their first block,
 // as in production (decision 0017): a SafeL2 v1.4.1 proxy through Safe's
@@ -10,9 +11,16 @@ import { SAFE_V141 } from './lib/devKeyException';
 // wallet, the only owner until the Ledger joins (threshold 1); pass its address
 // as REGISTRY_OWNER to deploy-identity.ts and deploy-auth.ts.
 //
+// On Base mainnet (chain 8453, a fork included) outside the exception it is
+// the company Safe (the founder's ruling of 2026-11-26): exactly three owners
+// (the Ledger, the founder's phone, a second hardware wallet of another make)
+// and threshold 2, created once before the production generation; the
+// CofferdamDev wallet is never among them (./lib/productionSafe.ts).
+//
 //   GENERATION        Base mainnet only: the deployments file, e.g. zkp-test-1
-//   SAFE_OWNERS       comma-separated owners; default the deployer
-//   SAFE_THRESHOLD    default 1
+//   SAFE_OWNERS       comma-separated owners; default the deployer (required on
+//                     chain 8453 outside the exception: the three owners)
+//   SAFE_THRESHOLD    default 1 (2 on chain 8453 outside the exception, the only value taken)
 //   SAFE_SALT_NONCE   default keccak256("cofferdam-safe:<GENERATION or network>")
 //
 // The Safe's address depends on the factory, the setup and the salt nonce,
@@ -39,12 +47,21 @@ async function main() {
   const version = await singleton.VERSION();
   if (version !== '1.4.1') throw new Error(`SafeL2 at ${SAFE_V141.singletonL2} reports ${version}, not 1.4.1`);
 
+  // The company Safe: chain 8453 outside the M2 dev-key exception.
+  const production = chainId === BASE_MAINNET_CHAIN_ID && !devKeyExceptionRequested();
+  if (production && !process.env.SAFE_OWNERS?.trim()) {
+    throw new Error('SAFE_OWNERS is required on Base mainnet: the three owners of the company Safe (the Ledger, the phone, the second hardware wallet)');
+  }
   const owners = (process.env.SAFE_OWNERS?.trim() ? process.env.SAFE_OWNERS.split(',') : [deployer.address])
     .map((a) => a.trim())
     .filter(Boolean)
     .map((a) => ethers.getAddress(a));
-  const threshold = BigInt(process.env.SAFE_THRESHOLD?.trim() || '1');
+  const threshold = BigInt(process.env.SAFE_THRESHOLD?.trim() || (production ? '2' : '1'));
   if (threshold < 1n || threshold > BigInt(owners.length)) throw new Error(`SAFE_THRESHOLD ${threshold} over ${owners.length} owners`);
+  if (production) {
+    const refusal = productionSafeSetupRefusal(owners, threshold);
+    if (refusal) throw new Error(refusal);
+  }
   const label = process.env.GENERATION?.trim() || network.name;
   const saltNonce = BigInt(process.env.SAFE_SALT_NONCE?.trim() || ethers.id(`cofferdam-safe:${label}`));
 
@@ -69,6 +86,11 @@ async function main() {
   const safe = await readSafe(predicted);
   if (!safe || safe.singleton.toLowerCase() !== SAFE_V141.singletonL2.toLowerCase()) throw new Error(`No SafeL2 proxy at ${predicted}`);
   if (safe.threshold !== threshold || safe.owners.length !== owners.length) throw new Error(`The Safe at ${predicted} reports another setup`);
+  if (production) {
+    // The check every Base mainnet deploy runs on REGISTRY_OWNER (chain.ts assertMainnetOwner).
+    const refusal = productionOwnerRefusal(predicted, safe);
+    if (refusal) throw new Error(refusal);
+  }
   console.log('CofferdamSafe:', predicted, `(owners ${safe.owners.join(', ')}; threshold ${safe.threshold})`);
 
   const file = writeDeployments(network.name, chainId, { CofferdamSafe: predicted });

@@ -176,6 +176,8 @@ export interface SafeFacts {
   singleton: string;
   owners: string[];
   threshold: bigint;
+  /** Enabled modules (the first page of `getModulesPaginated`), when read. */
+  modules?: string[];
 }
 
 /**
