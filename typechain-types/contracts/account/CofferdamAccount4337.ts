@@ -137,6 +137,7 @@ export interface CofferdamAccount4337Interface extends Interface {
       | "ACTION_RECOVER_HIGH"
       | "ACTION_REPLACE_PARTNER"
       | "CEREMONY_ATTESTERS"
+      | "CEREMONY_TYPEHASH"
       | "ENTRY_POINT"
       | "MAX_PASSKEYS"
       | "MAX_PERMISSION_ENTRIES"
@@ -148,6 +149,7 @@ export interface CofferdamAccount4337Interface extends Interface {
       | "addAuthority"
       | "authorityCount"
       | "cancelRecovery"
+      | "ceremonyDomainSeparator"
       | "ceremonyHash"
       | "ceremonyNonce"
       | "eip712Domain"
@@ -202,6 +204,10 @@ export interface CofferdamAccount4337Interface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "CEREMONY_TYPEHASH",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "ENTRY_POINT",
     values?: undefined
   ): string;
@@ -243,6 +249,10 @@ export interface CofferdamAccount4337Interface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "cancelRecovery",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "ceremonyDomainSeparator",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -376,6 +386,10 @@ export interface CofferdamAccount4337Interface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "CEREMONY_TYPEHASH",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "ENTRY_POINT",
     data: BytesLike
   ): Result;
@@ -417,6 +431,10 @@ export interface CofferdamAccount4337Interface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "cancelRecovery",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "ceremonyDomainSeparator",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -708,6 +726,8 @@ export interface CofferdamAccount4337 extends BaseContract {
 
   CEREMONY_ATTESTERS: TypedContractMethod<[], [string], "view">;
 
+  CEREMONY_TYPEHASH: TypedContractMethod<[], [string], "view">;
+
   ENTRY_POINT: TypedContractMethod<[], [string], "view">;
 
   MAX_PASSKEYS: TypedContractMethod<[], [bigint], "view">;
@@ -737,6 +757,8 @@ export interface CofferdamAccount4337 extends BaseContract {
   authorityCount: TypedContractMethod<[], [bigint], "view">;
 
   cancelRecovery: TypedContractMethod<[], [void], "nonpayable">;
+
+  ceremonyDomainSeparator: TypedContractMethod<[], [string], "view">;
 
   ceremonyHash: TypedContractMethod<
     [
@@ -920,6 +942,9 @@ export interface CofferdamAccount4337 extends BaseContract {
     nameOrSignature: "CEREMONY_ATTESTERS"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "CEREMONY_TYPEHASH"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "ENTRY_POINT"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
@@ -960,6 +985,9 @@ export interface CofferdamAccount4337 extends BaseContract {
   getFunction(
     nameOrSignature: "cancelRecovery"
   ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "ceremonyDomainSeparator"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "ceremonyHash"
   ): TypedContractMethod<

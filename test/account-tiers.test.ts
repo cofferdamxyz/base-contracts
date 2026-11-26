@@ -15,6 +15,17 @@ import {
   packSig,
   userOp,
 } from './helpers/keys';
+import {
+  CEREMONY_DOMAIN_NAME,
+  CEREMONY_DOMAIN_VERSION,
+  CEREMONY_TYPES,
+  ceremonyDigest,
+  ceremonyDomain,
+  domainOf,
+  signCeremony,
+  type CeremonyMessage,
+} from './helpers/ceremony';
+import CEREMONY_FIXTURE from './fixtures/ceremonyTypes.json';
 
 const ERC1271_MAGIC = '0x1626ba7e';
 const ERC1271_FAIL = '0xffffffff';
@@ -99,8 +110,14 @@ describe('CofferdamAccount4337 tiers (decisions 0015, 0016)', () => {
     const now = BigInt(await time.latest());
     const [notBefore, expiry] = window ?? [now - 60n, now + 600n];
     const nonce = await account.ceremonyNonce();
-    const h = await account.ceremonyHash(action, ethers.keccak256(newConfig), partnerId, nonce, notBefore, expiry);
-    return { notBefore, expiry, signature: await attester.signMessage(ethers.getBytes(h)) };
+    const message: CeremonyMessage = {
+      account: await account.getAddress(), action, newKeyHash: ethers.keccak256(newConfig), partnerId, nonce, notBefore, expiry,
+    };
+    const domain = await domainOf(account);
+    // The account's own digest is the typed one: encoding drift fails here.
+    expect(await account.ceremonyHash(action, message.newKeyHash, partnerId, nonce, notBefore, expiry))
+      .to.equal(ceremonyDigest(domain, message));
+    return { notBefore, expiry, signature: await signCeremony(attester, domain, message) };
   }
 
   async function partnerAccount(perm?: Permission) {
@@ -474,10 +491,11 @@ describe('CofferdamAccount4337 tiers (decisions 0015, 0016)', () => {
       const high = webauthnKey();
       const args: any[] = await firstHighArgs(account, 0, high);
       const forged = ethers.Wallet.createRandom();
-      const h = await account.ceremonyHash(
-        await account.ACTION_ENROLL_FIRST_HIGH(), ethers.keccak256(high.config), PARTNER_ID, 0, args[4].notBefore, args[4].expiry,
-      );
-      args[4] = { ...args[4], signature: await forged.signMessage(ethers.getBytes(h)) };
+      const message: CeremonyMessage = {
+        account: addr, action: await account.ACTION_ENROLL_FIRST_HIGH(), newKeyHash: ethers.keccak256(high.config),
+        partnerId: PARTNER_ID, nonce: 0n, notBefore: args[4].notBefore, expiry: args[4].expiry,
+      };
+      args[4] = { ...args[4], signature: await signCeremony(forged, await domainOf(account), message) };
       await expect(entryPoint.sendTransaction({ to: addr, data: enc(account, 'enrollFirstHigh', args) }))
         .to.be.revertedWithCustomError(account, 'UntrustedCeremonyAttester');
     });
@@ -499,6 +517,143 @@ describe('CofferdamAccount4337 tiers (decisions 0015, 0016)', () => {
       args[4] = await attest(account, await account.ACTION_REPLACE_PARTNER(), high.config, PARTNER_ID);
       await expect(entryPoint.sendTransaction({ to: addr, data: enc(account, 'enrollFirstHigh', args) }))
         .to.be.revertedWithCustomError(account, 'UntrustedCeremonyAttester');
+    });
+
+    describe('the typed attestation (decision 0090 item 5)', () => {
+      const SECP256K1_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
+
+      /** `firstHighArgs` with the attestation signed by `sign` over `message`. */
+      async function argsWith(
+        account: any,
+        high: ReturnType<typeof webauthnKey>,
+        sign: (message: CeremonyMessage) => Promise<string>,
+        over: Partial<CeremonyMessage> = {},
+      ) {
+        const args: any[] = await firstHighArgs(account, 0, high);
+        const message: CeremonyMessage = {
+          account: await account.getAddress(),
+          action: await account.ACTION_ENROLL_FIRST_HIGH(),
+          newKeyHash: ethers.keccak256(high.config),
+          partnerId: PARTNER_ID,
+          nonce: await account.ceremonyNonce(),
+          notBefore: args[4].notBefore,
+          expiry: args[4].expiry,
+          ...over,
+        };
+        args[4] = { ...args[4], signature: await sign(message) };
+        return args;
+      }
+
+      function send(account: any, addr: string, args: any[]) {
+        return entryPoint.sendTransaction({ to: addr, data: enc(account, 'enrollFirstHigh', args) });
+      }
+
+      it('names the registry as verifyingContract, never the account', async () => {
+        const { account, addr } = await partnerAccount();
+        const { chainId } = await ethers.provider.getNetwork();
+        const registry = await ceremonyRegistry.getAddress();
+        expect(await account.CEREMONY_TYPEHASH()).to.equal(
+          ethers.id('CeremonyAttestation(address account,bytes32 action,bytes32 newKeyHash,bytes32 partnerId,uint256 nonce,uint48 notBefore,uint48 expiry)'),
+        );
+        expect(await account.ceremonyDomainSeparator()).to.equal(ethers.TypedDataEncoder.hashDomain(ceremonyDomain(chainId, registry)));
+        expect(await account.ceremonyDomainSeparator()).to.not.equal(ethers.TypedDataEncoder.hashDomain(ceremonyDomain(chainId, addr)));
+      });
+
+      it('pins the shared fixture (cofferdam-sdk identity/ceremony.ts)', async () => {
+        for (const v of CEREMONY_FIXTURE.vectors) {
+          const domain = ceremonyDomain(BigInt(v.domain.chainId), v.domain.verifyingContract);
+          const message: CeremonyMessage = {
+            ...v.message, nonce: BigInt(v.message.nonce), notBefore: BigInt(v.message.notBefore), expiry: BigInt(v.message.expiry),
+          };
+          expect(ethers.TypedDataEncoder.hashDomain(domain)).to.equal(v.domainSeparator);
+          expect(ethers.TypedDataEncoder.hashStruct('CeremonyAttestation', CEREMONY_TYPES, message)).to.equal(v.structHash);
+          expect(ceremonyDigest(domain, message)).to.equal(v.digest);
+        }
+        expect(CEREMONY_FIXTURE.typehash).to.equal(await (await partnerAccount()).account.CEREMONY_TYPEHASH());
+        expect(CEREMONY_FIXTURE.domain.name).to.equal(CEREMONY_DOMAIN_NAME);
+        expect(CEREMONY_FIXTURE.domain.version).to.equal(CEREMONY_DOMAIN_VERSION);
+      });
+
+      it('refuses an EIP-191 signature by a listed attester', async () => {
+        const { account, addr } = await partnerAccount();
+        const high = webauthnKey();
+        // personal_sign over the typed digest.
+        let args = await argsWith(account, high, async (m) => {
+          const h = await account.ceremonyHash(m.action, m.newKeyHash, m.partnerId, m.nonce, m.notBefore, m.expiry);
+          return attester.signMessage(ethers.getBytes(h));
+        });
+        await expect(send(account, addr, args)).to.be.revertedWithCustomError(account, 'UntrustedCeremonyAttester');
+        // personal_sign over the earlier generation's ceremonyHash preimage.
+        const { chainId } = await ethers.provider.getNetwork();
+        args = await argsWith(account, high, (m) => {
+          const legacy = ethers.keccak256(
+            ethers.AbiCoder.defaultAbiCoder().encode(
+              ['bytes32', 'uint256', 'address', 'bytes32', 'bytes32', 'bytes32', 'uint256', 'uint48', 'uint48'],
+              [ethers.id('cofferdam-ceremony-v1'), chainId, m.account, m.action, m.newKeyHash, m.partnerId, m.nonce, m.notBefore, m.expiry],
+            ),
+          );
+          return attester.signMessage(ethers.getBytes(legacy));
+        });
+        await expect(send(account, addr, args)).to.be.revertedWithCustomError(account, 'UntrustedCeremonyAttester');
+        // The typed signature itself passes.
+        args = await argsWith(account, high, async (m) => signCeremony(attester, await domainOf(account), m));
+        await expect(send(account, addr, args)).to.emit(account, 'FirstHighEnrolled');
+      });
+
+      it('refuses an attestation made for another account', async () => {
+        const a = await partnerAccount();
+        const b = await partnerAccount();
+        const high = webauthnKey();
+        expect(await a.account.ceremonyNonce()).to.equal(await b.account.ceremonyNonce());
+        // Signed for A (same registry, chain, key, partner and nonce), sent to B.
+        const forA = await argsWith(b.account, high, async (m) => signCeremony(attester, await domainOf(a.account), { ...m, account: a.addr }));
+        await expect(send(b.account, b.addr, forA)).to.be.revertedWithCustomError(b.account, 'UntrustedCeremonyAttester');
+        // The same attestation is A's: it enrols there.
+        const onA: any[] = await firstHighArgs(a.account, 0, high);
+        onA[4] = forA[4];
+        await expect(send(a.account, a.addr, onA)).to.emit(a.account, 'FirstHighEnrolled');
+      });
+
+      it('refuses another domain: chain, name, version, or the account as verifyingContract', async () => {
+        const { account, addr } = await partnerAccount();
+        const high = webauthnKey();
+        const { chainId } = await ethers.provider.getNetwork();
+        const registry = await ceremonyRegistry.getAddress();
+        for (const domain of [
+          ceremonyDomain(chainId + 1n, registry),
+          { ...ceremonyDomain(chainId, registry), name: 'Cofferdam Account' },
+          { ...ceremonyDomain(chainId, registry), version: '2' },
+          ceremonyDomain(chainId, addr),
+          { name: CEREMONY_DOMAIN_NAME, version: CEREMONY_DOMAIN_VERSION, chainId },
+        ]) {
+          const args = await argsWith(account, high, (m) => signCeremony(attester, domain, m));
+          await expect(send(account, addr, args)).to.be.revertedWithCustomError(account, 'UntrustedCeremonyAttester');
+        }
+      });
+
+      it('refuses a malleated (high-s) signature', async () => {
+        const { account, addr } = await partnerAccount();
+        const high = webauthnKey();
+        const args = await argsWith(account, high, async (m) => {
+          const sig = ethers.Signature.from(await signCeremony(attester, await domainOf(account), m));
+          const highS = ethers.toBeHex(SECP256K1_N - BigInt(sig.s), 32);
+          return ethers.concat([sig.r, highS, sig.v === 27 ? '0x1c' : '0x1b']);
+        });
+        await expect(send(account, addr, args)).to.be.revertedWithCustomError(account, 'UntrustedCeremonyAttester');
+      });
+
+      it('refuses an attester the registry removed', async () => {
+        const { account, addr } = await partnerAccount();
+        const high = webauthnKey();
+        const args = await argsWith(account, high, async (m) => signCeremony(attester, await domainOf(account), m));
+        await ceremonyRegistry.connect(owner).removeAttester(attester.address);
+        try {
+          await expect(send(account, addr, args)).to.be.revertedWithCustomError(account, 'UntrustedCeremonyAttester');
+        } finally {
+          await ceremonyRegistry.connect(owner).addAttester(attester.address);
+        }
+        await expect(send(account, addr, args)).to.emit(account, 'FirstHighEnrolled');
+      });
     });
 
     it('needs the new key to be a cofferdam.xyz passkey that signed the challenge', async () => {

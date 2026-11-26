@@ -43,7 +43,7 @@ import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/Messa
 ///         ceremony co-sign from `CofferdamCeremonyAttesterRegistry`:
 ///           - `enrollFirstHigh`: Partner/Managed signs the op, the new
 ///             `cofferdam.xyz` passkey signs `firstHighChallenge`, and the
-///             attester signs `ceremonyHash`.
+///             attester signs `ceremonyHash`, an EIP-712 digest (below).
 ///           - Partner recovery: `userOp.signature` uses authorityId
 ///             `RECOVERY_AUTHORITY_ID`, the new Partner passkey signs the
 ///             userOpHash, the partner backend signs the recovery, and the
@@ -65,6 +65,19 @@ import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/Messa
 ///             After `RECOVERY_DELAY` anyone may `finalizeRecovery`, which
 ///             revokes every High and installs the new one; until then any
 ///             surviving mature High may `cancelRecovery`.
+///
+///         CEREMONY ATTESTATIONS (decision 0090 item 5) are EIP-712 typed
+///         data, so a CDP policy can pin what the attester signs:
+///           domain  EIP712Domain(name "Cofferdam Ceremony", version "1",
+///                   chainId, verifyingContract = CEREMONY_ATTESTERS)
+///           message CeremonyAttestation(address account, bytes32 action,
+///                   bytes32 newKeyHash, bytes32 partnerId, uint256 nonce,
+///                   uint48 notBefore, uint48 expiry)
+///         The domain names the registry, never the account (accounts are
+///         many; the registry is one per generation), and `account` in the
+///         message keeps an attestation from replaying on another account.
+///         Accounts of Base Sepolia's deployed generation verify EIP-191 over
+///         the earlier `ceremonyHash` and are unchanged.
 ///
 ///         SIGNATURE ENCODING for validateUserOp:
 ///           abi.encodePacked(uint256 authorityId, bytes userSignature)
@@ -100,7 +113,15 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
     bytes32 public constant ACTION_REPLACE_PARTNER = keccak256("replace-partner");
     bytes32 public constant ACTION_RECOVER_HIGH = keccak256("recover-high");
 
-    bytes32 private constant CEREMONY_TAG = keccak256("cofferdam-ceremony-v1");
+    /// @notice EIP-712 type of a ceremony attestation (decision 0090 item 5).
+    bytes32 public constant CEREMONY_TYPEHASH = keccak256(
+        "CeremonyAttestation(address account,bytes32 action,bytes32 newKeyHash,bytes32 partnerId,uint256 nonce,uint48 notBefore,uint48 expiry)"
+    );
+
+    bytes32 private constant EIP712_DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    bytes32 private constant CEREMONY_DOMAIN_NAME_HASH = keccak256("Cofferdam Ceremony");
+    bytes32 private constant CEREMONY_DOMAIN_VERSION_HASH = keccak256("1");
     bytes32 private constant FIRST_HIGH_CHALLENGE_TAG = keccak256("cofferdam-first-high-v1");
     bytes32 private constant PARTNER_RECOVERY_TAG = keccak256("cofferdam-partner-recovery-v1");
     bytes32 private constant RECOVERY_CHALLENGE_TAG = keccak256("cofferdam-recover-high-v1");
@@ -622,8 +643,25 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
 
     // ── Ceremony attestations ────────────────────────────────────────────────
 
-    /// @notice What a Cofferdam ceremony attester signs (EIP-191), for this
-    ///         account on this chain.
+    /// @notice The EIP-712 domain separator of ceremony attestations: name
+    ///         "Cofferdam Ceremony", version "1", this chain, and the ceremony
+    ///         attester registry as `verifyingContract` (never the account).
+    function ceremonyDomainSeparator() public view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                EIP712_DOMAIN_TYPEHASH,
+                CEREMONY_DOMAIN_NAME_HASH,
+                CEREMONY_DOMAIN_VERSION_HASH,
+                block.chainid,
+                address(CEREMONY_ATTESTERS)
+            )
+        );
+    }
+
+    /// @notice The EIP-712 digest a Cofferdam ceremony attester signs, for this
+    ///         account on this chain: `CeremonyAttestation(account = this, ...)`
+    ///         under `ceremonyDomainSeparator()`. The signature recovers over
+    ///         this digest directly, with no EIP-191 prefix.
     function ceremonyHash(
         bytes32 action,
         bytes32 newKeyHash,
@@ -632,14 +670,16 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
         uint48 notBefore,
         uint48 expiry
     ) public view returns (bytes32) {
-        return keccak256(
-            abi.encode(
-                CEREMONY_TAG, block.chainid, address(this), action, newKeyHash, partnerId, nonce, notBefore, expiry
-            )
+        bytes32 structHash = keccak256(
+            abi.encode(CEREMONY_TYPEHASH, address(this), action, newKeyHash, partnerId, nonce, notBefore, expiry)
         );
+        return MessageHashUtils.toTypedDataHash(ceremonyDomainSeparator(), structHash);
     }
 
     /// @dev Check the attestation's window and signer, and spend the nonce.
+    ///      The signer is recovered over the EIP-712 digest (65 bytes, low s)
+    ///      and must be listed in `CEREMONY_ATTESTERS`; an EIP-191 signature
+    ///      recovers to another address and is refused.
     function _consumeCeremony(
         bytes32 action,
         bytes32 newKeyHash,
@@ -650,7 +690,10 @@ contract CofferdamAccount4337 is AuthorityManagerBase, EIP712 {
         uint256 nonce = ceremonyNonce;
         bytes32 h = ceremonyHash(action, newKeyHash, partnerId, nonce, att.notBefore, att.expiry);
         ceremonyNonce = nonce + 1;
-        if (!CEREMONY_ATTESTERS.verifyAttesterSig(h, att.signature)) revert UntrustedCeremonyAttester();
+        (address attester, ECDSA.RecoverError err,) = ECDSA.tryRecover(h, att.signature);
+        if (err != ECDSA.RecoverError.NoError || !CEREMONY_ATTESTERS.isTrustedAttester(attester)) {
+            revert UntrustedCeremonyAttester();
+        }
     }
 
     /// @dev The partner id of a Partner authority (word 3 of its config), or 0

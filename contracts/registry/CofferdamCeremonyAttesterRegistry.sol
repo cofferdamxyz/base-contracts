@@ -11,9 +11,14 @@ import {SelfAttesterRegistry} from "../self/SelfAttesterRegistry.sol";
 ///         ceremony on `id.cofferdam.xyz` or in the Cofferdam app opened for
 ///         that account. No account function accepts the attestation alone,
 ///         and once High exists it has no path into the account.
-/// @dev    The same owner / two-step transfer / add-remove shape and EIP-191
-///         `verifyAttesterSig` as `SelfAttesterRegistry`, deployed separately
-///         so the ceremony key and the Self bind key never share a list.
+/// @dev    The same owner / two-step transfer / add-remove shape as
+///         `SelfAttesterRegistry`, deployed separately so the ceremony key and
+///         the Self bind key never share a list. Accounts from the production
+///         generation on (decision 0090 item 5) verify an EIP-712
+///         `CeremonyAttestation` whose domain names this registry as
+///         `verifyingContract`: the account recovers the signer itself and
+///         asks `isTrustedAttester`. The inherited EIP-191 `verifyAttesterSig`
+///         serves only Base Sepolia's deployed generation.
 ///         Owner is the Cofferdam Inc. Safe on mainnet. Removing every attester
 ///         pauses first-High upgrades and Partner recoveries only.
 contract CofferdamCeremonyAttesterRegistry is SelfAttesterRegistry {

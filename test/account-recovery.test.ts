@@ -3,6 +3,7 @@ import { ethers } from 'hardhat';
 import { time } from '@nomicfoundation/hardhat-network-helpers';
 import type { Signer } from 'ethers';
 import { TIER, NO_PERMISSION, permission, sessionKey, webauthnKey, packSig, userOp } from './helpers/keys';
+import { domainOf, signCeremony } from './helpers/ceremony';
 import { COFFERDAM_BIND_V1_SCOPE } from '../scripts/lib/selfScope';
 import {
   COFFERDAM_SELF_DEST_CHAIN_ID,
@@ -119,8 +120,11 @@ describe('CofferdamAccount4337 hard recovery and probation (decision 0023)', () 
     );
     const now = BigInt(await time.latest());
     const [notBefore, expiry] = [now - 60n, now + 600n];
-    const h = await account.ceremonyHash(ACTION, ethers.keccak256(newKey.config), ethers.ZeroHash, nonce, notBefore, expiry);
-    const attestation = { notBefore, expiry, signature: await (o.ceremonySigner ?? ceremonyAttester).signMessage(ethers.getBytes(h)) };
+    const message = {
+      account: addr, action: ACTION, newKeyHash: ethers.keccak256(newKey.config), partnerId: ethers.ZeroHash, nonce, notBefore, expiry,
+    };
+    const signature = await signCeremony(o.ceremonySigner ?? ceremonyAttester, await domainOf(account), message);
+    const attestation = { notBefore, expiry, signature };
     const assertion = o.assertion ?? newKey.sign(await account.recoveryChallenge(nonce));
     return { newKey, args: [highModule.target, newKey.config, assertion, proof, selfSig, attestation] as const };
   }
