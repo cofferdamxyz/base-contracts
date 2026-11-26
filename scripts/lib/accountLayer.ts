@@ -8,6 +8,19 @@ import { accountCodeFingerprint, paymasterRelayer } from './paymaster';
 export const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
 
 /**
+ * The account source this script deploys verifies ceremonies as EIP-712 under
+ * the registry's domain (decision 0090 item 5). A stale build that still
+ * verifies EIP-191 has no `ceremonyDomainSeparator`: refuse it before the
+ * first contract is deployed.
+ */
+export async function assertTypedCeremonyBuild(): Promise<void> {
+  const Account = await ethers.getContractFactory('CofferdamAccount4337');
+  if (!Account.interface.getFunction('ceremonyDomainSeparator')) {
+    throw new Error('CofferdamAccount4337 build verifies EIP-191 ceremonies: recompile (decision 0090 item 5)');
+  }
+}
+
+/**
  * Deploy the account layer (decisions 0016, 0023): authority modules, the
  * module registry, the ceremony attester registry, the factory that pins them
  * with the nullifier registry and the hard-recovery delay, and the paymaster.
@@ -15,8 +28,8 @@ export const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
  * - `REGISTRY_OWNER` owns both registries (the Cofferdam Safe on mainnet);
  *   defaults to the deployer off mainnet and is required on mainnet.
  * - `CEREMONY_ATTESTERS` is a comma-separated list of ceremony attester
- *   addresses; empty means first-High upgrades and Partner recoveries stay
- *   paused until the owner adds one.
+ *   addresses; empty means first-High upgrades, Partner recoveries and hard
+ *   recoveries stay paused until the owner adds one.
  * - The raw P-256 `PasskeyAuthority` has no RP binding: it is deployed and
  *   listed only off mainnet.
  * - `nullifierRegistry` (or `NULLIFIER_REGISTRY`, else the `NullifierRegistry`
@@ -38,8 +51,16 @@ export const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
  * - `RELAYER_ADDRESS` is the plane's relayer EOA, the only `tx.origin` the
  *   paymaster sponsors; required off the local networks. The paymaster is
  *   testnet only: mainnet deploys none (the CDP Paymaster, decision 0017).
+ * - Accounts from this source verify ceremony co-signs as EIP-712 (decision
+ *   0090 item 5): domain ("Cofferdam Ceremony", "1", chainId, the ceremony
+ *   registry deployed here). The attester Worker for this chain must then pin
+ *   `CEREMONY_SIGNATURE=eip712` and `CEREMONY_REGISTRY_ADDRESS` to that
+ *   registry; the script refuses an account build that still verifies
+ *   EIP-191 before deploying anything, and prints both with the domain
+ *   separator.
  */
 export async function deployAccountLayer(nullifierRegistry?: string): Promise<Record<string, string>> {
+  await assertTypedCeremonyBuild();
   const deployer = await getDeployer();
   const chainId = await nodeChainId();
   // By the chain id the node reports, so a fork of mainnet takes this path too.
@@ -134,6 +155,19 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
     console.log('Paymaster relayer:', relayer, '| account code hash:', fp.codeHash, `(${fp.codeSize} bytes, ${fp.maskOffsets.length} masked words)`);
     out.CofferdamPaymaster = await deploy('CofferdamPaymaster', [ENTRYPOINT_V07, relayer, fp.codeHash, fp.codeSize, fp.maskOffsets]);
   }
-  if (attesters.length === 0) console.log('No CEREMONY_ATTESTERS: first-High upgrades are paused until one is added.');
+  if (attesters.length === 0) console.log('No CEREMONY_ATTESTERS: first-High upgrades, Partner recoveries and hard recoveries are paused until one is added.');
+  const ceremonyDomain = ethers.TypedDataEncoder.hashDomain({
+    name: 'Cofferdam Ceremony',
+    version: '1',
+    chainId,
+    verifyingContract: out.CofferdamCeremonyAttesterRegistry,
+  });
+  console.log('Ceremony domain separator:', ceremonyDomain);
+  console.log(
+    'Ceremony attestations: EIP-712, domain ("Cofferdam Ceremony", "1",',
+    chainId.toString() + ',',
+    out.CofferdamCeremonyAttesterRegistry + ').',
+    'Attester Worker: CEREMONY_SIGNATURE=eip712, CEREMONY_REGISTRY_ADDRESS=' + out.CofferdamCeremonyAttesterRegistry,
+  );
   return out;
 }

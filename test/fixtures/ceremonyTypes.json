@@ -1,0 +1,121 @@
+{
+  "note": "workspace decision 0090 item 5; built by cofferdam-sdk packages/core/test/fixtures/buildCeremonyFixture.ts, never edited by hand",
+  "domain": {
+    "name": "Cofferdam Ceremony",
+    "version": "1"
+  },
+  "primaryType": "CeremonyAttestation",
+  "typeString": "CeremonyAttestation(address account,bytes32 action,bytes32 newKeyHash,bytes32 partnerId,uint256 nonce,uint48 notBefore,uint48 expiry)",
+  "typehash": "0x8fc24c67f1ec022dbd26d785acd47b1277e8281baef1d40e741d8ebf876b7415",
+  "fields": [
+    {
+      "name": "account",
+      "type": "address"
+    },
+    {
+      "name": "action",
+      "type": "bytes32"
+    },
+    {
+      "name": "newKeyHash",
+      "type": "bytes32"
+    },
+    {
+      "name": "partnerId",
+      "type": "bytes32"
+    },
+    {
+      "name": "nonce",
+      "type": "uint256"
+    },
+    {
+      "name": "notBefore",
+      "type": "uint48"
+    },
+    {
+      "name": "expiry",
+      "type": "uint48"
+    }
+  ],
+  "actions": {
+    "enroll-first-high": "0x576812806b2b1bd14ce155ba9d5337803c10ece5f435ca8686a823e35f1e2ed8",
+    "replace-partner": "0xe2591104ad69f1b410138053b93edfcec7c193634c8506cbbb7534293abc95d7",
+    "recover-high": "0xebbf885ea458beb39d5e937f9183c71d44e0b6f3ea49f7f8845a1d9cd4efa97b"
+  },
+  "attester": {
+    "privateKey": "0x1f7ba18fd4276e85251f5142db6ca12d4dfe7a4b4bd586c31de42798a77fce35",
+    "address": "0x323AB64a514392a4Ade23D467730b5c2408713B4",
+    "note": "keccak256 of a fixed string; never a real key"
+  },
+  "vectors": [
+    {
+      "actionName": "enroll-first-high",
+      "domain": {
+        "name": "Cofferdam Ceremony",
+        "version": "1",
+        "chainId": 8453,
+        "verifyingContract": "0xF37C5D23c8B86069eb501f4cd066d1ABf0CAc9e5"
+      },
+      "message": {
+        "account": "0xDfbeD931a77B097bE818000DDC7207813Beb9580",
+        "newKeyHash": "0x8d1b373a6f18ba3ffbe3629adf43ec5f66ddc19ed7aa9f4c7bf4b478e4dcaa32",
+        "partnerId": "0xc0a431ef70fcf5513ce674c90d6f0dfd0625204260c6318e66aadbc91b7a0067",
+        "nonce": "0",
+        "notBefore": "1800000000",
+        "expiry": "1800000600",
+        "action": "0x576812806b2b1bd14ce155ba9d5337803c10ece5f435ca8686a823e35f1e2ed8"
+      },
+      "domainSeparator": "0xa9e52127f0b2fde1718f5342997ad43923cced96bd942b7895cae6f314731da6",
+      "structHash": "0x8d7bc263b5ddfe1645a019e5def849cfb60e01915653f4c46adcc394ff1c03bd",
+      "digest": "0xe0685980acd506aeedd247b71db6f2069bafc924b5d7b6a7e3e5fc732235d6e6",
+      "signature": "0x6d24dd3b3afe7782d9ede7e4173c77e287b8fb9c457a2e0f649762e3221983327f2e26675663ee2c2626923759319c71cd08a22e8a3f0bcbc146243ca53320c61b",
+      "signerAddress": "0x323AB64a514392a4Ade23D467730b5c2408713B4"
+    },
+    {
+      "actionName": "replace-partner",
+      "domain": {
+        "name": "Cofferdam Ceremony",
+        "version": "1",
+        "chainId": 84532,
+        "verifyingContract": "0x540AE3a6F22F920f01397454487260aDA6f15FE5"
+      },
+      "message": {
+        "account": "0x7d75bcd4C6948e4b8ee56fD2e8A16934A58F443B",
+        "newKeyHash": "0x6dc8afbfedb5c4439fa09e66b99104dbbbce8acd55b6a2af331b85e515ae662e",
+        "partnerId": "0xc0a431ef70fcf5513ce674c90d6f0dfd0625204260c6318e66aadbc91b7a0067",
+        "nonce": "3",
+        "notBefore": "1800000000",
+        "expiry": "1800003600",
+        "action": "0xe2591104ad69f1b410138053b93edfcec7c193634c8506cbbb7534293abc95d7"
+      },
+      "domainSeparator": "0x8b7c02cf30f54be70c5986f345c5e6d18fa3b2c0cc4a6ccbb68282babeac1d6a",
+      "structHash": "0xd1641dd4c910868950cf0b77cf53a0355b4955f13ff6011dae5befda91822285",
+      "digest": "0x047722d3dd45fd96757649b428ec029467610232f01bcca12e4d6f20da994b7e",
+      "signature": "0xd0c8957077678e30214722474733fb1d675376c8c56435d8339ff16f901abadd6804756f5860a0f555e383025d1e22452ee0cb7cebc79de408559326fe5a103a1b",
+      "signerAddress": "0x323AB64a514392a4Ade23D467730b5c2408713B4"
+    },
+    {
+      "actionName": "recover-high",
+      "domain": {
+        "name": "Cofferdam Ceremony",
+        "version": "1",
+        "chainId": 8453,
+        "verifyingContract": "0xF37C5D23c8B86069eb501f4cd066d1ABf0CAc9e5"
+      },
+      "message": {
+        "account": "0xDfbeD931a77B097bE818000DDC7207813Beb9580",
+        "newKeyHash": "0x36b954427306882072c85a77ff61ea323fbb19c6a89d505f164474f55af103eb",
+        "partnerId": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "nonce": "57896044618658097711785492504343953926634992332820282019728792003956564819975",
+        "notBefore": "281474976710055",
+        "expiry": "281474976710655",
+        "action": "0xebbf885ea458beb39d5e937f9183c71d44e0b6f3ea49f7f8845a1d9cd4efa97b"
+      },
+      "domainSeparator": "0xa9e52127f0b2fde1718f5342997ad43923cced96bd942b7895cae6f314731da6",
+      "structHash": "0x2c913cb7a8a190ef8543ecd1bdab1c17e8724a27e858536966bb5463dcedcc1b",
+      "digest": "0x33858771e4b9b890cac72ce82d03a08f9a8bf47472625c4b2dc04512194f32b4",
+      "signature": "0x0cd3626b1e757b2becc8b6b0626cceeb8727c0eed5b318b31cbcce7182c08a5166269e8830676023f7cfe87b8902a11e3b03f6da7bbd98fd507819228c9e3c3a1b",
+      "signerAddress": "0x323AB64a514392a4Ade23D467730b5c2408713B4"
+    }
+  ]
+}
