@@ -28,8 +28,8 @@ export async function assertTypedCeremonyBuild(): Promise<void> {
  * - `REGISTRY_OWNER` owns both registries (the Cofferdam Safe on mainnet);
  *   defaults to the deployer off mainnet and is required on mainnet.
  * - `CEREMONY_ATTESTERS` is a comma-separated list of ceremony attester
- *   addresses; empty means first-High upgrades and Partner recoveries stay
- *   paused until the owner adds one.
+ *   addresses; empty means first-High upgrades, Partner recoveries and hard
+ *   recoveries stay paused until the owner adds one.
  * - The raw P-256 `PasskeyAuthority` has no RP binding: it is deployed and
  *   listed only off mainnet.
  * - `nullifierRegistry` (or `NULLIFIER_REGISTRY`, else the `NullifierRegistry`
@@ -155,7 +155,7 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
     console.log('Paymaster relayer:', relayer, '| account code hash:', fp.codeHash, `(${fp.codeSize} bytes, ${fp.maskOffsets.length} masked words)`);
     out.CofferdamPaymaster = await deploy('CofferdamPaymaster', [ENTRYPOINT_V07, relayer, fp.codeHash, fp.codeSize, fp.maskOffsets]);
   }
-  if (attesters.length === 0) console.log('No CEREMONY_ATTESTERS: first-High upgrades are paused until one is added.');
+  if (attesters.length === 0) console.log('No CEREMONY_ATTESTERS: first-High upgrades, Partner recoveries and hard recoveries are paused until one is added.');
   const ceremonyDomain = ethers.TypedDataEncoder.hashDomain({
     name: 'Cofferdam Ceremony',
     version: '1',
