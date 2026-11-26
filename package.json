@@ -27,6 +27,7 @@
     "safe:create:fork": "hardhat run scripts/create-safe.ts --network baseFork",
     "safe:create:base-dev": "hardhat run scripts/create-safe.ts --network baseDevTest",
     "safe:create:sepolia": "hardhat run scripts/create-safe.ts --network baseSepolia",
+    "safe:create:base": "hardhat run scripts/create-safe.ts --network base",
     "safe:exec:fork": "hardhat run scripts/safe-exec.ts --network baseFork",
     "safe:exec:base-dev": "hardhat run scripts/safe-exec.ts --network baseDevTest",
     "safe:exec:sepolia": "hardhat run scripts/safe-exec.ts --network baseSepolia",
