@@ -51,6 +51,10 @@ async function main() {
   const relayer = ethers.getAddress(relayPaymasterRelayer(process.env.RELAYER_ADDRESS, { mainnet, local, deployer: deployer.address }));
   const relayerProblem = relayerRefusal(relayer, { owner, deployer: deployer.address, mainnet, code: await ethers.provider.getCode(relayer) });
   if (relayerProblem) throw new Error(relayerProblem);
+  const ownerSafe = await readSafe(owner);
+  if (ownerSafe?.owners.some((o) => o.toLowerCase() === relayer.toLowerCase())) {
+    throw new Error(`The relayer ${relayer} is an owner of the Safe ${owner}: a Safe signer is never the relayer`);
+  }
   const maxCost = relayPaymasterMaxCost(process.env.PAYMASTER_MAX_COST_WEI, { mainnet, local });
 
   if (mainnet) refuseRecordedGeneration(network.name, chainId, [RELAY_PAYMASTER]);
@@ -69,7 +73,6 @@ async function main() {
   if ((await f.ENTRY_POINT()).toLowerCase() !== ENTRYPOINT_V07.toLowerCase()) throw new Error(`The factory ${factory} does not pin EntryPoint v0.7`);
 
   const fp = await accountCodeFingerprint(factory, highModule);
-  const ownerSafe = await readSafe(owner);
   console.log({
     owner,
     ownerSafe: ownerSafe ? `${ownerSafe.threshold}-of-${ownerSafe.owners.length}` : 'not a Safe',
