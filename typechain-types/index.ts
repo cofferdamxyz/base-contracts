@@ -14,6 +14,8 @@ export type { IERC20Errors } from "./@openzeppelin/contracts/interfaces/draft-IE
 export { IERC20Errors__factory } from "./factories/@openzeppelin/contracts/interfaces/draft-IERC6093.sol/IERC20Errors__factory";
 export type { IERC721Errors } from "./@openzeppelin/contracts/interfaces/draft-IERC6093.sol/IERC721Errors";
 export { IERC721Errors__factory } from "./factories/@openzeppelin/contracts/interfaces/draft-IERC6093.sol/IERC721Errors__factory";
+export type { IERC1363 } from "./@openzeppelin/contracts/interfaces/IERC1363";
+export { IERC1363__factory } from "./factories/@openzeppelin/contracts/interfaces/IERC1363__factory";
 export type { IERC5267 } from "./@openzeppelin/contracts/interfaces/IERC5267";
 export { IERC5267__factory } from "./factories/@openzeppelin/contracts/interfaces/IERC5267__factory";
 export type { Clones } from "./@openzeppelin/contracts/proxy/Clones";
@@ -24,6 +26,8 @@ export type { IERC20Metadata } from "./@openzeppelin/contracts/token/ERC20/exten
 export { IERC20Metadata__factory } from "./factories/@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata__factory";
 export type { IERC20 } from "./@openzeppelin/contracts/token/ERC20/IERC20";
 export { IERC20__factory } from "./factories/@openzeppelin/contracts/token/ERC20/IERC20__factory";
+export type { SafeERC20 } from "./@openzeppelin/contracts/token/ERC20/utils/SafeERC20";
+export { SafeERC20__factory } from "./factories/@openzeppelin/contracts/token/ERC20/utils/SafeERC20__factory";
 export type { Base64 } from "./@openzeppelin/contracts/utils/Base64";
 export { Base64__factory } from "./factories/@openzeppelin/contracts/utils/Base64__factory";
 export type { Create2 } from "./@openzeppelin/contracts/utils/Create2";
@@ -36,6 +40,8 @@ export type { MessageHashUtils } from "./@openzeppelin/contracts/utils/cryptogra
 export { MessageHashUtils__factory } from "./factories/@openzeppelin/contracts/utils/cryptography/MessageHashUtils__factory";
 export type { Errors } from "./@openzeppelin/contracts/utils/Errors";
 export { Errors__factory } from "./factories/@openzeppelin/contracts/utils/Errors__factory";
+export type { IERC165 } from "./@openzeppelin/contracts/utils/introspection/IERC165";
+export { IERC165__factory } from "./factories/@openzeppelin/contracts/utils/introspection/IERC165__factory";
 export type { SafeCast } from "./@openzeppelin/contracts/utils/math/SafeCast";
 export { SafeCast__factory } from "./factories/@openzeppelin/contracts/utils/math/SafeCast__factory";
 export type { ReentrancyGuard } from "./@openzeppelin/contracts/utils/ReentrancyGuard";
@@ -144,6 +150,10 @@ export type { RejectingGroth16Verifier } from "./contracts/test/MockGroth16Verif
 export { RejectingGroth16Verifier__factory } from "./factories/contracts/test/MockGroth16Verifier.sol/RejectingGroth16Verifier__factory";
 export type { MockTierModule } from "./contracts/test/MockTierModule";
 export { MockTierModule__factory } from "./factories/contracts/test/MockTierModule__factory";
+export type { MockFeeToken } from "./contracts/test/MockToken.sol/MockFeeToken";
+export { MockFeeToken__factory } from "./factories/contracts/test/MockToken.sol/MockFeeToken__factory";
+export type { MockToken } from "./contracts/test/MockToken.sol/MockToken";
+export { MockToken__factory } from "./factories/contracts/test/MockToken.sol/MockToken__factory";
 export type { USDC } from "./contracts/test/MockUSDC.sol/USDC";
 export { USDC__factory } from "./factories/contracts/test/MockUSDC.sol/USDC__factory";
 export type { MockZKPassportHelper } from "./contracts/test/MockZKPassport.sol/MockZKPassportHelper";

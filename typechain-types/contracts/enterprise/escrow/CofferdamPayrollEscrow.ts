@@ -59,7 +59,6 @@ export declare namespace CofferdamPayrollEscrow {
 export interface CofferdamPayrollEscrowInterface extends Interface {
   getFunction(
     nameOrSignature:
-      | "USDC"
       | "approvedBy"
       | "claim"
       | "companyOrgRoot"
@@ -74,6 +73,7 @@ export interface CofferdamPayrollEscrowInterface extends Interface {
       | "refund"
       | "releaseAt"
       | "state"
+      | "token"
   ): FunctionFragment;
 
   getEvent(
@@ -85,7 +85,6 @@ export interface CofferdamPayrollEscrowInterface extends Interface {
       | "EscrowStateChanged"
   ): EventFragment;
 
-  encodeFunctionData(functionFragment: "USDC", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "approvedBy",
     values?: undefined
@@ -115,8 +114,8 @@ export interface CofferdamPayrollEscrowInterface extends Interface {
   encodeFunctionData(functionFragment: "refund", values?: undefined): string;
   encodeFunctionData(functionFragment: "releaseAt", values?: undefined): string;
   encodeFunctionData(functionFragment: "state", values?: undefined): string;
+  encodeFunctionData(functionFragment: "token", values?: undefined): string;
 
-  decodeFunctionResult(functionFragment: "USDC", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "approvedBy", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "claim", data: BytesLike): Result;
   decodeFunctionResult(
@@ -143,6 +142,7 @@ export interface CofferdamPayrollEscrowInterface extends Interface {
   decodeFunctionResult(functionFragment: "refund", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "releaseAt", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "state", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "token", data: BytesLike): Result;
 }
 
 export namespace EscrowDisputedEvent {
@@ -295,8 +295,6 @@ export interface CofferdamPayrollEscrow extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  USDC: TypedContractMethod<[], [string], "view">;
-
   approvedBy: TypedContractMethod<[], [string], "view">;
 
   claim: TypedContractMethod<[_workerProof: BytesLike[]], [void], "nonpayable">;
@@ -344,13 +342,12 @@ export interface CofferdamPayrollEscrow extends BaseContract {
 
   state: TypedContractMethod<[], [bigint], "view">;
 
+  token: TypedContractMethod<[], [string], "view">;
+
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
 
-  getFunction(
-    nameOrSignature: "USDC"
-  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "approvedBy"
   ): TypedContractMethod<[], [string], "view">;
@@ -408,6 +405,9 @@ export interface CofferdamPayrollEscrow extends BaseContract {
   getFunction(
     nameOrSignature: "state"
   ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "token"
+  ): TypedContractMethod<[], [string], "view">;
 
   getEvent(
     key: "EscrowDisputed"

@@ -2,6 +2,7 @@
 /* tslint:disable */
 /* eslint-disable */
 export * as mockGroth16VerifierSol from "./MockGroth16Verifier.sol";
+export * as mockTokenSol from "./MockToken.sol";
 export * as mockUsdcSol from "./MockUSDC.sol";
 export * as mockZkPassportSol from "./MockZKPassport.sol";
 export * as mockZkPassportDirectSol from "./MockZKPassportDirect.sol";

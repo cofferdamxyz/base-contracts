@@ -3,11 +3,18 @@ import { createHmac } from 'crypto';
 import { chainId, refuseMainnet } from './lib/chain';
 import { readDeployments, writeDeployments } from './lib/deployments';
 
-/** The MockUSDC already recorded for this network, if any. */
-async function recordedMockUsdc(networkName: string): Promise<string | null> {
-  const addr = readDeployments(networkName, await chainId()).MockUSDC?.address;
+/** The address recorded under `name` for this network, if any. */
+async function recorded(networkName: string, name: string): Promise<string | null> {
+  const addr = readDeployments(networkName, await chainId())[name]?.address;
   return typeof addr === 'string' && /^0x[0-9a-fA-F]{40}$/.test(addr) ? addr : null;
 }
+
+/**
+ * BRS on Base Sepolia is Pods' test token pBRL (18 decimals; mainnet BRS has
+ * 6). Nobody but Pods' staging sandbox mints it (workspace
+ * docs/runbooks/pods-pix-ramp.md, `scripts/pods/sandbox.mjs mint`).
+ */
+const PODS_PBRL_BASE_SEPOLIA = '0x9762f60740142cF11C0F32C6e24cd3e86016C0f2';
 
 // Mirror of LocalChainDemo's deriveDeterministicPk — same salt + algorithm
 // so the deployed escrow's policy matches the demo's wallets.
@@ -21,7 +28,7 @@ async function main() {
   // A mintable mock token and demo keys derived from public strings: never on
   // Base mainnet, a fork of it included (decision 0080).
   await refuseMainnet('deploy-escrow.ts (MockUSDC and demo wallets)');
-  console.log('=== Deploy EscrowFactory + Sample SpotEscrow (MockUSDC reused unless NEW_MOCK_USDC=1) ===\n');
+  console.log('=== Deploy EscrowFactory (USDC + BRS allowed) + Sample SpotEscrow (MockUSDC reused unless NEW_MOCK_USDC=1) ===\n');
 
   const [deployer] = await ethers.getSigners();
   console.log('Network:', network.name);
@@ -51,11 +58,11 @@ async function main() {
   //    webhook, which all pin this address (workspace decision 0032). Set
   //    NEW_MOCK_USDC=1 only for a deliberate token reset.
   const USDC = await ethers.getContractFactory('USDC');
-  const recorded = process.env.NEW_MOCK_USDC === '1' ? null : await recordedMockUsdc(network.name);
+  const recordedUsdc = process.env.NEW_MOCK_USDC === '1' ? null : await recorded(network.name, 'MockUSDC');
   let usdc;
-  if (recorded) {
-    usdc = USDC.attach(recorded) as Awaited<ReturnType<typeof USDC.deploy>>;
-    console.log('MockUSDC (reused):', recorded);
+  if (recordedUsdc) {
+    usdc = USDC.attach(recordedUsdc) as Awaited<ReturnType<typeof USDC.deploy>>;
+    console.log('MockUSDC (reused):', recordedUsdc);
   } else {
     usdc = await USDC.deploy('USD Coin', 'USDC');
     await usdc.waitForDeployment();
@@ -63,9 +70,33 @@ async function main() {
   }
   const usdcAddr = await usdc.getAddress();
 
-  // 2. EscrowFactory
+  // 1b. BRS. On Base Sepolia it is Pods' pBRL, which we cannot deploy or
+  //     mint; elsewhere (a local node) an 18-decimal MockToken stands in,
+  //     reused when recorded.
+  let brsAddr: string;
+  if (isTestnet) {
+    brsAddr = PODS_PBRL_BASE_SEPOLIA;
+    if ((await ethers.provider.getCode(brsAddr)) === '0x') throw new Error(`No pBRL contract at ${brsAddr} on this network`);
+    console.log('BRS (Pods pBRL):', brsAddr);
+  } else {
+    const recordedBrs = await recorded(network.name, 'BRS');
+    if (recordedBrs && (await ethers.provider.getCode(recordedBrs)) !== '0x') {
+      brsAddr = recordedBrs;
+      console.log('BRS (local MockToken, reused):', brsAddr);
+    } else {
+      const Token = await ethers.getContractFactory('MockToken');
+      const brs = await Token.deploy('pods BRL Testnet (local)', 'pBRL', 18);
+      await brs.waitForDeployment();
+      brsAddr = await brs.getAddress();
+      console.log('BRS (local MockToken, new):', brsAddr);
+    }
+  }
+
+  // 2. EscrowFactory, allowing USDC and BRS (workspace decision 0100,
+  //    question 7). The owner changes the allowlist later (allowToken /
+  //    disallowToken); on mainnet the owner is the Cofferdam Safe.
   const Factory = await ethers.getContractFactory('EscrowFactory');
-  const factory = await Factory.deploy(usdcAddr);
+  const factory = await Factory.deploy([usdcAddr, brsAddr]);
   await factory.waitForDeployment();
   const factoryAddr = await factory.getAddress();
   console.log('EscrowFactory:', factoryAddr);
@@ -96,17 +127,17 @@ async function main() {
     witness: witnessWallet.address,
     arbiter: deployer.address,
     killFeeBps: 1000,
-    amount: 1_000_000n, // 1 USDC (6 decimals) — fund() must match; equals the testnet demo amount
+    amount: 1_000_000n, // 1 USDC (6 decimals; the sample escrow is in USDC) — fund() must match; equals the testnet demo amount
     termsHash: ethers.id('cofferdam-spot-demo-terms-v1'), // pointer to off-chain agreed terms
     jobStartTime: 0, // effective at creation (no scheduled start)
     disputeWindow: 120, // 2m demo — worker can claim if the arbiter stays silent
   };
 
   // Predict the address before deploying
-  const predictedAddr = await factory.predictSpotEscrowAddress(policy, ethers.id('cofferdam-spot-demo-v1'));
+  const predictedAddr = await factory.predictSpotEscrowAddress(usdcAddr, policy, ethers.id('cofferdam-spot-demo-v1'));
   console.log('Predicted escrow address:', predictedAddr);
 
-  const tx = await factory.createSpotEscrow(policy, ethers.id('cofferdam-spot-demo-v1'));
+  const tx = await factory.createSpotEscrow(usdcAddr, policy, ethers.id('cofferdam-spot-demo-v1'));
   const receipt = await tx.wait();
 
   const iface = factory.interface;
@@ -135,6 +166,7 @@ async function main() {
   //    existing entries written by deploy-all.ts / deploy-self.ts).
   const registryPath = writeDeployments(network.name, await chainId(), {
     MockUSDC: usdcAddr,
+    BRS: brsAddr,
     EscrowFactory: factoryAddr,
     CofferdamSpotEscrow: escrowAddr,
   });
@@ -142,6 +174,7 @@ async function main() {
 
   console.log('\n=== Summary ===');
   console.log('MockUSDC:', usdcAddr);
+  console.log('BRS:', brsAddr);
   console.log('EscrowFactory:', factoryAddr);
   console.log('CofferdamSpotEscrow:', escrowAddr);
   console.log(`\nPaste these into the example's .env.local:`);

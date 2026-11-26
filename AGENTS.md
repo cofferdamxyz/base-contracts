@@ -27,7 +27,7 @@ encoding live in the workspace: `docs/architecture/contracts.md` and
   `test/spot-escrow-witness.test.ts` needs it (no guard yet), so `yarn test`
   fails in a clone without the submodule.
   CI (`.github/workflows/ci.yml`) never initialises the submodule: it
-  compiles the public core and runs every test file except the four that
+  compiles the public core and runs every test file except those that
   deploy enterprise contracts (`enterprise-*`, `payroll-escrow*`,
   `spot-escrow*`); run `yarn test` on the Mac for those.
 - Deployed addresses live in `deployments/baseSepolia.json` and are mirrored

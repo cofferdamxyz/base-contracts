@@ -71,7 +71,6 @@ export declare namespace CofferdamSpotEscrow {
 export interface CofferdamSpotEscrowInterface extends Interface {
   getFunction(
     nameOrSignature:
-      | "USDC"
       | "awardWorker"
       | "awardedWorker"
       | "cancel"
@@ -94,6 +93,7 @@ export interface CofferdamSpotEscrowInterface extends Interface {
       | "selfWitnessed"
       | "setWitness"
       | "state"
+      | "token"
       | "witnessHistory"
       | "witnessHistoryCount"
       | "worker"
@@ -113,7 +113,6 @@ export interface CofferdamSpotEscrowInterface extends Interface {
       | "WorkerAwarded"
   ): EventFragment;
 
-  encodeFunctionData(functionFragment: "USDC", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "awardWorker",
     values: [AddressLike]
@@ -181,6 +180,7 @@ export interface CofferdamSpotEscrowInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "state", values?: undefined): string;
+  encodeFunctionData(functionFragment: "token", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "witnessHistory",
     values: [BigNumberish]
@@ -191,7 +191,6 @@ export interface CofferdamSpotEscrowInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "worker", values?: undefined): string;
 
-  decodeFunctionResult(functionFragment: "USDC", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "awardWorker",
     data: BytesLike
@@ -250,6 +249,7 @@ export interface CofferdamSpotEscrowInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "setWitness", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "state", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "token", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "witnessHistory",
     data: BytesLike
@@ -505,8 +505,6 @@ export interface CofferdamSpotEscrow extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  USDC: TypedContractMethod<[], [string], "view">;
-
   awardWorker: TypedContractMethod<
     [_worker: AddressLike],
     [void],
@@ -595,6 +593,8 @@ export interface CofferdamSpotEscrow extends BaseContract {
 
   state: TypedContractMethod<[], [bigint], "view">;
 
+  token: TypedContractMethod<[], [string], "view">;
+
   witnessHistory: TypedContractMethod<
     [arg0: BigNumberish],
     [
@@ -615,9 +615,6 @@ export interface CofferdamSpotEscrow extends BaseContract {
     key: string | FunctionFragment
   ): T;
 
-  getFunction(
-    nameOrSignature: "USDC"
-  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "awardWorker"
   ): TypedContractMethod<[_worker: AddressLike], [void], "nonpayable">;
@@ -716,6 +713,9 @@ export interface CofferdamSpotEscrow extends BaseContract {
   getFunction(
     nameOrSignature: "state"
   ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "token"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "witnessHistory"
   ): TypedContractMethod<

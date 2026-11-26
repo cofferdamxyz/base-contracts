@@ -104,11 +104,13 @@ export declare namespace CofferdamSpotEscrow {
 export interface EscrowFactoryInterface extends Interface {
   getFunction(
     nameOrSignature:
-      | "USDC"
+      | "allowToken"
+      | "allowedTokens"
       | "authorize"
       | "authorizedCallers"
       | "createPayrollEscrow"
       | "createSpotEscrow"
+      | "disallowToken"
       | "owner"
       | "predictSpotEscrowAddress"
       | "revoke"
@@ -119,11 +121,21 @@ export interface EscrowFactoryInterface extends Interface {
     nameOrSignatureOrTopic:
       | "CallerAuthorized"
       | "CallerRevoked"
+      | "OwnershipTransferred"
       | "PayrollEscrowCreated"
       | "SpotEscrowCreated"
+      | "TokenAllowed"
+      | "TokenDisallowed"
   ): EventFragment;
 
-  encodeFunctionData(functionFragment: "USDC", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "allowToken",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "allowedTokens",
+    values: [AddressLike]
+  ): string;
   encodeFunctionData(
     functionFragment: "authorize",
     values: [AddressLike]
@@ -136,6 +148,7 @@ export interface EscrowFactoryInterface extends Interface {
     functionFragment: "createPayrollEscrow",
     values: [
       AddressLike,
+      AddressLike,
       BytesLike,
       CofferdamPayrollEscrow.PayrollEscrowPolicyStruct,
       BytesLike
@@ -143,12 +156,16 @@ export interface EscrowFactoryInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "createSpotEscrow",
-    values: [CofferdamSpotEscrow.SpotEscrowPolicyStruct, BytesLike]
+    values: [AddressLike, CofferdamSpotEscrow.SpotEscrowPolicyStruct, BytesLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "disallowToken",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "predictSpotEscrowAddress",
-    values: [CofferdamSpotEscrow.SpotEscrowPolicyStruct, BytesLike]
+    values: [AddressLike, CofferdamSpotEscrow.SpotEscrowPolicyStruct, BytesLike]
   ): string;
   encodeFunctionData(functionFragment: "revoke", values: [AddressLike]): string;
   encodeFunctionData(
@@ -156,7 +173,11 @@ export interface EscrowFactoryInterface extends Interface {
     values: [AddressLike]
   ): string;
 
-  decodeFunctionResult(functionFragment: "USDC", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "allowToken", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "allowedTokens",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "authorize", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "authorizedCallers",
@@ -168,6 +189,10 @@ export interface EscrowFactoryInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "createSpotEscrow",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "disallowToken",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
@@ -208,22 +233,38 @@ export namespace CallerRevokedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace OwnershipTransferredEvent {
+  export type InputTuple = [previousOwner: AddressLike, newOwner: AddressLike];
+  export type OutputTuple = [previousOwner: string, newOwner: string];
+  export interface OutputObject {
+    previousOwner: string;
+    newOwner: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace PayrollEscrowCreatedEvent {
   export type InputTuple = [
     escrow: AddressLike,
     funder: AddressLike,
+    token: AddressLike,
     workerRole: BytesLike,
     payPeriodEnd: BigNumberish
   ];
   export type OutputTuple = [
     escrow: string,
     funder: string,
+    token: string,
     workerRole: string,
     payPeriodEnd: bigint
   ];
   export interface OutputObject {
     escrow: string;
     funder: string;
+    token: string;
     workerRole: string;
     payPeriodEnd: bigint;
   }
@@ -238,6 +279,7 @@ export namespace SpotEscrowCreatedEvent {
     escrow: AddressLike,
     funder: AddressLike,
     recruiter: AddressLike,
+    token: AddressLike,
     workerNullifier: BytesLike,
     witness: AddressLike
   ];
@@ -245,6 +287,7 @@ export namespace SpotEscrowCreatedEvent {
     escrow: string,
     funder: string,
     recruiter: string,
+    token: string,
     workerNullifier: string,
     witness: string
   ];
@@ -252,8 +295,44 @@ export namespace SpotEscrowCreatedEvent {
     escrow: string;
     funder: string;
     recruiter: string;
+    token: string;
     workerNullifier: string;
     witness: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace TokenAllowedEvent {
+  export type InputTuple = [
+    token: AddressLike,
+    decimals: BigNumberish,
+    allowedBy: AddressLike
+  ];
+  export type OutputTuple = [
+    token: string,
+    decimals: bigint,
+    allowedBy: string
+  ];
+  export interface OutputObject {
+    token: string;
+    decimals: bigint;
+    allowedBy: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace TokenDisallowedEvent {
+  export type InputTuple = [token: AddressLike, disallowedBy: AddressLike];
+  export type OutputTuple = [token: string, disallowedBy: string];
+  export interface OutputObject {
+    token: string;
+    disallowedBy: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -304,7 +383,9 @@ export interface EscrowFactory extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  USDC: TypedContractMethod<[], [string], "view">;
+  allowToken: TypedContractMethod<[_token: AddressLike], [void], "nonpayable">;
+
+  allowedTokens: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
 
   authorize: TypedContractMethod<[_caller: AddressLike], [void], "nonpayable">;
 
@@ -316,6 +397,7 @@ export interface EscrowFactory extends BaseContract {
 
   createPayrollEscrow: TypedContractMethod<
     [
+      _token: AddressLike,
       _funder: AddressLike,
       _companyOrgRoot: BytesLike,
       _policy: CofferdamPayrollEscrow.PayrollEscrowPolicyStruct,
@@ -326,15 +408,29 @@ export interface EscrowFactory extends BaseContract {
   >;
 
   createSpotEscrow: TypedContractMethod<
-    [_policy: CofferdamSpotEscrow.SpotEscrowPolicyStruct, _salt: BytesLike],
+    [
+      _token: AddressLike,
+      _policy: CofferdamSpotEscrow.SpotEscrowPolicyStruct,
+      _salt: BytesLike
+    ],
     [string],
+    "nonpayable"
+  >;
+
+  disallowToken: TypedContractMethod<
+    [_token: AddressLike],
+    [void],
     "nonpayable"
   >;
 
   owner: TypedContractMethod<[], [string], "view">;
 
   predictSpotEscrowAddress: TypedContractMethod<
-    [_policy: CofferdamSpotEscrow.SpotEscrowPolicyStruct, _salt: BytesLike],
+    [
+      _token: AddressLike,
+      _policy: CofferdamSpotEscrow.SpotEscrowPolicyStruct,
+      _salt: BytesLike
+    ],
     [string],
     "view"
   >;
@@ -352,8 +448,11 @@ export interface EscrowFactory extends BaseContract {
   ): T;
 
   getFunction(
-    nameOrSignature: "USDC"
-  ): TypedContractMethod<[], [string], "view">;
+    nameOrSignature: "allowToken"
+  ): TypedContractMethod<[_token: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "allowedTokens"
+  ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
   getFunction(
     nameOrSignature: "authorize"
   ): TypedContractMethod<[_caller: AddressLike], [void], "nonpayable">;
@@ -364,6 +463,7 @@ export interface EscrowFactory extends BaseContract {
     nameOrSignature: "createPayrollEscrow"
   ): TypedContractMethod<
     [
+      _token: AddressLike,
       _funder: AddressLike,
       _companyOrgRoot: BytesLike,
       _policy: CofferdamPayrollEscrow.PayrollEscrowPolicyStruct,
@@ -375,17 +475,28 @@ export interface EscrowFactory extends BaseContract {
   getFunction(
     nameOrSignature: "createSpotEscrow"
   ): TypedContractMethod<
-    [_policy: CofferdamSpotEscrow.SpotEscrowPolicyStruct, _salt: BytesLike],
+    [
+      _token: AddressLike,
+      _policy: CofferdamSpotEscrow.SpotEscrowPolicyStruct,
+      _salt: BytesLike
+    ],
     [string],
     "nonpayable"
   >;
+  getFunction(
+    nameOrSignature: "disallowToken"
+  ): TypedContractMethod<[_token: AddressLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "predictSpotEscrowAddress"
   ): TypedContractMethod<
-    [_policy: CofferdamSpotEscrow.SpotEscrowPolicyStruct, _salt: BytesLike],
+    [
+      _token: AddressLike,
+      _policy: CofferdamSpotEscrow.SpotEscrowPolicyStruct,
+      _salt: BytesLike
+    ],
     [string],
     "view"
   >;
@@ -411,6 +522,13 @@ export interface EscrowFactory extends BaseContract {
     CallerRevokedEvent.OutputObject
   >;
   getEvent(
+    key: "OwnershipTransferred"
+  ): TypedContractEvent<
+    OwnershipTransferredEvent.InputTuple,
+    OwnershipTransferredEvent.OutputTuple,
+    OwnershipTransferredEvent.OutputObject
+  >;
+  getEvent(
     key: "PayrollEscrowCreated"
   ): TypedContractEvent<
     PayrollEscrowCreatedEvent.InputTuple,
@@ -423,6 +541,20 @@ export interface EscrowFactory extends BaseContract {
     SpotEscrowCreatedEvent.InputTuple,
     SpotEscrowCreatedEvent.OutputTuple,
     SpotEscrowCreatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "TokenAllowed"
+  ): TypedContractEvent<
+    TokenAllowedEvent.InputTuple,
+    TokenAllowedEvent.OutputTuple,
+    TokenAllowedEvent.OutputObject
+  >;
+  getEvent(
+    key: "TokenDisallowed"
+  ): TypedContractEvent<
+    TokenDisallowedEvent.InputTuple,
+    TokenDisallowedEvent.OutputTuple,
+    TokenDisallowedEvent.OutputObject
   >;
 
   filters: {
@@ -448,7 +580,18 @@ export interface EscrowFactory extends BaseContract {
       CallerRevokedEvent.OutputObject
     >;
 
-    "PayrollEscrowCreated(address,address,bytes32,uint48)": TypedContractEvent<
+    "OwnershipTransferred(address,address)": TypedContractEvent<
+      OwnershipTransferredEvent.InputTuple,
+      OwnershipTransferredEvent.OutputTuple,
+      OwnershipTransferredEvent.OutputObject
+    >;
+    OwnershipTransferred: TypedContractEvent<
+      OwnershipTransferredEvent.InputTuple,
+      OwnershipTransferredEvent.OutputTuple,
+      OwnershipTransferredEvent.OutputObject
+    >;
+
+    "PayrollEscrowCreated(address,address,address,bytes32,uint48)": TypedContractEvent<
       PayrollEscrowCreatedEvent.InputTuple,
       PayrollEscrowCreatedEvent.OutputTuple,
       PayrollEscrowCreatedEvent.OutputObject
@@ -459,7 +602,7 @@ export interface EscrowFactory extends BaseContract {
       PayrollEscrowCreatedEvent.OutputObject
     >;
 
-    "SpotEscrowCreated(address,address,address,bytes32,address)": TypedContractEvent<
+    "SpotEscrowCreated(address,address,address,address,bytes32,address)": TypedContractEvent<
       SpotEscrowCreatedEvent.InputTuple,
       SpotEscrowCreatedEvent.OutputTuple,
       SpotEscrowCreatedEvent.OutputObject
@@ -468,6 +611,28 @@ export interface EscrowFactory extends BaseContract {
       SpotEscrowCreatedEvent.InputTuple,
       SpotEscrowCreatedEvent.OutputTuple,
       SpotEscrowCreatedEvent.OutputObject
+    >;
+
+    "TokenAllowed(address,uint8,address)": TypedContractEvent<
+      TokenAllowedEvent.InputTuple,
+      TokenAllowedEvent.OutputTuple,
+      TokenAllowedEvent.OutputObject
+    >;
+    TokenAllowed: TypedContractEvent<
+      TokenAllowedEvent.InputTuple,
+      TokenAllowedEvent.OutputTuple,
+      TokenAllowedEvent.OutputObject
+    >;
+
+    "TokenDisallowed(address,address)": TypedContractEvent<
+      TokenDisallowedEvent.InputTuple,
+      TokenDisallowedEvent.OutputTuple,
+      TokenDisallowedEvent.OutputObject
+    >;
+    TokenDisallowed: TypedContractEvent<
+      TokenDisallowedEvent.InputTuple,
+      TokenDisallowedEvent.OutputTuple,
+      TokenDisallowedEvent.OutputObject
     >;
   };
 }

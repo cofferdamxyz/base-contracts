@@ -10,10 +10,10 @@ name: CI
 # The enterprise module is the private submodule contracts/enterprise
 # (cofferdamxyz/enterprise-contracts, over SSH). CI never initialises it: the
 # checkout leaves the directory empty, the public core compiles on its own,
-# and the test step runs every test file except the four that deploy
-# enterprise contracts (enterprise-registries, payroll-escrow,
-# spot-escrow-settlement, spot-escrow-witness). Those four run on the Mac
-# with `yarn test`.
+# and the test step runs every test file except those that deploy
+# enterprise contracts (enterprise-escrow-tokens, enterprise-registries,
+# payroll-escrow, spot-escrow-settlement, spot-escrow-witness). Those run on
+# the Mac with `yarn test`.
 on:
   push:
     branches: [main]
