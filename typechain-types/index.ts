@@ -8,6 +8,8 @@ export type { contracts };
 export * as factories from "./factories";
 export type { Ownable } from "./@openzeppelin/contracts/access/Ownable";
 export { Ownable__factory } from "./factories/@openzeppelin/contracts/access/Ownable__factory";
+export type { Ownable2Step } from "./@openzeppelin/contracts/access/Ownable2Step";
+export { Ownable2Step__factory } from "./factories/@openzeppelin/contracts/access/Ownable2Step__factory";
 export type { IERC1155Errors } from "./@openzeppelin/contracts/interfaces/draft-IERC6093.sol/IERC1155Errors";
 export { IERC1155Errors__factory } from "./factories/@openzeppelin/contracts/interfaces/draft-IERC6093.sol/IERC1155Errors__factory";
 export type { IERC20Errors } from "./@openzeppelin/contracts/interfaces/draft-IERC6093.sol/IERC20Errors";
@@ -60,6 +62,8 @@ export type { CofferdamPaymaster } from "./contracts/account/CofferdamPaymaster.
 export { CofferdamPaymaster__factory } from "./factories/contracts/account/CofferdamPaymaster.sol/CofferdamPaymaster__factory";
 export type { IPaymaster } from "./contracts/account/CofferdamPaymaster.sol/IPaymaster";
 export { IPaymaster__factory } from "./factories/contracts/account/CofferdamPaymaster.sol/IPaymaster__factory";
+export type { CofferdamRelayPaymaster } from "./contracts/account/CofferdamRelayPaymaster";
+export { CofferdamRelayPaymaster__factory } from "./factories/contracts/account/CofferdamRelayPaymaster__factory";
 export type { PartnerPasskeyAuthority } from "./contracts/auth/PartnerPasskeyAuthority";
 export { PartnerPasskeyAuthority__factory } from "./factories/contracts/auth/PartnerPasskeyAuthority__factory";
 export type { PasskeyAuthority } from "./contracts/auth/PasskeyAuthority";

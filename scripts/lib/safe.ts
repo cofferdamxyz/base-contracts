@@ -53,7 +53,7 @@ export function safeExecRefusal(address: string, safe: SafeFacts | null, signer:
   }
   if (!safe.owners.some((o) => same(o, signer))) return `The Safe ${address} does not list the signer ${signer}`;
   if (safe.threshold !== 1n) {
-    return `The Safe ${address} has threshold ${safe.threshold}: this script executes with one owner's signature only; collect the others in the Safe app`;
+    return `The Safe ${address} has threshold ${safe.threshold}: this script executes with one owner's signature only; propose it with scripts/safe-propose.ts and collect the signatures in the Safe app`;
   }
   return null;
 }

@@ -49,8 +49,10 @@ export async function assertTypedCeremonyBuild(): Promise<void> {
  * - `PROBATION_PERIOD_SECONDS` is the probation of a High added by a High:
  *   72 hours on mainnet, 600 seconds elsewhere by default.
  * - `RELAYER_ADDRESS` is the plane's relayer EOA, the only `tx.origin` the
- *   paymaster sponsors; required off the local networks. The paymaster is
- *   testnet only: mainnet deploys none (the CDP Paymaster, decision 0017).
+ *   paymaster sponsors; required off the local networks. `CofferdamPaymaster`
+ *   is testnet only: on mainnet the account layer deploys none, and the
+ *   production generation's `CofferdamRelayPaymaster` (ruling P9) is deployed
+ *   next by `scripts/deploy-relay-paymaster.ts`, through the Ledger.
  * - Accounts from this source verify ceremony co-signs as EIP-712 (decision
  *   0090 item 5): domain ("Cofferdam Ceremony", "1", chainId, the ceremony
  *   registry deployed here). The attester Worker for this chain must then pin
@@ -68,8 +70,8 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
   await assertMainnetSigner(deployer.address);
   const owner = isMainnet ? mainnetRegistryOwner() : process.env.REGISTRY_OWNER?.trim() || deployer.address;
   if (!ethers.isAddress(owner)) throw new Error(`REGISTRY_OWNER ${owner} is not an address`);
-  await assertMainnetOwner(owner);
-  // The paymaster is testnet only.
+  await assertMainnetOwner(owner, { deployer: deployer.address, recordedSafe: readDeployments(network.name, chainId).CofferdamSafe?.address });
+  // CofferdamPaymaster is testnet only; mainnet's is deploy-relay-paymaster.ts.
   const skipPaymaster = isMainnet;
   const relayer = skipPaymaster ? '' : paymasterRelayer(deployer.address);
   const attesters = (process.env.CEREMONY_ATTESTERS || '')
@@ -149,7 +151,7 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
     probationPeriod,
   ]);
   if (skipPaymaster) {
-    console.log('No CofferdamPaymaster on mainnet: gas goes through the CDP Paymaster (decision 0017).');
+    console.log('No CofferdamPaymaster on mainnet: deploy CofferdamRelayPaymaster next (scripts/deploy-relay-paymaster.ts, the Ledger; ruling P9).');
   } else {
     const fp = await accountCodeFingerprint(out.CofferdamAccountFactory4337, out.WebAuthnPasskeyAuthority);
     console.log('Paymaster relayer:', relayer, '| account code hash:', fp.codeHash, `(${fp.codeSize} bytes, ${fp.maskOffsets.length} masked words)`);

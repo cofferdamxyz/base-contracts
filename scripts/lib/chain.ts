@@ -1,4 +1,6 @@
 import { ethers, network } from 'hardhat';
+import { productionOwnerRefusal } from './productionSafe';
+import { readSafeFacts } from './safeFacts';
 import {
   DEV_KEY_EXCEPTION,
   SafeFacts,
@@ -79,8 +81,7 @@ export async function refuseMainnet(what: string): Promise<void> {
 }
 
 /**
- * On Base mainnet the deployer is the Ledger (decision 0017; the founder's
- * Ledger for the test generation, T3). The `base` network has no private keys
+ * On Base mainnet the deployer is the Ledger (decision 0017; decision 0080 T3). The `base` network has no private keys
  * (hardhat.config.ts), so a signer there can only come from `ledgerAccounts`;
  * this checks it once more against the network the script actually reached.
  *
@@ -166,34 +167,24 @@ export async function getDeployer() {
   return deployer;
 }
 
-/** The Safe facts of `address`, or null when it has no code or does not answer as a Safe. */
+/** The Safe facts of `address`, or null when it has no code or does not answer as a Safe (./safeFacts.ts). */
 export async function readSafe(address: string): Promise<SafeFacts | null> {
-  if ((await ethers.provider.getCode(address)) === '0x') return null;
-  const safe = new ethers.Contract(
-    address,
-    ['function getOwners() view returns (address[])', 'function getThreshold() view returns (uint256)'],
-    ethers.provider,
-  );
-  try {
-    const slot0 = await ethers.provider.getStorage(address, 0);
-    return {
-      singleton: ethers.getAddress(ethers.dataSlice(slot0, 12)),
-      owners: [...(await safe.getOwners())],
-      threshold: await safe.getThreshold(),
-    };
-  } catch {
-    return null;
-  }
+  return readSafeFacts(ethers.provider, address);
 }
 
 /**
- * Under the dev-key exception on chain 8453, the registries' owner is the
- * CofferdamDev wallet or a Safe v1.4.1 it signs for, read from the chain. A
- * no-op otherwise.
+ * The owner of a contract on chain 8453 (a fork included), read from the
+ * chain. Under the dev-key exception: the CofferdamDev wallet or a Safe v1.4.1
+ * it signs for (./devKeyException.ts). Otherwise the company Safe: a Safe
+ * v1.4.1 with at least three owners, threshold 2 or more and no module, the
+ * deployer among its owners, and the generation's recorded CofferdamSafe when
+ * one is recorded (./productionSafe.ts; the founder's ruling of 2026-11-26).
+ * A no-op off chain 8453.
  */
-export async function assertMainnetOwner(owner: string): Promise<void> {
-  if (!devKeyExceptionRequested() || !(await isBaseMainnetChain())) return;
-  const refusal = exceptionOwnerRefusal(owner, await readSafe(owner));
+export async function assertMainnetOwner(owner: string, o: { deployer: string; recordedSafe?: string }): Promise<void> {
+  if (!(await isBaseMainnetChain())) return;
+  const facts = await readSafe(owner);
+  const refusal = devKeyExceptionRequested() ? exceptionOwnerRefusal(owner, facts) : productionOwnerRefusal(owner, facts, o);
   if (refusal) throw new Error(refusal);
 }
 

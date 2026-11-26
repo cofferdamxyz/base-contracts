@@ -30,4 +30,29 @@ contract MockEntryPoint {
     {
         return paymaster.validatePaymasterUserOp(userOp, bytes32(0), 0);
     }
+
+    /// @notice As `validatePaymaster`, with the `maxCost` the EntryPoint
+    ///         would pass (the op's gas limits times its `maxFeePerGas`).
+    function validatePaymasterWithMaxCost(
+        IPaymaster paymaster,
+        IEntryPoint.PackedUserOperation calldata userOp,
+        uint256 maxCost
+    ) external view returns (bytes memory context, uint256 validationData) {
+        return paymaster.validatePaymasterUserOp(userOp, bytes32(0), maxCost);
+    }
+
+    /// @notice v0.7's order for a first op: deploy the sender from `initCode`
+    ///         (factory address, then its calldata), require code at
+    ///         `userOp.sender`, then ask the paymaster.
+    function createSenderThenValidate(IPaymaster paymaster, IEntryPoint.PackedUserOperation calldata userOp, uint256 maxCost)
+        external
+        returns (bytes memory context, uint256 validationData)
+    {
+        require(userOp.sender.code.length == 0, "MockEntryPoint: sender exists");
+        address factory = address(bytes20(userOp.initCode[0:20]));
+        (bool ok, ) = factory.call(userOp.initCode[20:]);
+        require(ok, "MockEntryPoint: initCode failed");
+        require(userOp.sender.code.length > 0, "MockEntryPoint: initCode did not deploy the sender");
+        return paymaster.validatePaymasterUserOp(userOp, bytes32(0), maxCost);
+    }
 }

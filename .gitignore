@@ -10,3 +10,7 @@ coverage/
 # Fork dry runs of Base mainnet write their own deployments files (scripts/lib/deployments.ts)
 deployments/baseFork.*.json
 deployments/hardhat.*.json
+# Safe proposals of fork and local runs (scripts/safe-propose.ts); live ones may be committed as records
+safe-proposals/baseFork.*
+safe-proposals/hardhat.*
+safe-proposals/localhost.*

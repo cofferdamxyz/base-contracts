@@ -6,3 +6,4 @@ export type { cofferdamPaymasterSol };
 export type { AuthorityManagerBase } from "./AuthorityManagerBase";
 export type { CofferdamAccount4337 } from "./CofferdamAccount4337";
 export type { CofferdamAccountFactory4337 } from "./CofferdamAccountFactory4337";
+export type { CofferdamRelayPaymaster } from "./CofferdamRelayPaymaster";

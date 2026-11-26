@@ -7,7 +7,7 @@ const NO_PERMISSION = { targets: [], selectors: [], codeHashes: [], codeSelector
 export type AccountCodeFingerprint = { codeHash: string; codeSize: number; maskOffsets: number[] };
 
 /**
- * What `CofferdamPaymaster` checks a sender against: the runtime code of the
+ * What `CofferdamPaymaster` and `CofferdamRelayPaymaster` check a sender against: the runtime code of the
  * accounts `factory` deploys, with the per-account immutables zeroed.
  *
  * OpenZeppelin's EIP712 writes the account's own address and its domain
@@ -80,7 +80,11 @@ export function paymasterRelayer(deployer: string): string {
   throw new Error("RELAYER_ADDRESS (the plane's RELAYER_PRIVATE_KEY address) is required");
 }
 
-/** The paymaster is a testnet contract: mainnet gas goes through the CDP Paymaster (decision 0017). */
+/**
+ * `CofferdamPaymaster` is a testnet contract (decision 0071 (3)): on mainnet the
+ * production generation's paymaster is `CofferdamRelayPaymaster` (ruling P9,
+ * `scripts/deploy-relay-paymaster.ts`, through the Ledger).
+ */
 export async function refuseMainnetPaymaster(): Promise<void> {
-  await refuseMainnet('CofferdamPaymaster (testnet only: mainnet gas goes through the CDP Paymaster, decision 0017)');
+  await refuseMainnet('CofferdamPaymaster (testnet only; mainnet takes CofferdamRelayPaymaster through deploy-relay-paymaster.ts, ruling P9)');
 }
