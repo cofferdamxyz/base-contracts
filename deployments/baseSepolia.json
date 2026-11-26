@@ -30,10 +30,10 @@
     "address": "0x8c05Df95F91De2D70e0436B774fc9D1f86FF1f51"
   },
   "EscrowFactory": {
-    "address": "0x37553ab271a0078F95032B35F5494Fbf25206Fd2"
+    "address": "0x431f869275bb0da7CF5050Ac8c87f7C7E495cB66"
   },
   "CofferdamSpotEscrow": {
-    "address": "0xe6dCFc3Af1cB944b0Aa03f27325E7E47e390d9b1"
+    "address": "0x7aDB70d319262fF4660163a62868aaBa0050475f"
   },
   "Verifier_vc_and_disclose": {
     "address": "0x26fBC868344AF4E99874edFd0E3756EcC2359bEb"
@@ -58,5 +58,8 @@
   },
   "CofferdamHandleAnchorSafe": {
     "address": "0x48fDe2B5aF92BF4BE2Cc82DE71e7a87774CFF735"
+  },
+  "BRS": {
+    "address": "0x9762f60740142cF11C0F32C6e24cd3e86016C0f2"
   }
 }
