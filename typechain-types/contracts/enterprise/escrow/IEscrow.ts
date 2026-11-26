@@ -57,12 +57,19 @@ export namespace EscrowDisputedEvent {
 export namespace EscrowFundedEvent {
   export type InputTuple = [
     escrowId: BigNumberish,
+    token: AddressLike,
     amount: BigNumberish,
     funder: AddressLike
   ];
-  export type OutputTuple = [escrowId: bigint, amount: bigint, funder: string];
+  export type OutputTuple = [
+    escrowId: bigint,
+    token: string,
+    amount: bigint,
+    funder: string
+  ];
   export interface OutputObject {
     escrowId: bigint;
+    token: string;
     amount: bigint;
     funder: string;
   }
@@ -75,12 +82,19 @@ export namespace EscrowFundedEvent {
 export namespace EscrowRefundedEvent {
   export type InputTuple = [
     escrowId: BigNumberish,
+    token: AddressLike,
     amount: BigNumberish,
     funder: AddressLike
   ];
-  export type OutputTuple = [escrowId: bigint, amount: bigint, funder: string];
+  export type OutputTuple = [
+    escrowId: bigint,
+    token: string,
+    amount: bigint,
+    funder: string
+  ];
   export interface OutputObject {
     escrowId: bigint;
+    token: string;
     amount: bigint;
     funder: string;
   }
@@ -93,12 +107,19 @@ export namespace EscrowRefundedEvent {
 export namespace EscrowReleasedEvent {
   export type InputTuple = [
     escrowId: BigNumberish,
+    token: AddressLike,
     amount: BigNumberish,
     worker: AddressLike
   ];
-  export type OutputTuple = [escrowId: bigint, amount: bigint, worker: string];
+  export type OutputTuple = [
+    escrowId: bigint,
+    token: string,
+    amount: bigint,
+    worker: string
+  ];
   export interface OutputObject {
     escrowId: bigint;
+    token: string;
     amount: bigint;
     worker: string;
   }
@@ -234,7 +255,7 @@ export interface IEscrow extends BaseContract {
       EscrowDisputedEvent.OutputObject
     >;
 
-    "EscrowFunded(uint256,uint256,address)": TypedContractEvent<
+    "EscrowFunded(uint256,address,uint256,address)": TypedContractEvent<
       EscrowFundedEvent.InputTuple,
       EscrowFundedEvent.OutputTuple,
       EscrowFundedEvent.OutputObject
@@ -245,7 +266,7 @@ export interface IEscrow extends BaseContract {
       EscrowFundedEvent.OutputObject
     >;
 
-    "EscrowRefunded(uint256,uint256,address)": TypedContractEvent<
+    "EscrowRefunded(uint256,address,uint256,address)": TypedContractEvent<
       EscrowRefundedEvent.InputTuple,
       EscrowRefundedEvent.OutputTuple,
       EscrowRefundedEvent.OutputObject
@@ -256,7 +277,7 @@ export interface IEscrow extends BaseContract {
       EscrowRefundedEvent.OutputObject
     >;
 
-    "EscrowReleased(uint256,uint256,address)": TypedContractEvent<
+    "EscrowReleased(uint256,address,uint256,address)": TypedContractEvent<
       EscrowReleasedEvent.InputTuple,
       EscrowReleasedEvent.OutputTuple,
       EscrowReleasedEvent.OutputObject

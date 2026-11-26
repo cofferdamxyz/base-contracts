@@ -44,6 +44,12 @@ const _abi = [
         type: "uint256",
       },
       {
+        indexed: true,
+        internalType: "address",
+        name: "token",
+        type: "address",
+      },
+      {
         indexed: false,
         internalType: "uint256",
         name: "amount",
@@ -69,6 +75,12 @@ const _abi = [
         type: "uint256",
       },
       {
+        indexed: true,
+        internalType: "address",
+        name: "token",
+        type: "address",
+      },
+      {
         indexed: false,
         internalType: "uint256",
         name: "amount",
@@ -92,6 +104,12 @@ const _abi = [
         internalType: "uint256",
         name: "escrowId",
         type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "token",
+        type: "address",
       },
       {
         indexed: false,

@@ -177,7 +177,7 @@ for (const [label, key, decimals, whole] of [
       expect(await bal(token, await escrow.getAddress())).to.equal(amount);
       await (await escrow.connect(ctx.witness).checkIn(ctx.worker.address)).wait();
       await expect(escrow.connect(ctx.witness).checkOut())
-        .to.emit(escrow, 'EscrowReleased').withArgs(0, amount, ctx.worker.address);
+        .to.emit(escrow, 'EscrowReleased').withArgs(0, await token.getAddress(), amount, ctx.worker.address);
       expect(await bal(token, ctx.worker.address)).to.equal(amount);
       expect(await bal(token, await escrow.getAddress())).to.equal(0n);
     });
@@ -211,6 +211,29 @@ for (const [label, key, decimals, whole] of [
       expect(await bal(token, ctx.worker.address)).to.equal(third);
       expect((await bal(token, ctx.funder.address)) - before).to.equal(amount - third);
       expect(await bal(token, await escrow.getAddress())).to.equal(0n);
+    });
+
+    it('names the token in every event that moves an amount (the founder, 2026-11-26)', async () => {
+      const ctx = await deployFixture();
+      const token = ctx[key];
+      const tokenAddr = await token.getAddress();
+      const amount = amountOf();
+      const escrow = await createSpot(ctx, token, amount);
+      await (await token.connect(ctx.funder).approve(await escrow.getAddress(), amount)).wait();
+      await expect(escrow.connect(ctx.funder).fund(amount))
+        .to.emit(escrow, 'EscrowFunded').withArgs(0, tokenAddr, amount, ctx.funder.address);
+      await (await escrow.connect(ctx.recruiter).awardWorker(ctx.worker.address)).wait();
+      const killFee = (amount * BigInt(KILL_FEE_BPS)) / 10_000n;
+      await expect(escrow.connect(ctx.funder).refund())
+        .to.emit(escrow, 'KillFeePaid').withArgs(ctx.worker.address, tokenAddr, killFee, ctx.funder.address)
+        .and.to.emit(escrow, 'EscrowRefunded').withArgs(0, tokenAddr, amount - killFee, ctx.funder.address);
+
+      const disputed = await createSpot(ctx, token, amount);
+      await fundAndAward(ctx, token, disputed, amount);
+      await (await disputed.connect(ctx.worker).raiseDispute(ethers.id('late'))).wait();
+      await expect(disputed.connect(ctx.arbiter).resolveDispute(amount / 2n))
+        .to.emit(disputed, 'DisputeResolved')
+        .withArgs(ctx.worker.address, tokenAddr, amount / 2n, ctx.funder.address, amount - amount / 2n, ctx.arbiter.address);
     });
 
     it('refuses an amount other than the agreed one, in base units', async () => {
@@ -261,9 +284,11 @@ describe('CofferdamPayrollEscrow from the factory — 18 decimals', () => {
     expect(await escrow.token()).to.equal(pbrlAddr);
 
     await (await ctx.pbrl.connect(ctx.funder).approve(await escrow.getAddress(), amount)).wait();
-    await (await escrow.connect(ctx.funder).fund(amount)).wait();
+    await expect(escrow.connect(ctx.funder).fund(amount))
+      .to.emit(escrow, 'EscrowFunded').withArgs(0, pbrlAddr, amount, ctx.funder.address);
     await time.increase(31 * DAY + 1);
-    await (await escrow.connect(ctx.stranger).claim([])).wait();
+    await expect(escrow.connect(ctx.stranger).claim([]))
+      .to.emit(escrow, 'EscrowReleased').withArgs(0, pbrlAddr, amount, ctx.worker.address);
     expect(await bal(ctx.pbrl, ctx.worker.address)).to.equal(amount);
   });
 });

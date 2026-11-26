@@ -73,7 +73,7 @@ describe('CofferdamSpotEscrow — refund', () => {
 
     await expect(escrow.connect(ctx.funder).refund())
       .to.emit(escrow, 'KillFeePaid')
-      .withArgs(ctx.worker.address, killFee, ctx.funder.address);
+      .withArgs(ctx.worker.address, await ctx.usdc.getAddress(), killFee, ctx.funder.address);
 
     expect(await balance(ctx.usdc, ctx.worker)).to.equal(killFee);
     expect((await balance(ctx.usdc, ctx.funder)) - before).to.equal(ctx.amount - killFee);
@@ -103,7 +103,7 @@ describe('CofferdamSpotEscrow — disputes', () => {
 
     await expect(escrow.connect(ctx.arbiter).resolveDispute(half))
       .to.emit(escrow, 'DisputeResolved')
-      .withArgs(ctx.worker.address, half, ctx.funder.address, ctx.amount - half, ctx.arbiter.address);
+      .withArgs(ctx.worker.address, await ctx.usdc.getAddress(), half, ctx.funder.address, ctx.amount - half, ctx.arbiter.address);
 
     expect(await balance(ctx.usdc, ctx.worker)).to.equal(half);
     expect((await balance(ctx.usdc, ctx.funder)) - before).to.equal(ctx.amount - half);

@@ -264,6 +264,7 @@ export interface CofferdamSpotEscrowInterface extends Interface {
 export namespace DisputeResolvedEvent {
   export type InputTuple = [
     worker: AddressLike,
+    token: AddressLike,
     workerAmount: BigNumberish,
     funder: AddressLike,
     funderAmount: BigNumberish,
@@ -271,6 +272,7 @@ export namespace DisputeResolvedEvent {
   ];
   export type OutputTuple = [
     worker: string,
+    token: string,
     workerAmount: bigint,
     funder: string,
     funderAmount: bigint,
@@ -278,6 +280,7 @@ export namespace DisputeResolvedEvent {
   ];
   export interface OutputObject {
     worker: string;
+    token: string;
     workerAmount: bigint;
     funder: string;
     funderAmount: bigint;
@@ -314,12 +317,19 @@ export namespace EscrowDisputedEvent {
 export namespace EscrowFundedEvent {
   export type InputTuple = [
     escrowId: BigNumberish,
+    token: AddressLike,
     amount: BigNumberish,
     funder: AddressLike
   ];
-  export type OutputTuple = [escrowId: bigint, amount: bigint, funder: string];
+  export type OutputTuple = [
+    escrowId: bigint,
+    token: string,
+    amount: bigint,
+    funder: string
+  ];
   export interface OutputObject {
     escrowId: bigint;
+    token: string;
     amount: bigint;
     funder: string;
   }
@@ -332,12 +342,19 @@ export namespace EscrowFundedEvent {
 export namespace EscrowRefundedEvent {
   export type InputTuple = [
     escrowId: BigNumberish,
+    token: AddressLike,
     amount: BigNumberish,
     funder: AddressLike
   ];
-  export type OutputTuple = [escrowId: bigint, amount: bigint, funder: string];
+  export type OutputTuple = [
+    escrowId: bigint,
+    token: string,
+    amount: bigint,
+    funder: string
+  ];
   export interface OutputObject {
     escrowId: bigint;
+    token: string;
     amount: bigint;
     funder: string;
   }
@@ -350,12 +367,19 @@ export namespace EscrowRefundedEvent {
 export namespace EscrowReleasedEvent {
   export type InputTuple = [
     escrowId: BigNumberish,
+    token: AddressLike,
     amount: BigNumberish,
     worker: AddressLike
   ];
-  export type OutputTuple = [escrowId: bigint, amount: bigint, worker: string];
+  export type OutputTuple = [
+    escrowId: bigint,
+    token: string,
+    amount: bigint,
+    worker: string
+  ];
   export interface OutputObject {
     escrowId: bigint;
+    token: string;
     amount: bigint;
     worker: string;
   }
@@ -399,12 +423,19 @@ export namespace EscrowStateChangedEvent {
 export namespace KillFeePaidEvent {
   export type InputTuple = [
     worker: AddressLike,
+    token: AddressLike,
     amount: BigNumberish,
     funder: AddressLike
   ];
-  export type OutputTuple = [worker: string, amount: bigint, funder: string];
+  export type OutputTuple = [
+    worker: string,
+    token: string,
+    amount: bigint,
+    funder: string
+  ];
   export interface OutputObject {
     worker: string;
+    token: string;
     amount: bigint;
     funder: string;
   }
@@ -808,7 +839,7 @@ export interface CofferdamSpotEscrow extends BaseContract {
   >;
 
   filters: {
-    "DisputeResolved(address,uint256,address,uint256,address)": TypedContractEvent<
+    "DisputeResolved(address,address,uint256,address,uint256,address)": TypedContractEvent<
       DisputeResolvedEvent.InputTuple,
       DisputeResolvedEvent.OutputTuple,
       DisputeResolvedEvent.OutputObject
@@ -830,7 +861,7 @@ export interface CofferdamSpotEscrow extends BaseContract {
       EscrowDisputedEvent.OutputObject
     >;
 
-    "EscrowFunded(uint256,uint256,address)": TypedContractEvent<
+    "EscrowFunded(uint256,address,uint256,address)": TypedContractEvent<
       EscrowFundedEvent.InputTuple,
       EscrowFundedEvent.OutputTuple,
       EscrowFundedEvent.OutputObject
@@ -841,7 +872,7 @@ export interface CofferdamSpotEscrow extends BaseContract {
       EscrowFundedEvent.OutputObject
     >;
 
-    "EscrowRefunded(uint256,uint256,address)": TypedContractEvent<
+    "EscrowRefunded(uint256,address,uint256,address)": TypedContractEvent<
       EscrowRefundedEvent.InputTuple,
       EscrowRefundedEvent.OutputTuple,
       EscrowRefundedEvent.OutputObject
@@ -852,7 +883,7 @@ export interface CofferdamSpotEscrow extends BaseContract {
       EscrowRefundedEvent.OutputObject
     >;
 
-    "EscrowReleased(uint256,uint256,address)": TypedContractEvent<
+    "EscrowReleased(uint256,address,uint256,address)": TypedContractEvent<
       EscrowReleasedEvent.InputTuple,
       EscrowReleasedEvent.OutputTuple,
       EscrowReleasedEvent.OutputObject
@@ -874,7 +905,7 @@ export interface CofferdamSpotEscrow extends BaseContract {
       EscrowStateChangedEvent.OutputObject
     >;
 
-    "KillFeePaid(address,uint256,address)": TypedContractEvent<
+    "KillFeePaid(address,address,uint256,address)": TypedContractEvent<
       KillFeePaidEvent.InputTuple,
       KillFeePaidEvent.OutputTuple,
       KillFeePaidEvent.OutputObject
