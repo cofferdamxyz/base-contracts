@@ -180,6 +180,7 @@ async function main() {
   console.log(`\nPaste these into the example's .env.local:`);
   console.log(`${envPrefix}_ESCROW_ADDRESS=${escrowAddr}`);
   console.log(`${envPrefix}_FACTORY_ADDRESS=${factoryAddr}`);
+  console.log(`${envPrefix}_TOKEN_ADDRESS=${usdcAddr}`);
 }
 
 main().catch((error) => {
