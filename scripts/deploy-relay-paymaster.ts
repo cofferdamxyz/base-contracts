@@ -46,7 +46,7 @@ async function main() {
   const owner = mainnet ? mainnetRegistryOwner() : process.env.REGISTRY_OWNER?.trim() || (local ? deployer.address : '');
   if (!owner) throw new Error('REGISTRY_OWNER is required off the local networks: the Safe that owns the paymaster');
   if (!ethers.isAddress(owner)) throw new Error(`REGISTRY_OWNER ${owner} is not an address`);
-  await assertMainnetOwner(owner);
+  await assertMainnetOwner(owner, { deployer: deployer.address, recordedSafe: readDeployments(network.name, chainId).CofferdamSafe?.address });
 
   const relayer = ethers.getAddress(relayPaymasterRelayer(process.env.RELAYER_ADDRESS, { mainnet, local, deployer: deployer.address }));
   const relayerProblem = relayerRefusal(relayer, { owner, deployer: deployer.address, mainnet, code: await ethers.provider.getCode(relayer) });

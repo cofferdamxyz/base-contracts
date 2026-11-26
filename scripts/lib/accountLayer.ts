@@ -70,7 +70,7 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
   await assertMainnetSigner(deployer.address);
   const owner = isMainnet ? mainnetRegistryOwner() : process.env.REGISTRY_OWNER?.trim() || deployer.address;
   if (!ethers.isAddress(owner)) throw new Error(`REGISTRY_OWNER ${owner} is not an address`);
-  await assertMainnetOwner(owner);
+  await assertMainnetOwner(owner, { deployer: deployer.address, recordedSafe: readDeployments(network.name, chainId).CofferdamSafe?.address });
   // CofferdamPaymaster is testnet only; mainnet's is deploy-relay-paymaster.ts.
   const skipPaymaster = isMainnet;
   const relayer = skipPaymaster ? '' : paymasterRelayer(deployer.address);

@@ -8,7 +8,7 @@ import {
   isLocalFork,
   mainnetDelay,
 } from './lib/chain';
-import { refuseRecordedGeneration, writeDeployments } from './lib/deployments';
+import { readDeployments, refuseRecordedGeneration, writeDeployments } from './lib/deployments';
 import { mainnetRegistryOwner } from './lib/devKeyException';
 import {
   ZKP_DOMAIN,
@@ -95,7 +95,7 @@ async function main() {
 
   const owner = mainnet ? mainnetRegistryOwner() : process.env.REGISTRY_OWNER?.trim() || deployer.address;
   if (!ethers.isAddress(owner)) throw new Error(`REGISTRY_OWNER ${owner} is not an address`);
-  await assertMainnetOwner(owner);
+  await assertMainnetOwner(owner, { deployer: deployer.address, recordedSafe: readDeployments(network.name, chainId).CofferdamSafe?.address });
 
   const scope = process.env.ZKP_SCOPE?.trim();
   if (!scope) throw new Error('ZKP_SCOPE is required (T1: cofferdam-zkp-test-1 for the test generation, never reused)');

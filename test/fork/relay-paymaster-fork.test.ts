@@ -244,6 +244,9 @@ describe('CofferdamRelayPaymaster and the 2-of-3 Safe on a fork of Base mainnet 
     expect(facts!.owners.map((a) => a.toLowerCase()).sort()).to.deep.equal(c.owners.map((o) => o.address.toLowerCase()).sort());
     expect(facts!.modules).to.deep.equal([]);
     expect(productionOwnerRefusal(c.safe, facts)).to.equal(null);
+    // As the deploy scripts call it: the deployer among the owners, the recorded Safe.
+    expect(productionOwnerRefusal(c.safe, facts, { deployer: c.owners[1].address, recordedSafe: c.safe })).to.equal(null);
+    expect(productionOwnerRefusal(c.safe, facts, { deployer: c.deployer.address })).to.match(/does not list the deployer/);
     const single = await createSafe([c.owners[0].address], 1, `single:${ethers.hexlify(ethers.randomBytes(4))}`);
     expect(productionOwnerRefusal(single, await readSafeFacts(ethers.provider, single))).to.match(/has 1 owners/);
     expect(safeProposeRefusal(single, await readSafeFacts(ethers.provider, single))).to.match(/threshold 1/);
@@ -332,6 +335,12 @@ describe('CofferdamRelayPaymaster and the 2-of-3 Safe on a fork of Base mainnet 
     expect(await c.entryPoint.balanceOf(pm)).to.equal(before - ethers.parseEther('0.01'));
     await rejects(proposeAndExecute(c, 'paymaster-withdraw', { AMOUNT_WEI: ethers.parseEther('1').toString() }), /more than the deposit/);
 
+    // The nominee is checked before the owners sign: never an EOA, a 1-of-1 Safe or this Safe.
+    await rejects(proposeAndExecute(c, 'paymaster-transfer-ownership', { NEW_SAFE: c.attacker.address }), /NEW_SAFE: .*not a Safe/);
+    const lone1 = await createSafe([c.spares[0].address], 1, `lone:${ethers.hexlify(ethers.randomBytes(4))}`);
+    await rejects(proposeAndExecute(c, 'paymaster-transfer-ownership', { NEW_SAFE: lone1 }), /NEW_SAFE: .*has 1 owners/);
+    await rejects(proposeAndExecute(c, 'paymaster-transfer-ownership', { NEW_SAFE: c.safe }), /NEW_SAFE is this Safe/);
+
     // Ownership to a second 2-of-3 Safe, in two steps.
     const next = await createSafe(c.spares.map((s) => s.address), 2, `next:${ethers.hexlify(ethers.randomBytes(4))}`);
     await proposeAndExecute(c, 'paymaster-transfer-ownership', { NEW_SAFE: next });
@@ -367,7 +376,9 @@ describe('CofferdamRelayPaymaster and the 2-of-3 Safe on a fork of Base mainnet 
     const other = await (await c.deployer.sendTransaction({ to: c.deployer.address, value: 0 })).wait();
     await rejects(runReadback(ethers.provider, proposal, other!.hash), /not this proposal's execution/);
     // A proposal whose hash differs from the executed one.
-    await rejects(runReadback(ethers.provider, { ...proposal, safeTxHash: ethers.ZeroHash }, receipt.hash), /not this proposal's execution/);
+    await rejects(runReadback(ethers.provider, { ...proposal, safeTxHash: ethers.ZeroHash }, receipt.hash), /the record was altered/);
+    // A record edited to another nonce (or call) no longer matches its own hash.
+    await rejects(runReadback(ethers.provider, { ...proposal, nonce: '7' }, receipt.hash), /the record was altered/);
     // The same execution, read against a check that does not hold.
     const wrong = { ...proposal, checks: proposal.checks.map((ch) => (ch.kind === 'call' ? { ...ch, value: 'false' } : ch)) };
     await rejects(runReadback(ethers.provider, wrong, receipt.hash), /paused: read true, expected false/);

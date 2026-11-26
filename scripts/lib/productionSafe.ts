@@ -8,7 +8,7 @@
 // CofferdamDev wallet its only owner) is checked by ./devKeyException.ts
 // instead. Imports nothing from Hardhat, so the tests call it without a network.
 
-import { DEV_KEY_EXCEPTION, SAFE_V141, type SafeFacts } from './devKeyException';
+import { DEV_KEY_EXCEPTION, SAFE_V141, SAFE_V141_PROXY_CODE_HASH, type SafeFacts } from './devKeyException';
 
 export const PRODUCTION_SAFE = { owners: 3, threshold: 2n } as const;
 
@@ -39,16 +39,33 @@ export function productionSafeSetupRefusal(owners: string[], threshold: bigint):
 
 /**
  * Why `owner` may not own a contract of a Base mainnet generation outside the
- * exception, or null. It must be a Safe v1.4.1 proxy, read on chain: at least
- * three owners and threshold at least 2 (and no more than its owners), no
- * module enabled (a module executes without the owners' signatures), and
- * never listing the CofferdamDev wallet. `safe` is null when the address has
- * no code or does not answer as a Safe.
+ * exception, or null. It must be a Safe v1.4.1 proxy, read on chain (the
+ * canonical proxy code and a v1.4.1 singleton): at least three owners and
+ * threshold at least 2 (and no more than its owners), no module enabled (a
+ * module executes without the owners' signatures), and never listing the
+ * CofferdamDev wallet. `safe` is null when the address has no code or does
+ * not answer as a Safe.
+ *
+ * Shape alone does not make it the company's Safe, so a deploy also passes:
+ * `deployer`, which must be one of its owners (the Ledger is; on a fork dry
+ * run, create the Safe with the deployer among its owners), and
+ * `recordedSafe`, the generation's recorded `CofferdamSafe`, which it must be
+ * when one is recorded.
  */
-export function productionOwnerRefusal(owner: string, safe: SafeFacts | null): string | null {
+export function productionOwnerRefusal(
+  owner: string,
+  safe: SafeFacts | null,
+  o: { deployer?: string; recordedSafe?: string } = {},
+): string | null {
+  if (o.recordedSafe && !same(o.recordedSafe, owner)) {
+    return `REGISTRY_OWNER ${owner} is not the generation's recorded CofferdamSafe ${o.recordedSafe}`;
+  }
   if (!safe) return `REGISTRY_OWNER ${owner} is not a Safe on this chain: on Base mainnet every contract is owned by the company Safe (2-of-3)`;
   if (!same(safe.singleton, SAFE_V141.singletonL2) && !same(safe.singleton, SAFE_V141.singleton)) {
     return `REGISTRY_OWNER ${owner} is not a Safe v1.4.1 proxy (singleton ${safe.singleton})`;
+  }
+  if (!safe.codeHash || !same(safe.codeHash, SAFE_V141_PROXY_CODE_HASH)) {
+    return `REGISTRY_OWNER ${owner} does not run the Safe v1.4.1 proxy code (code hash ${safe.codeHash ?? 'unread'})`;
   }
   if (safe.owners.length < PRODUCTION_SAFE.owners) {
     return `The Safe ${owner} has ${safe.owners.length} owners; the company Safe has at least ${PRODUCTION_SAFE.owners}`;
@@ -62,6 +79,9 @@ export function productionOwnerRefusal(owner: string, safe: SafeFacts | null): s
   if (safe.modules === undefined) return `The Safe ${owner}'s modules could not be read`;
   if (safe.modules.length > 0) {
     return `The Safe ${owner} has modules enabled (${safe.modules.join(', ')}): a module executes without the owners' signatures`;
+  }
+  if (o.deployer && !safe.owners.some((x) => same(x, o.deployer!))) {
+    return `The Safe ${owner} does not list the deployer ${o.deployer} among its owners: the company Safe lists the Ledger`;
   }
   return null;
 }

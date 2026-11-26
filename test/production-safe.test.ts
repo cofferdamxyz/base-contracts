@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { Wallet } from 'ethers';
 
-import { DEV_KEY_EXCEPTION, SAFE_V141, exceptionOwnerRefusal } from '../scripts/lib/devKeyException';
+import { DEV_KEY_EXCEPTION, SAFE_V141, SAFE_V141_PROXY_CODE_HASH, exceptionOwnerRefusal } from '../scripts/lib/devKeyException';
 import { productionOwnerRefusal, productionSafeSetupRefusal } from '../scripts/lib/productionSafe';
 import {
   LOCAL_DEFAULT_MAX_COST,
@@ -19,11 +19,12 @@ import {
 const DEV = DEV_KEY_EXCEPTION.signer;
 const [A, B, C, D] = Array.from({ length: 4 }, () => Wallet.createRandom().address);
 const SAFE = Wallet.createRandom().address;
-const facts = (o: Partial<{ singleton: string; owners: string[]; threshold: bigint; modules?: string[] }> = {}) => ({
+const facts = (o: Partial<{ singleton: string; owners: string[]; threshold: bigint; modules?: string[]; codeHash?: string }> = {}) => ({
   singleton: SAFE_V141.singletonL2,
   owners: [A, B, C],
   threshold: 2n,
   modules: [] as string[] | undefined,
+  codeHash: SAFE_V141_PROXY_CODE_HASH as string | undefined,
   ...o,
 });
 
@@ -61,6 +62,15 @@ describe('the company Safe (scripts/lib/productionSafe.ts)', function () {
       expect(productionOwnerRefusal(SAFE, facts({ modules: [D] }))).to.match(/modules enabled/);
       expect(productionOwnerRefusal(SAFE, facts({ modules: undefined }))).to.match(/modules could not be read/);
       expect(productionOwnerRefusal(SAFE, facts({ owners: [A, B, DEV] }))).to.match(/lists the CofferdamDev hot wallet/);
+      // A contract that answers like a Safe but does not run the proxy's code.
+      expect(productionOwnerRefusal(SAFE, facts({ codeHash: '0x' + '11'.repeat(32) }))).to.match(/does not run the Safe v1.4.1 proxy code/);
+      expect(productionOwnerRefusal(SAFE, facts({ codeHash: undefined }))).to.match(/proxy code/);
+    });
+
+    it("is the company's Safe, not one shaped like it: the deployer among its owners, the recorded CofferdamSafe", function () {
+      expect(productionOwnerRefusal(SAFE, facts(), { deployer: B, recordedSafe: SAFE.toLowerCase() })).to.equal(null);
+      expect(productionOwnerRefusal(SAFE, facts(), { deployer: D })).to.match(/does not list the deployer/);
+      expect(productionOwnerRefusal(SAFE, facts(), { recordedSafe: D })).to.match(/not the generation's recorded CofferdamSafe/);
     });
 
     it("leaves zkp-test-1's threshold-1 Safe to the exception's own check", function () {

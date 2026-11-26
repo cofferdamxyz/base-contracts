@@ -35,7 +35,9 @@ import {IPaymaster} from "./CofferdamPaymaster.sol";
 ///              deployed factory). The EntryPoint deploys a new sender from
 ///              `initCode` before it asks the paymaster, so a first op passes.
 ///         Validation returns an empty context, so the EntryPoint never calls
-///         `postOp` and charges no unused-postOp penalty.
+///         `postOp`. EntryPoint v0.7 still charges 10% of the unused
+///         `callGasLimit` and `paymasterPostOpGasLimit`: the plane sets the
+///         postOp limit to 0, and `maxCost` bounds the whole charge.
 ///
 ///         Reading `tx.origin` breaks the ERC-7562 rules public bundlers
 ///         apply, so no public bundler accepts an op naming this paymaster;

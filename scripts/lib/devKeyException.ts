@@ -158,6 +158,13 @@ export const SAFE_V141 = {
 } as const;
 
 /**
+ * keccak256 of the runtime code every SafeProxy from the v1.4.1 factory runs
+ * (171 bytes; the singleton sits in storage slot 0, so the code is the same
+ * for every Safe; read from zkp-test-1's Safe on Base on 2026-11-26).
+ */
+export const SAFE_V141_PROXY_CODE_HASH = '0xd7d408ebcd99b2b70be43e20253d6d92a8ea8fab29bd3be7f55b10032331fb4c';
+
+/**
  * The owner of the generation's registries on chain 8453. Under the exception
  * it is the CofferdamDev wallet by default, or REGISTRY_OWNER when that names
  * a Safe the wallet signs for (the founder, 2026-11-14: a Safe owns the
@@ -167,7 +174,7 @@ export const SAFE_V141 = {
 export function mainnetRegistryOwner(env: Env = process.env): string {
   const fromEnv = env.REGISTRY_OWNER?.trim();
   if (devKeyExceptionRequested(env)) return fromEnv || DEV_KEY_EXCEPTION.signer;
-  if (!fromEnv) throw new Error('REGISTRY_OWNER is required on Base mainnet (the Safe; the Ledger for the test generation)');
+  if (!fromEnv) throw new Error('REGISTRY_OWNER is required on Base mainnet: the company Safe (2-of-3)');
   return fromEnv;
 }
 
@@ -178,6 +185,8 @@ export interface SafeFacts {
   threshold: bigint;
   /** Enabled modules (the first page of `getModulesPaginated`), when read. */
   modules?: string[];
+  /** keccak256 of the address's runtime code, when read. */
+  codeHash?: string;
 }
 
 /**

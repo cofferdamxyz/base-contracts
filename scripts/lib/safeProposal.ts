@@ -10,7 +10,9 @@
 // without the scripts. Signs nothing and holds no key.
 
 import { ethers } from 'ethers';
-import { SAFE_V141, type SafeFacts } from './devKeyException';
+import { SAFE_V141, type SafeFacts, devKeyExceptionRequested } from './devKeyException';
+import { productionOwnerRefusal } from './productionSafe';
+import { readSafeFacts } from './safeFacts';
 import { ANCHOR_SAFE_ACTIONS, AnchorSafeAction, anchorCall, isAnchorSafeAction } from './handleAnchor';
 import { HANDLE_ANCHOR_EXEC_ABI } from './handleAnchorExec';
 import { zkpCircuitsVersion } from './identity';
@@ -208,6 +210,15 @@ export async function runReadback(
   execTxHash: string,
   log: (line: string) => void = () => {},
 ): Promise<number> {
+  // The hash is recomputed from the record's own transaction, never taken on trust from the file.
+  const recomputed = safeTxHash(
+    BigInt(proposal.chainId),
+    proposal.safe,
+    safeCallTx(proposal.tx.to, BigInt(proposal.tx.value), proposal.tx.data, BigInt(proposal.nonce)),
+  );
+  if (recomputed.toLowerCase() !== proposal.safeTxHash.toLowerCase()) {
+    throw new Error(`The proposal's safeTxHash ${proposal.safeTxHash} is not its transaction's (${recomputed}): the record was altered`);
+  }
   const receipt = await provider.getTransactionReceipt(execTxHash);
   if (!receipt) throw new Error(`No receipt for ${execTxHash} on this chain`);
   if (receipt.status !== 1) throw new Error(`${execTxHash} reverted`);
@@ -342,6 +353,24 @@ const ADAPTER_ABI = [
 const ROOT_VERIFIER_ABI = ['function getHelper(bytes32 version) view returns (address)', 'function getSubVerifier(bytes32 version) view returns (address)'];
 const SUB_VERIFIER_ABI = ['function proofVerifiers(bytes32 vkeyHash) view returns (address)'];
 
+/**
+ * Why a nominated next owner (NEW_SAFE) may not be proposed, or null: another
+ * Safe v1.4.1 with threshold 2 or more, and on chain 8453 outside the M2
+ * dev-key exception the company Safe's shape (./productionSafe.ts). An EOA
+ * nominee would accept on its own, never through a proposal, so it is
+ * refused here, before the owners sign.
+ */
+export async function nomineeRefusal(ctx: BuildContext, nominee: string): Promise<string | null> {
+  if (same(nominee, ctx.safe)) return 'NEW_SAFE is this Safe';
+  const facts = await readSafeFacts(ctx.provider, nominee);
+  if (ctx.chainId === 8453n && !devKeyExceptionRequested(ctx.env)) {
+    const r = productionOwnerRefusal(nominee, facts);
+    return r ? `NEW_SAFE: ${r}` : null;
+  }
+  const r = safeProposeRefusal(nominee, facts);
+  return r ? `NEW_SAFE: ${r}` : null;
+}
+
 function envAddress(env: NodeJS.ProcessEnv, name: string): string {
   const v = env[name]?.trim();
   if (!v || !ethers.isAddress(v) || /^0x0{40}$/i.test(v)) throw new Error(`${name} is required: a non-zero address; got ${v || 'nothing'}`);
@@ -439,7 +468,8 @@ async function paymasterCall(ctx: BuildContext): Promise<SafeCall> {
     }
     case 'paymaster-transfer-ownership': {
       const next = envAddress(ctx.env, 'NEW_SAFE');
-      if (same(next, ctx.safe)) throw new Error('NEW_SAFE is this Safe');
+      const refused = await nomineeRefusal(ctx, next);
+      if (refused) throw new Error(refused);
       return call('transferOwnership', [next], `transferOwnership(${next}) (two-step: the new Safe accepts)`, [check('pendingOwner', 'pendingOwner', next)], [
         `Then, from the new Safe: SAFE_ACTION=paymaster-accept-ownership SAFE_ADDRESS=${next}`,
       ]);
@@ -470,6 +500,10 @@ async function anchorSafeCall(ctx: BuildContext, action: AnchorSafeAction): Prom
     if (!same(pending, ctx.safe)) throw new Error(`The anchor's pending owner is ${pending}, not the Safe ${ctx.safe}`);
   } else if (!same(owner, ctx.safe)) {
     throw new Error(`The anchor ${ctx.target} is owned by ${owner}, not the Safe ${ctx.safe}`);
+  }
+  if (action === 'anchor-transfer-ownership') {
+    const refused = await nomineeRefusal(ctx, call.args[0] as string);
+    if (refused) throw new Error(refused);
   }
   const notes: string[] = [];
   const c = (label: string, fn: string, args: unknown[], value: unknown, op: 'eq' | 'ne' = 'eq', index = 0) =>
