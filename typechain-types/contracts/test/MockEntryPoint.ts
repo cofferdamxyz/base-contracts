@@ -61,14 +61,20 @@ export interface MockEntryPointInterface extends Interface {
   getFunction(
     nameOrSignature:
       | "balanceOf"
+      | "createSenderThenValidate"
       | "depositTo"
       | "validatePaymaster"
+      | "validatePaymasterWithMaxCost"
       | "withdrawTo"
   ): FunctionFragment;
 
   encodeFunctionData(
     functionFragment: "balanceOf",
     values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "createSenderThenValidate",
+    values: [AddressLike, IEntryPoint.PackedUserOperationStruct, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "depositTo",
@@ -79,14 +85,26 @@ export interface MockEntryPointInterface extends Interface {
     values: [AddressLike, IEntryPoint.PackedUserOperationStruct]
   ): string;
   encodeFunctionData(
+    functionFragment: "validatePaymasterWithMaxCost",
+    values: [AddressLike, IEntryPoint.PackedUserOperationStruct, BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "withdrawTo",
     values: [AddressLike, BigNumberish]
   ): string;
 
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "createSenderThenValidate",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "depositTo", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "validatePaymaster",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "validatePaymasterWithMaxCost",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "withdrawTo", data: BytesLike): Result;
@@ -137,10 +155,30 @@ export interface MockEntryPoint extends BaseContract {
 
   balanceOf: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
+  createSenderThenValidate: TypedContractMethod<
+    [
+      paymaster: AddressLike,
+      userOp: IEntryPoint.PackedUserOperationStruct,
+      maxCost: BigNumberish
+    ],
+    [[string, bigint] & { context: string; validationData: bigint }],
+    "nonpayable"
+  >;
+
   depositTo: TypedContractMethod<[account: AddressLike], [void], "payable">;
 
   validatePaymaster: TypedContractMethod<
     [paymaster: AddressLike, userOp: IEntryPoint.PackedUserOperationStruct],
+    [[string, bigint] & { context: string; validationData: bigint }],
+    "view"
+  >;
+
+  validatePaymasterWithMaxCost: TypedContractMethod<
+    [
+      paymaster: AddressLike,
+      userOp: IEntryPoint.PackedUserOperationStruct,
+      maxCost: BigNumberish
+    ],
     [[string, bigint] & { context: string; validationData: bigint }],
     "view"
   >;
@@ -159,12 +197,34 @@ export interface MockEntryPoint extends BaseContract {
     nameOrSignature: "balanceOf"
   ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
   getFunction(
+    nameOrSignature: "createSenderThenValidate"
+  ): TypedContractMethod<
+    [
+      paymaster: AddressLike,
+      userOp: IEntryPoint.PackedUserOperationStruct,
+      maxCost: BigNumberish
+    ],
+    [[string, bigint] & { context: string; validationData: bigint }],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "depositTo"
   ): TypedContractMethod<[account: AddressLike], [void], "payable">;
   getFunction(
     nameOrSignature: "validatePaymaster"
   ): TypedContractMethod<
     [paymaster: AddressLike, userOp: IEntryPoint.PackedUserOperationStruct],
+    [[string, bigint] & { context: string; validationData: bigint }],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "validatePaymasterWithMaxCost"
+  ): TypedContractMethod<
+    [
+      paymaster: AddressLike,
+      userOp: IEntryPoint.PackedUserOperationStruct,
+      maxCost: BigNumberish
+    ],
     [[string, bigint] & { context: string; validationData: bigint }],
     "view"
   >;

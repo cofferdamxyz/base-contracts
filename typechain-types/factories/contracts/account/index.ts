@@ -5,3 +5,4 @@ export * as cofferdamPaymasterSol from "./CofferdamPaymaster.sol";
 export { AuthorityManagerBase__factory } from "./AuthorityManagerBase__factory";
 export { CofferdamAccount4337__factory } from "./CofferdamAccount4337__factory";
 export { CofferdamAccountFactory4337__factory } from "./CofferdamAccountFactory4337__factory";
+export { CofferdamRelayPaymaster__factory } from "./CofferdamRelayPaymaster__factory";
