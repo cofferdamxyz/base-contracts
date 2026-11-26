@@ -39,6 +39,11 @@ const BASE_RPC_URL = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
 // the block. Off by default, so `yarn test` never touches the network.
 const BASE_FORK = process.env.BASE_FORK === '1';
 const BASE_FORK_BLOCK = process.env.BASE_FORK_BLOCK?.trim() ? Number(process.env.BASE_FORK_BLOCK) : undefined;
+// `baseFork`'s port on 127.0.0.1, 8546 by default (`yarn node:start:base`);
+// BASE_FORK_PORT moves it when another fork holds 8546. A port only: the
+// network stays local, and the scripts ask the node itself whether it is a fork.
+const BASE_FORK_PORT = process.env.BASE_FORK_PORT?.trim() || '8546';
+if (!/^[0-9]{2,5}$/.test(BASE_FORK_PORT)) throw new Error(`hardhat.config.ts: BASE_FORK_PORT is a port number; got ${BASE_FORK_PORT}`);
 
 const config: HardhatUserConfig = {
   defaultNetwork: 'hardhat',
@@ -79,7 +84,7 @@ const config: HardhatUserConfig = {
     // node:start:base`), for deploy dry runs: anvil's unlocked accounts, or the
     // Ledger with LEDGER_ADDRESS for the Ledger dry run.
     baseFork: {
-      url: 'http://127.0.0.1:8546',
+      url: `http://127.0.0.1:${BASE_FORK_PORT}`,
       chainId: 8453,
       // A fork fetches the state it lacks from the forked RPC: the first proof
       // verification on a fresh fork outlasts Hardhat's 20 s HTTP default
