@@ -8,6 +8,19 @@ import { accountCodeFingerprint, paymasterRelayer } from './paymaster';
 export const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
 
 /**
+ * The account source this script deploys verifies ceremonies as EIP-712 under
+ * the registry's domain (decision 0090 item 5). A stale build that still
+ * verifies EIP-191 has no `ceremonyDomainSeparator`: refuse it before the
+ * first contract is deployed.
+ */
+export async function assertTypedCeremonyBuild(): Promise<void> {
+  const Account = await ethers.getContractFactory('CofferdamAccount4337');
+  if (!Account.interface.getFunction('ceremonyDomainSeparator')) {
+    throw new Error('CofferdamAccount4337 build verifies EIP-191 ceremonies: recompile (decision 0090 item 5)');
+  }
+}
+
+/**
  * Deploy the account layer (decisions 0016, 0023): authority modules, the
  * module registry, the ceremony attester registry, the factory that pins them
  * with the nullifier registry and the hard-recovery delay, and the paymaster.
@@ -43,29 +56,11 @@ export const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
  *   registry deployed here). The attester Worker for this chain must then pin
  *   `CEREMONY_SIGNATURE=eip712` and `CEREMONY_REGISTRY_ADDRESS` to that
  *   registry; the script refuses an account build that still verifies
- *   EIP-191 and prints both with the domain separator.
+ *   EIP-191 before deploying anything, and prints both with the domain
+ *   separator.
  */
-/**
- * The account source this script deploys verifies ceremonies as EIP-712 under
- * the registry's domain (decision 0090 item 5). A stale build that still
- * verifies EIP-191 has no `ceremonyDomainSeparator`; refuse it before the
- * generation's addresses are written down.
- */
-export async function assertTypedCeremony(registry: string, chainId: bigint): Promise<void> {
-  const Account = await ethers.getContractFactory('CofferdamAccount4337');
-  if (!Account.interface.getFunction('ceremonyDomainSeparator')) {
-    throw new Error('CofferdamAccount4337 build verifies EIP-191 ceremonies: recompile (decision 0090 item 5)');
-  }
-  const expected = ethers.TypedDataEncoder.hashDomain({
-    name: 'Cofferdam Ceremony',
-    version: '1',
-    chainId,
-    verifyingContract: registry,
-  });
-  console.log('Ceremony domain separator:', expected);
-}
-
 export async function deployAccountLayer(nullifierRegistry?: string): Promise<Record<string, string>> {
+  await assertTypedCeremonyBuild();
   const deployer = await getDeployer();
   const chainId = await nodeChainId();
   // By the chain id the node reports, so a fork of mainnet takes this path too.
@@ -161,7 +156,13 @@ export async function deployAccountLayer(nullifierRegistry?: string): Promise<Re
     out.CofferdamPaymaster = await deploy('CofferdamPaymaster', [ENTRYPOINT_V07, relayer, fp.codeHash, fp.codeSize, fp.maskOffsets]);
   }
   if (attesters.length === 0) console.log('No CEREMONY_ATTESTERS: first-High upgrades are paused until one is added.');
-  await assertTypedCeremony(out.CofferdamCeremonyAttesterRegistry, chainId);
+  const ceremonyDomain = ethers.TypedDataEncoder.hashDomain({
+    name: 'Cofferdam Ceremony',
+    version: '1',
+    chainId,
+    verifyingContract: out.CofferdamCeremonyAttesterRegistry,
+  });
+  console.log('Ceremony domain separator:', ceremonyDomain);
   console.log(
     'Ceremony attestations: EIP-712, domain ("Cofferdam Ceremony", "1",',
     chainId.toString() + ',',
