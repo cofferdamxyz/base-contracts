@@ -16,6 +16,7 @@ export const VERIFY_CONTRACTS: Record<string, string> = {
   CofferdamCeremonyAttesterRegistry: 'CofferdamCeremonyAttesterRegistry',
   CofferdamAccountFactory4337: 'CofferdamAccountFactory4337',
   CofferdamPaymaster: 'CofferdamPaymaster',
+  CofferdamRelayPaymaster: 'CofferdamRelayPaymaster',
   CofferdamHandleAnchor: 'CofferdamHandleAnchor',
 };
 
