@@ -28,10 +28,10 @@ jobs:
     name: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: yarn
@@ -59,7 +59,7 @@ jobs:
       # pull-requests: write on the GITHUB_TOKEN; no other secret.
       - name: Report the result on the pull request
         if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           STEPS: ${{ toJSON(steps) }}
           STEP_LABELS: |
